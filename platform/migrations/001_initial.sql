@@ -1,0 +1,14 @@
+CREATE TABLE users (id TEXT PRIMARY KEY, email TEXT NOT NULL UNIQUE, name TEXT, password_hash TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+CREATE TABLE sessions (token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, kind TEXT NOT NULL CHECK(kind IN ('web','extension')), expires_at TEXT NOT NULL, created_at TEXT NOT NULL);
+CREATE INDEX sessions_user ON sessions(user_id);
+CREATE TABLE password_resets (token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, expires_at TEXT NOT NULL);
+CREATE TABLE subscriptions (user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, provider TEXT NOT NULL, provider_customer_id TEXT, provider_subscription_id TEXT UNIQUE, plan TEXT NOT NULL CHECK(plan IN ('FREE','PRO')), status TEXT NOT NULL CHECK(status IN ('free','active','trialing','past_due','canceled','incomplete')), current_period_start TEXT, current_period_end TEXT, cancel_at_period_end INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL);
+CREATE TABLE prototypes (id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, name TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', target_domain TEXT NOT NULL, current_version INTEGER NOT NULL DEFAULT 0, revision INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+CREATE INDEX prototypes_owner ON prototypes(user_id,updated_at);
+CREATE TABLE prototype_definitions (prototype_id TEXT PRIMARY KEY REFERENCES prototypes(id) ON DELETE CASCADE, definition TEXT NOT NULL);
+CREATE TABLE prototype_versions (prototype_id TEXT NOT NULL REFERENCES prototypes(id) ON DELETE CASCADE, version INTEGER NOT NULL, definition TEXT NOT NULL, created_at TEXT NOT NULL, PRIMARY KEY(prototype_id,version));
+CREATE TABLE ai_actions (id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, request_key TEXT NOT NULL, fingerprint TEXT NOT NULL, period_start TEXT NOT NULL, period_end TEXT NOT NULL, status TEXT NOT NULL CHECK(status IN ('pending','succeeded','failed')), result TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, UNIQUE(user_id,request_key));
+CREATE INDEX ai_usage ON ai_actions(user_id,period_start,status);
+CREATE TABLE checkouts (id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, provider TEXT NOT NULL, status TEXT NOT NULL CHECK(status IN ('pending','completed','expired')), price_cents INTEGER NOT NULL, currency TEXT NOT NULL, created_at TEXT NOT NULL, expires_at TEXT NOT NULL, completed_at TEXT);
+CREATE TABLE analytics_events (id TEXT PRIMARY KEY, user_id TEXT REFERENCES users(id) ON DELETE SET NULL, name TEXT NOT NULL, properties TEXT NOT NULL, created_at TEXT NOT NULL);
+CREATE TABLE rate_limits (key TEXT PRIMARY KEY, window_start INTEGER NOT NULL, count INTEGER NOT NULL);

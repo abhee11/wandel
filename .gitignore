@@ -1,0 +1,21 @@
+node_modules/
+dist/
+.env
+*.log
+
+.data/
+dist-platform/
+.env.*
+!.env.example
+
+# Local auth state, private assets, and editor metadata
+.clerk/
+*.pem
+*.key
+*.sqlite
+*.sqlite-*
+*.db
+.DS_Store
+._*
+.codex/
+.agents/

@@ -1,0 +1,38 @@
+{
+  "name": "wandel-workflow-prototype",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit && node scripts/build.mjs",
+    "dev": "vite --host 127.0.0.1",
+    "test": "vitest run",
+    "ai": "node scripts/ai-server.mjs",
+    "platform:build": "tsc --noEmit && node scripts/platform-build.mjs && vite build --config platform/vite.config.ts",
+    "platform:server": "node scripts/platform-build.mjs && node dist-platform/server/main.js",
+    "platform:dev": "vite --config platform/vite.config.ts",
+    "platform:seed": "node scripts/platform-build.mjs && node dist-platform/server/seed.js"
+  },
+  "dependencies": {
+    "@clerk/backend": "^3.22.0",
+    "@clerk/chrome-extension": "^3.1.90",
+    "@clerk/react": "^6.17.5",
+    "better-sqlite3": "^11.10.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "stripe": "^23.0.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/chrome": "^0.0.287",
+    "@types/node": "^20.19.43",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "esbuild": "^0.25.0",
+    "jsdom": "^26.0.0",
+    "typescript": "^5.7.3",
+    "vite": "^6.1.0",
+    "vitest": "^3.0.5"
+  }
+}

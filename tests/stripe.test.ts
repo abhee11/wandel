@@ -1,0 +1,23 @@
+import {it,expect,vi} from 'vitest';
+import Stripe from 'stripe';
+import {database} from '../platform/server/db';
+import {StripeBilling,UnavailableBilling} from '../platform/server/stripe';
+it('rejects forged webhooks and confirms a test subscription once from signed events',async()=>{
+ const db=database(':memory:'),secret='whsec_test_secret';
+ const stripe=new Stripe('sk_test_placeholder');
+ const now=new Date().toISOString();db.prepare('INSERT INTO users (id,email,password_hash,created_at,updated_at) VALUES (?,?,?,?,?)').run('user1','test@example.com','unused',now,now);
+ db.prepare("INSERT INTO subscriptions VALUES (?,'stripe','cus_test',NULL,'FREE','free',NULL,NULL,0,?)").run('user1',now);
+ const sub={id:'sub_test',customer:'cus_test',metadata:{wandelUserId:'user1'},status:'active',cancel_at_period_end:false,items:{data:[{price:{id:'price_test'},current_period_start:Math.floor(Date.now()/1000),current_period_end:Math.floor(Date.now()/1000)+2592000}]}};
+ vi.spyOn(stripe.subscriptions,'retrieve').mockResolvedValue(sub as any);
+ const billing=new StripeBilling(db,stripe,'price_test',secret,'http://127.0.0.1:5174');
+ const body=JSON.stringify({id:'evt_1',type:'customer.subscription.updated',livemode:false,data:{object:{id:'sub_test'}}});
+ await expect(billing.webhook(body,'forged')).rejects.toThrow('signature');
+ const signature=stripe.webhooks.generateTestHeaderString({payload:body,secret});
+ await billing.webhook(body,signature);await billing.webhook(body,signature);
+ expect((db.prepare('SELECT plan FROM subscriptions').get() as any).plan).toBe('PRO');expect((db.prepare('SELECT count(*) n FROM stripe_events').get() as any).n).toBe(1);
+ expect(stripe.subscriptions.retrieve).toHaveBeenCalledTimes(1);
+ expect(()=>billing.complete()).toThrow('Stripe confirms');
+ sub.status='canceled';const canceled=JSON.stringify({id:'evt_2',type:'customer.subscription.deleted',livemode:false,data:{object:{id:'sub_test'}}});await billing.webhook(canceled,stripe.webhooks.generateTestHeaderString({payload:canceled,secret}));expect((db.prepare('SELECT plan FROM subscriptions').get() as any).plan).toBe('FREE');
+ const live=JSON.stringify({id:'evt_live',type:'customer.subscription.updated',livemode:true,data:{object:{id:'sub_test'}}});await expect(billing.webhook(live,stripe.webhooks.generateTestHeaderString({payload:live,secret}))).rejects.toThrow('test events');db.close();
+});
+it('does not pretend to upgrade when Stripe is unconfigured',()=>{expect(()=>new UnavailableBilling().start('user')).toThrow('not configured');});
