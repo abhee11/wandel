@@ -1,3 +1,4 @@
+import {redeemAccessCode} from './access';
 import {assistantService,type AssistantProvider} from './assistant';
 import {recordingStore} from './recordings';
 import {guestPlan} from './guestAI';
@@ -87,6 +88,7 @@ export function createPlatform(options:{db:DB;config:Config;ai:AIProvider;mail:M
   if(path==='/api/workflows'&&method==='GET')return json({workflows:workflows.list(u.id)});
   if(path==='/api/workflows'&&method==='POST')return json(workflows.save(u.id,await body(req)));
   if(path.startsWith('/api/workflows/')&&method==='GET')return json(workflows.read(u.id,decodeURIComponent(path.slice('/api/workflows/'.length))));
+  if(path==='/api/account/redeem'&&method==='POST'){rateLimit(db,'access-code:'+u.id,5,clock().getTime(),60000);const input=z.object({code:z.string().trim().min(1).max(80)}).strict().parse(await body(req));const grant=redeemAccessCode(db,u.id,input.code,clock());return json({grant,entitlements:entitlements.get(u.id)});}
   if(path==='/api/me'&&method==='GET')return json({user:publicUser(u),entitlements:entitlements.get(u.id)});
   if(path==='/api/entitlements'&&method==='GET')return json(entitlements.get(u.id));
   if(path==='/api/usage'&&method==='GET')return json(entitlements.get(u.id).usage);

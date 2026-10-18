@@ -13,7 +13,8 @@
     "platform:dev": "vite --config platform/vite.config.ts",
     "platform:seed": "node scripts/platform-build.mjs && node dist-platform/server/seed.js",
     "build:free": "tsc --noEmit && node scripts/build.mjs --free",
-    "build:assistant": "tsc --noEmit && node scripts/build.mjs --assistant"
+    "build:assistant": "tsc --noEmit && node scripts/build.mjs --assistant",
+    "platform:access": "node scripts/platform-build.mjs && node dist-platform/server/accessAdmin.js"
   },
   "dependencies": {
     "@clerk/backend": "^3.22.0",

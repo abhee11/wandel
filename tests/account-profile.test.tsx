@@ -17,3 +17,12 @@ it('shows guest sign-in without opening a menu and updates profile after returni
   await act(async()=>window.dispatchEvent(new Event('focus')));expect(element.textContent).toContain('Alex');expect(element.textContent).not.toContain('Guest');
  }finally{await act(async()=>root.unmount());element.remove();vi.unstubAllGlobals();}
 });
+it('redeems beta access in the extension and shows its source without a subscription portal',async()=>{
+ (globalThis as any).IS_REACT_ACT_ENVIRONMENT=true;vi.stubGlobal('chrome',{storage:{local:{get:vi.fn().mockResolvedValue({})}}});let redeemed=false;vi.mocked(accountAPI).mockImplementation(async(path,method,body)=>{if(path==='/account/redeem'){expect(method).toBe('POST');expect(body).toEqual({code:'WANDEL-TEST'});redeemed=true;return {grant:{expiresAt:'2027-01-01'}};}if(path==='/workflows')return {workflows:[]};return {user:{name:'Tester',email:'tester@example.com'},entitlements:{plan:redeemed?'PRO':'FREE',access:redeemed?{source:'beta_code',expiresAt:'2027-01-01'}:null}};});
+ const element=document.createElement('div'),root=createRoot(element);document.body.append(element);
+ try{
+  await act(async()=>root.render(<Account bridge={{send:vi.fn(),subscribe:()=>()=>{}}} snapshot={null}/>));await act(async()=>[...element.querySelectorAll('button')].find(b=>b.textContent?.startsWith('Account &'))!.click());const input=element.querySelector<HTMLInputElement>('[aria-label="Beta access code"]')!;
+  await act(async()=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')!.set!.call(input,'WANDEL-TEST');input.dispatchEvent(new Event('input',{bubbles:true}));});await act(async()=>element.querySelector('form')!.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));
+  expect(redeemed).toBe(true);expect(element.textContent).toContain('PRO · Beta access');expect(element.textContent).toContain('Beta access activated');expect(element.textContent).not.toContain('Manage subscription');expect(input.value).toBe('');
+ }finally{await act(async()=>root.unmount());element.remove();vi.unstubAllGlobals();}
+});

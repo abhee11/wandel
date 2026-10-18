@@ -12,10 +12,11 @@ export class Entitlements {
   }return s;
  }
  get(userId:string){const now=this.clock(),s=this.subscription(userId);const paid=s.plan==='PRO'&&['active','trialing'].includes(s.status)&&!!s.current_period_end&&s.current_period_end>now.toISOString();
-  const plan=paid?'PRO':'FREE',limits=this.config.plans[plan],p=period(now);
+  const grant=one<{source:string;expires_at:string|null}>(this.db,`SELECT g.source,g.expires_at FROM access_grants g LEFT JOIN access_codes c ON c.id=g.code_id WHERE g.user_id=? AND g.revoked_at IS NULL AND (g.expires_at IS NULL OR g.expires_at>?) AND (g.code_id IS NULL OR c.revoked_at IS NULL) ORDER BY g.expires_at IS NULL DESC,g.expires_at DESC LIMIT 1`,userId,now.toISOString());
+  const plan=paid||grant?'PRO':'FREE',limits=this.config.plans[plan],p=period(now);
   const count=one<{count:number}>(this.db,'SELECT count(*) count FROM prototypes WHERE user_id=?',userId)!.count;
   const usage=one<{used:number}>(this.db,"SELECT count(*) used FROM ai_actions WHERE user_id=? AND period_start=? AND (status='succeeded' OR (status='pending' AND created_at>?))",userId,p.start,new Date(now.getTime()-120000).toISOString())!.used;
-  return {plan,limits,usage:{used:usage,allowance:limits.aiActionsPerMonth,remaining:Math.max(0,limits.aiActionsPerMonth-usage),periodStart:p.start,resetsAt:p.end},savedWorkflows:count,capabilities:{canUseAI:usage<limits.aiActionsPerMonth,canCreateWorkflow:limits.savedWorkflows===null||count<limits.savedWorkflows,canUseVersionHistory:limits.versionHistory,canSharePrivately:limits.privateSharing}};
+  return {plan,access:paid?{source:'subscription',expiresAt:s.current_period_end}:grant?{source:grant.source,expiresAt:grant.expires_at}:null,limits,usage:{used:usage,allowance:limits.aiActionsPerMonth,remaining:Math.max(0,limits.aiActionsPerMonth-usage),periodStart:p.start,resetsAt:p.end},savedWorkflows:count,capabilities:{canUseAI:usage<limits.aiActionsPerMonth,canCreateWorkflow:limits.savedWorkflows===null||count<limits.savedWorkflows,canUseVersionHistory:limits.versionHistory,canSharePrivately:limits.privateSharing}};
  }
  canUseAI(id:string){return this.get(id).capabilities.canUseAI;}
  canCreateWorkflow(id:string){return this.get(id).capabilities.canCreateWorkflow;}
