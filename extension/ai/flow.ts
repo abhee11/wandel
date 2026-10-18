@@ -1,7 +1,7 @@
 import type {NativeDesign} from '../content/nativeDesign';
 import {FlowPlanSchema} from './planSchema';
 import {clone,uid,type Locator,type Workflow,type StylePatch,type CopyNode} from '../shared/model';
-import {validateWorkflow} from '../prototype/engine';
+import {validateWorkflow,hasDefaultWorkflowName} from '../prototype/engine';
 
 const owned=(id:string):Locator=>({owned:id,tag:'',role:'',name:'',text:'',attrs:{},parent:{tag:'',id:'',role:'',label:''},previous:'',next:''});
 /** Compile validated screens and explicit links, never executable model output. */
@@ -9,7 +9,7 @@ export function compileFlow(workflow:Workflow,stateId:string,target:Locator,inpu
  const plan=FlowPlanSchema.parse(input),next=clone(workflow);
  if(next.states.length+plan.screens.length>next.maxStates)throw new Error(`This flow would exceed ${next.maxStates} states. Shorten it or start a new workflow.`);
  const parent=next.states.find(s=>s.id===stateId);if(!parent)throw new Error('State not found.');
- if(next.name==='Untitled workflow')next.name=plan.name;
+ if(hasDefaultWorkflowName(next))next.name=plan.name;
  const keys=new Map((plan.variables||[]).map(v=>[v.key,'d'+uid().replaceAll('-','')]));
  const key=(name:string)=>keys.get(name)!;
  const text=(value:string)=>value.replace(/\{\{([^{}]+)\}\}/g,(_,name)=>'{{'+key(name)+'}}');

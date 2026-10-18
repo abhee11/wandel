@@ -1,7 +1,12 @@
 import { WorkflowSchema, VisitedScreenSchema, clone, uid, type Workflow, type Operation } from '../shared/model';
-export function createWorkflow(url: URL, name = 'Untitled workflow'): Workflow {
-  const entry = uid(), now = new Date().toISOString();
-  return { schemaVersion: 1, id: uid(), name, origin: url.origin, route: url.pathname + url.search + url.hash, createdAt: now, updatedAt: now, entry, maxStates: 30, states: [{ id: entry, title: 'Existing application', parent: null, view: 'base', operations: [] }], edges: [] };
+export function defaultWorkflowName(url:URL,createdAt:string,id:string){
+  const context=(url.host+(url.pathname==='/'?'':url.pathname)).slice(0,120);
+  return `Flow — ${context} — ${createdAt.slice(0,19).replace('T',' ')} UTC — ${id.slice(0,6)}`;
+}
+export function hasDefaultWorkflowName(w:Workflow){return w.name==='Untitled workflow'||w.name===defaultWorkflowName(new URL(w.origin+w.route),w.createdAt,w.id);}
+export function createWorkflow(url: URL, name?:string): Workflow {
+  const entry = uid(), now = new Date().toISOString(), id=uid();
+  return { schemaVersion: 1, id, name:name?.trim()||defaultWorkflowName(url,now,id), origin: url.origin, route: url.pathname + url.search + url.hash, createdAt: now, updatedAt: now, entry, maxStates: 30, states: [{ id: entry, title: 'Existing application', parent: null, view: 'base', operations: [] }], edges: [] };
 }
 export function lineage(workflow: Workflow, stateId: string) {
   const chain: Workflow['states'] = [], seen = new Set<string>();

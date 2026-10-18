@@ -530,3 +530,9 @@ it('raises moved items above siblings and restores stacking on undo; rejects exe
  session=new Session(host(),new Repository(new BrowserStorage()),new URL('https://example.com'));await session.init();await session.dispatch({type:'edit'});document.getElementById('customers')!.click();const button=document.getElementById('customers')!;const before=button.style.cssText;await session.dispatch({type:'style',style:{x:30,y:10}});expect(button.style.zIndex).toBe('1000');await session.dispatch({type:'undo'});expect(button.style.cssText).toBe(before);
  host().innerHTML='<img id="picture" src="https://example.com/a.png" srcset="https://example.com/b.png 2x">';const img=host().querySelector('img')!;img.click();await expect(session.dispatch({type:'image',src:'javascript:alert(1)',fit:'cover'})).rejects.toThrow();await session.dispatch({type:'image',src:'https://example.com/c.png',fit:'cover'});expect(img.hasAttribute('srcset')).toBe(false);await session.dispatch({type:'undo'});expect(img.getAttribute('srcset')).toBe('https://example.com/b.png 2x');
 });
+
+it('renames and saves during replay without repainting or leaving the current screen',async()=>{
+ const repository=new Repository(new BrowserStorage());session=new Session(host(),repository,new URL('https://example.com'));await session.init();await session.dispatch({type:'replay'});
+ const content=host().firstElementChild,stateId=session.stateId;await session.dispatch({type:'rename',text:'Replay review'});await session.dispatch({type:'saveTemporary'});
+ expect(session.replay).toBe(true);expect(session.stateId).toBe(stateId);expect(host().firstElementChild).toBe(content);expect((await repository.get(session.workflow.id))!.draft.name).toBe('Replay review');
+});

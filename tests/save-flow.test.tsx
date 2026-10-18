@@ -27,3 +27,23 @@ it('reuses the same save request on an uncertain network retry and acknowledges 
  await mount();await click('Save to my account');expect(set).not.toHaveBeenCalled();await click('Save to my account');
  const saves=vi.mocked(accountAPI).mock.calls.filter(([path])=>path==='/workflows');expect(saves).toHaveLength(2);expect(saves[0][2]).toEqual(saves[1][2]);expect(send).toHaveBeenCalledWith({type:'acknowledgeSave',record,expected:snapshot.workflow});expect(element.textContent).toContain('Saved to your account as v1');
 });
+
+async function rename(value:string){const input=element.querySelector<HTMLInputElement>('[aria-label="Save workflow name"]')!;await act(async()=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')!.set!.call(input,value);input.dispatchEvent(new Event('input',{bubbles:true}));});}
+it('saves the name typed in the dialog before either storage destination, without relying on blur',async()=>{
+ send.mockImplementation(async command=>{if(command.type==='rename')snapshot={...snapshot,workflow:{...snapshot.workflow,name:command.text}};return snapshot;});
+ vi.mocked(accountAPI).mockImplementation(async(path)=>path==='/me'?{user:{id:'a'}}:{record:{draft:snapshot.workflow,currentVersion:1,versions:[]},revision:1,savedRevision:1});
+ await mount();expect(document.activeElement?.getAttribute('aria-label')).toBe('Save workflow name');
+ await rename('Risk Analysis Flow');await click('Save to my account');
+ expect(vi.mocked(accountAPI).mock.calls.find(([path])=>path==='/workflows')?.[2]).toMatchObject({workflow:{name:'Risk Analysis Flow'}});
+ await rename('Risk Analysis revised');await click('Save temporarily');
+ const commands=send.mock.calls.map(([command])=>command);expect(commands.at(-2)).toEqual({type:'rename',text:'Risk Analysis revised'});expect(commands.at(-1)).toEqual({type:'saveTemporary'});
+});
+it('keeps an empty name editable and rejects saving it before touching storage or accounts',async()=>{
+ await mount();await rename('   ');await click('Save temporarily');expect(send).not.toHaveBeenCalled();expect(accountAPI).not.toHaveBeenCalled();expect(element.textContent).toContain('Give your flow a name');
+});
+it('shows sharing and interactive preview directly in the save dialog',async()=>{
+ await mount();expect(element.querySelector('details')?.open).toBe(true);await click('Try flow on app');expect(send).toHaveBeenCalledWith({type:'replay'});expect(element.textContent).toContain('not a video or standalone public playback link');
+});
+it('does not rename or save a different workflow if the active app changed',async()=>{
+ await mount();send.mockResolvedValue({...snapshot,workflow:{...snapshot.workflow,id:'different'}});await rename('My flow');await click('Save to my account');expect(accountAPI).not.toHaveBeenCalled();expect(element.textContent).toContain('active workflow changed');expect(send).not.toHaveBeenCalledWith(expect.objectContaining({type:'rename'}));
+});

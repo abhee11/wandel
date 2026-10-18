@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createWorkflow,addOperation,addChild,transition,lineage,validateWorkflow } from '../extension/prototype/engine';
+import { createWorkflow,defaultWorkflowName,hasDefaultWorkflowName,addOperation,addChild,transition,lineage,validateWorkflow } from '../extension/prototype/engine';
 import { localPlan,operationFromPlan,PlanSchema } from '../extension/ai/planner';
 import { Repository,type StorageAdapter } from '../extension/storage/store';
 import type { Locator } from '../extension/shared/model';
@@ -40,4 +40,10 @@ describe('version persistence',()=>{
    const v3=await repo.save(restored.draft,true);expect(v3.versions.map(v=>v.number)).toEqual([1,2,3]);
    expect(await repo.list(w.origin,w.route)).toHaveLength(1);expect(await repo.list(w.origin,'/other')).toHaveLength(0);
  });
+});
+
+it('gives new flows context and unique dated names, without query tokens or replacing custom names',()=>{
+ const url=new URL('https://example.com/customers?token=private#secret');const a=createWorkflow(url),b=createWorkflow(url);
+ expect(a.name).toContain('Flow — example.com/customers — ');expect(a.name).toContain(a.createdAt.slice(0,10));expect(a.name).not.toContain('private');expect(a.name).not.toContain('secret');expect(a.name).not.toBe(b.name);expect(hasDefaultWorkflowName(a)).toBe(true);
+ expect(defaultWorkflowName(url,a.createdAt,a.id)).toBe(a.name);expect(hasDefaultWorkflowName({...a,name:'My risk workflow'})).toBe(false);expect(hasDefaultWorkflowName({...a,name:'Untitled workflow'})).toBe(true);expect(createWorkflow(url,'My flow').name).toBe('My flow');
 });

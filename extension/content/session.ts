@@ -281,7 +281,7 @@ export class Session {
     if(next){this.replayHistory.push(clone(this.replayData));for(const effect of (passes?edge?.effects:[])||[])this.replayData[effect.key]=effect.value;this.visits.push(this.stateId);this.stateId=next;this.selected=null;this.render(true);this.renderer.owned.get(`view:${next}`)?.scrollIntoView?.({behavior:'smooth',block:'center'});}
     else if(!this.replay){const el=this.renderer.owned.get(source);if(el)this.select(el);}
   }
-  private commit(next:Workflow,nextState=this.stateId,group?:string) {const validated=validateWorkflow(next);if(!group||group!==this.historyGroup)this.history.push(this.workflow,this.stateId);this.historyGroup=group;this.workflow=validated;this.workflow.updatedAt=new Date().toISOString();this.stateId=nextState;this.dirty=true;this.render(true);this.scheduleDraft();}
+  private commit(next:Workflow,nextState=this.stateId,group?:string,repaint=true) {const validated=validateWorkflow(next);if(!group||group!==this.historyGroup)this.history.push(this.workflow,this.stateId);this.historyGroup=group;this.workflow=validated;this.workflow.updatedAt=new Date().toISOString();this.stateId=nextState;this.dirty=true;if(repaint)this.render(true);this.scheduleDraft();}
   private scheduleDraft(){
     clearTimeout(this.draftTimer);this.draftTimer=setTimeout(()=>{const work=this.queue.then(()=>this.checkpoint());this.queue=work.catch(this.gestureError);},500);
   }
@@ -343,7 +343,7 @@ export class Session {
   private async execute(c:Command):Promise<Snapshot> {
     if(['reset','new'].includes(c.type)){await this.options.liveNavigation?.clear();this.liveSession=false;}
     if(this.dragData&&c.type!=='snapshot')this.cancelDrag();
-    const editing=['appearance','alignText','insertElement','fieldSettings','pasteStyle','image','prompt','text','child','link','rename','undo','redo','style','remove','drag','duplicateElement','mirror'];
+    const editing=['appearance','alignText','insertElement','fieldSettings','pasteStyle','image','prompt','text','child','link','undo','redo','style','remove','drag','duplicateElement','mirror'];
     if(editing.includes(c.type)&&this.replay)throw new Error('Return to Edit to change the workflow.');
     if(['appearance','alignText','insertElement','fieldSettings','pasteStyle','image','prompt','text','child','link','style','remove','drag','duplicateElement','mirror'].includes(c.type)&&!this.enabled)throw new Error('Enable the workflow before editing.');
     if(c.type==='connectionAnchor'){this.pageEditor.connectionAnchor(c.ratio);return this.snapshot();}
@@ -564,7 +564,7 @@ export class Session {
       const next=clone(workflow);next.edges=next.edges.filter(e=>e.from!==this.stateId||e.source!==source);next.edges.push({id:uid(),from:this.stateId,source,to:c.id});this.commit(next);
     }
     else if(c.type==='state') {if(!this.workflow.states.some(s=>s.id===c.id))throw new Error('State not found.');if(await this.navigateState(c.id,[...this.visits,this.stateId]))return this.snapshot();this.stateId=c.id;this.selected=null;this.visits=[];this.render(true);if(this.liveSession)await this.checkpoint();}
-    else if(c.type==='rename') {const next=clone(this.workflow);next.name=c.text.trim();this.commit(next);}
+    else if(c.type==='rename') {const next=clone(this.workflow);next.name=c.text.trim();this.commit(next,this.stateId,undefined,false);}
     else if(c.type==='undo'||c.type==='redo') {const next=this.history[c.type](this.workflow,this.stateId);if(next){this.workflow=next.workflow;this.stateId=next.stateId;this.selected=null;this.dirty=true;this.visits=[];this.render(true);}}
     else if(c.type==='replay'){if(await this.navigateState(this.workflow.entry,[],'replay'))return this.snapshot();this.replayData=this.defaults();this.replayHistory=[];this.interacting=false;this.projectionActive=true;this.cancelDrag();this.dragging=false;this.replay=true;this.picking=false;this.outline.style.display='none';this.selected=null;this.stateId=this.workflow.entry;this.visits=[];this.render(true);}
     else if(c.type==='edit'){this.panelMinimized=false;const wasReplay=this.replay;this.replayData={};this.replayHistory=[];this.interacting=false;this.authoring=true;this.projectionActive=true;this.replay=false;this.picking=true;this.render(wasReplay);if(this.liveSession)await this.checkpoint();}
