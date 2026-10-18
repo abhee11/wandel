@@ -3,19 +3,31 @@ import {randomUUID} from 'node:crypto';
 import {type DB,one} from './db';
 import {APIError} from './security';
 export interface AccountIdentity {subject:string;email:string;name:string|null}
-export interface IdentityProvider {verify(token:string):Promise<AccountIdentity>}
+export interface IdentityProvider {verify(token:string,requestOrigin?:string|null):Promise<AccountIdentity>}
 export class ClerkIdentity implements IdentityProvider {
  private client;
  constructor(private secretKey:string,private authorizedParties:string[]){this.client=createClerkClient({secretKey});}
- async verify(token:string):Promise<AccountIdentity>{
+ async verify(token:string,requestOrigin?:string|null):Promise<AccountIdentity>{
   if(!this.secretKey)throw new APIError(503,'AUTH_NOT_CONFIGURED','Clerk is not configured yet. Temporary local saves are still available.');
   try{
-   const claims=await verifyToken(token,{secretKey:this.secretKey,authorizedParties:this.authorizedParties});
+   // Verify the signature, expiry and session claims before inspecting azp.
+   // Clerk worker tokens can omit azp when Chrome omits the Origin header.
+   // This API accepts explicit Bearer credentials only, never ambient cookies.
+   // Origin-less worker/native requests still require a fully verified token.
+   const claims=await verifyToken(token,{secretKey:this.secretKey});
+   const trustedExtension=Boolean(requestOrigin?.startsWith('chrome-extension://')&&this.authorizedParties.includes(requestOrigin));
+   if(claims.azp ? !this.authorizedParties.includes(claims.azp) : Boolean(requestOrigin)&&!trustedExtension)throw new APIError(401,'AUTH_ORIGIN_MISMATCH','Wandel’s sign-in origin is not configured on the server.');
    const user=await this.client.users.getUser(claims.sub);
    const email=user.emailAddresses.find(e=>e.id===user.primaryEmailAddressId&&e.verification?.status==='verified');
    if(!email)throw new Error('Verified email required');
    return {subject:user.id,email:email.emailAddress.toLowerCase(),name:[user.firstName,user.lastName].filter(Boolean).join(' ')||null};
-  }catch{throw new APIError(401,'AUTH_REQUIRED','Please sign in with Clerk again.');}
+  }catch(error){
+   // Log only SDK error classification, never credentials or user records.
+   const reason=error&&typeof error==='object'&&'reason' in error?String(error.reason):error instanceof Error?error.name:'unknown';
+   console.warn('Clerk account verification failed:',reason);
+   if(error instanceof APIError)throw error;
+   throw new APIError(401,'AUTH_REQUIRED','Please sign in with Clerk again.');
+  }
  }
 }
 export function provisionIdentity(db:DB,identity:AccountIdentity,now:string){

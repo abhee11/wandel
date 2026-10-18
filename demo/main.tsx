@@ -12,13 +12,15 @@ if(new URL(location.href).searchParams.get('fixture')==='login') {
  root.innerHTML='<main style="padding:48px;width:100%;box-sizing:border-box"><h2>Sign in</h2><form id="login-form" style="max-width:360px;margin:24px auto"><label style="display:block;margin:16px 0">Email<input type="email" style="display:block;width:100%;padding:10px;box-sizing:border-box"></label><label style="display:block;margin:16px 0">Password<input type="password" style="display:block;width:100%;padding:10px;box-sizing:border-box"></label><button type="submit" style="padding:10px 20px"><span>Sign in</span></button></form><p>Local form fixture · no sign-in service</p></main>';
  root.querySelector('form')!.addEventListener('submit',event=>event.preventDefault());
 }
-const session=new Session(root,new Repository(new BrowserStorage()),new URL(location.href),{directSelection:true});
+const featureFixture=new URL(location.href).searchParams.get('fixture')==='feature';
+const session=new Session(root,new Repository(new BrowserStorage()),new URL(location.href),{directSelection:true,...(featureFixture?{requestPlan:async()=>({steps:[],flow:(await import('./fixtures/riskFeature')).riskFeature})}:{})});
 await session.init();
 const canvasTools=document.createElement('div');
 canvasTools.className='lab-canvas-tools';canvasTools.dataset.dxIgnore='true';
 const modeLabel=document.createElement('span'), editButton=document.createElement('button'), replayButton=document.createElement('button');
 editButton.textContent='Edit elements';replayButton.textContent='Replay flow';
 canvasTools.append(modeLabel,editButton,replayButton);root.before(canvasTools);
+if(featureFixture){const build=document.createElement('button');build.textContent='Build sample branching feature';build.onclick=async()=>{await session.dispatch({type:'edit'});document.getElementById('customers-nav')!.click();await session.promptHere('Imagine a risk review feature with approve and reject branches','element');await session.dispatch({type:'replay'});};canvasTools.append(build);const note=document.createElement('span');note.textContent='Scripted sample · no AI request';canvasTools.append(note);}
 editButton.onclick=()=>void session.dispatch({type:'edit'});
 replayButton.onclick=()=>void session.dispatch({type:'replay'});
 session.subscribe(snapshot=>{

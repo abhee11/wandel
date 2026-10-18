@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { BatchSchema, type Batch } from './planSchema';
+import { parseBatch, type Batch } from './planSchema';
 import { OperationSchema, uid, type Locator, type Operation } from '../shared/model';
 export const PlanSchema = z.object({ kind: z.enum(['insert','text']), position: z.enum(['before','after','inside','below']), element: z.enum(['button','panel','text']), text: z.string().trim().min(1).max(300) }).strict();
 export type Plan = z.infer<typeof PlanSchema>;
@@ -37,7 +37,7 @@ export async function requestAI(prompt: string, selection: { tag: string; label:
   const response = await fetch('http://127.0.0.1:4319/plan', { method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${token}`}, body:JSON.stringify({prompt,selection}), signal:AbortSignal.timeout(45000) }).catch(()=>{throw new Error('Cannot reach the AI planner. Start npm run ai and check that it is listening on port 4319.');});
   const body = await response.json();
   if (!response.ok) throw new Error(body.error || 'AI planner failed.');
-  if(body.steps) {for(const step of body.steps)if(step.style)step.style=Object.fromEntries(Object.entries(step.style).filter(([,value])=>value!==null));return BatchSchema.parse(body);}
+  if(body.steps) return parseBatch(body);
   return PlanSchema.parse(body);
 }
 

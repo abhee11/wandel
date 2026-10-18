@@ -1,0 +1,475 @@
+{
+  "draft": {
+    "schemaVersion": 1,
+    "id": "1211dc17-4552-4870-844f-f46e5511e526",
+    "name": "Risk Analysis Flow — v1",
+    "origin": "http://127.0.0.1:5173",
+    "route": "/?journey=risk-beta",
+    "createdAt": "2026-10-17T20:35:32.883Z",
+    "updatedAt": "2026-10-17T20:36:24.163Z",
+    "entry": "f4e1e810-f718-4cfe-8301-86024195f3d9",
+    "maxStates": 30,
+    "states": [
+      {
+        "id": "f4e1e810-f718-4cfe-8301-86024195f3d9",
+        "title": "Existing application",
+        "parent": null,
+        "view": "base",
+        "operations": [
+          {
+            "id": "6025e64a-1f6a-4dec-9acc-daa4f6fcc181",
+            "kind": "insert",
+            "target": {
+              "ancestorTags": [
+                "aside",
+                "div",
+                "div",
+                "div",
+                "div",
+                "body",
+                "html"
+              ],
+              "tag": "button",
+              "role": "button",
+              "name": "♧ Customers 24",
+              "text": "♧ Customers 24",
+              "attrs": {
+                "id": "customers-nav"
+              },
+              "parent": {
+                "tag": "aside",
+                "id": "",
+                "role": "complementary",
+                "label": ""
+              },
+              "previous": "▦ Overview",
+              "next": "▤ Reports"
+            },
+            "position": "after",
+            "node": {
+              "id": "c32a1f5b-d563-47ed-a338-3a9c9fb532dd",
+              "kind": "button",
+              "text": "Risk Analysis",
+              "appearance": {
+                "box-sizing": "border-box",
+                "padding": "10px 12px",
+                "margin": "4px 0px",
+                "gap": "normal",
+                "align-items": "normal",
+                "justify-content": "normal",
+                "color": "rgb(121, 116, 190)",
+                "background-color": "rgb(238, 238, 250)",
+                "border": "0px none rgb(121, 116, 190)",
+                "border-radius": "5px",
+                "box-shadow": "none",
+                "font-family": "Arial",
+                "font-size": "10px",
+                "font-weight": "500",
+                "font-style": "normal",
+                "line-height": "normal",
+                "text-align": "left",
+                "text-decoration-line": "none",
+                "letter-spacing": "normal",
+                "white-space": "normal"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "id": "b7cc1d1f-8f41-4a75-a7f2-b9018ecfa4e0",
+        "title": "Risk Analysis",
+        "parent": "f4e1e810-f718-4cfe-8301-86024195f3d9",
+        "view": "panel",
+        "design": {
+          "surface": {
+            "box-sizing": "border-box",
+            "padding": "23px 12px 0px",
+            "margin": "0px",
+            "gap": "normal",
+            "align-items": "normal",
+            "justify-content": "normal",
+            "color": "rgb(48, 54, 75)",
+            "background-color": "rgb(251, 252, 255)",
+            "border-radius": "0px",
+            "box-shadow": "none",
+            "font-family": "Inter, -apple-system, \"system-ui\", \"Segoe UI\", sans-serif",
+            "font-size": "16px",
+            "font-weight": "400",
+            "font-style": "normal",
+            "line-height": "normal",
+            "text-align": "start",
+            "text-decoration-line": "none",
+            "letter-spacing": "normal",
+            "white-space": "normal"
+          },
+          "heading": {
+            "font-family": "Inter, -apple-system, \"system-ui\", \"Segoe UI\", sans-serif",
+            "color": "rgb(48, 54, 75)"
+          },
+          "text": {
+            "font-family": "Inter, -apple-system, \"system-ui\", \"Segoe UI\", sans-serif",
+            "color": "rgb(48, 54, 75)"
+          },
+          "button": {
+            "box-sizing": "border-box",
+            "padding": "10px 12px",
+            "margin": "4px 0px",
+            "gap": "normal",
+            "align-items": "normal",
+            "justify-content": "normal",
+            "color": "rgb(121, 116, 190)",
+            "background-color": "rgb(238, 238, 250)",
+            "border": "0px none rgb(121, 116, 190)",
+            "border-radius": "5px",
+            "box-shadow": "none",
+            "font-family": "Arial",
+            "font-size": "10px",
+            "font-weight": "500",
+            "font-style": "normal",
+            "line-height": "normal",
+            "text-align": "left",
+            "text-decoration-line": "none",
+            "letter-spacing": "normal",
+            "white-space": "normal"
+          },
+          "field": {},
+          "card": {
+            "font-family": "Inter, -apple-system, \"system-ui\", \"Segoe UI\", sans-serif",
+            "color": "rgb(48, 54, 75)",
+            "background-color": "rgb(251, 252, 255)"
+          },
+          "table": {},
+          "tableHeader": {}
+        },
+        "operations": [
+          {
+            "id": "c7530499-1da7-4bb3-9a1b-b9c0b157614f",
+            "kind": "insert",
+            "target": {
+              "ancestorTags": [
+                "div",
+                "div",
+                "div",
+                "div",
+                "body",
+                "html"
+              ],
+              "owned": "view:b7cc1d1f-8f41-4a75-a7f2-b9018ecfa4e0",
+              "tag": "section",
+              "role": "",
+              "name": "Risk Analysis",
+              "text": "Risk Analysis",
+              "attrs": {},
+              "parent": {
+                "tag": "div",
+                "id": "live-app",
+                "role": "",
+                "label": ""
+              },
+              "previous": "Workspace / Customers ⌕ ◉ YOUR WORKSPACE AT A GLANCE Customers A little context for every customer r",
+              "next": ""
+            },
+            "position": "inside",
+            "node": {
+              "id": "57f0f27d-ea0d-4dbe-a8a7-7f1a1a597ccc",
+              "kind": "button",
+              "text": "View Details",
+              "appearance": {}
+            }
+          }
+        ]
+      },
+      {
+        "id": "91f829cc-3ebf-4dd7-86b7-077adf5bc56c",
+        "title": "Details",
+        "parent": "b7cc1d1f-8f41-4a75-a7f2-b9018ecfa4e0",
+        "view": "panel",
+        "design": {
+          "surface": {
+            "box-sizing": "border-box",
+            "padding": "23px 12px 0px",
+            "margin": "16px 20px",
+            "gap": "normal",
+            "align-items": "normal",
+            "justify-content": "normal",
+            "color": "rgb(48, 54, 75)",
+            "background-color": "rgb(251, 252, 255)",
+            "border": "1px solid rgb(213, 220, 245)",
+            "border-radius": "0px",
+            "box-shadow": "none",
+            "font-family": "Inter, -apple-system, \"system-ui\", \"Segoe UI\", sans-serif",
+            "font-size": "16px",
+            "font-weight": "400",
+            "font-style": "normal",
+            "line-height": "normal",
+            "text-align": "start",
+            "text-decoration-line": "none",
+            "letter-spacing": "normal",
+            "white-space": "normal"
+          },
+          "heading": {
+            "font-family": "Inter, -apple-system, \"system-ui\", \"Segoe UI\", sans-serif",
+            "color": "rgb(48, 54, 75)"
+          },
+          "text": {
+            "font-family": "Inter, -apple-system, \"system-ui\", \"Segoe UI\", sans-serif",
+            "color": "rgb(48, 54, 75)",
+            "box-sizing": "border-box",
+            "padding": "0px",
+            "margin": "8px 0px 16px",
+            "gap": "normal",
+            "align-items": "normal",
+            "justify-content": "normal",
+            "background-color": "rgba(0, 0, 0, 0)",
+            "border": "0px none rgb(48, 54, 75)",
+            "border-radius": "0px",
+            "box-shadow": "none",
+            "font-size": "22px",
+            "font-weight": "600",
+            "font-style": "normal",
+            "line-height": "28.6px",
+            "text-align": "start",
+            "text-decoration-line": "none",
+            "letter-spacing": "normal",
+            "white-space": "normal"
+          },
+          "button": {
+            "box-sizing": "border-box",
+            "padding": "9px 14px",
+            "margin": "4px",
+            "gap": "8px",
+            "align-items": "center",
+            "justify-content": "center",
+            "color": "rgb(48, 54, 75)",
+            "background-color": "rgba(0, 0, 0, 0)",
+            "border": "0px none rgb(48, 54, 75)",
+            "border-radius": "8px",
+            "box-shadow": "none",
+            "font-family": "Inter, -apple-system, \"system-ui\", \"Segoe UI\", sans-serif",
+            "font-size": "16px",
+            "font-weight": "400",
+            "font-style": "normal",
+            "line-height": "normal",
+            "text-align": "center",
+            "text-decoration-line": "none",
+            "letter-spacing": "normal",
+            "white-space": "normal"
+          },
+          "field": {},
+          "card": {
+            "font-family": "Inter, -apple-system, \"system-ui\", \"Segoe UI\", sans-serif",
+            "color": "rgb(48, 54, 75)",
+            "background-color": "rgb(251, 252, 255)"
+          },
+          "table": {},
+          "tableHeader": {}
+        },
+        "operations": [
+          {
+            "id": "41046b7a-838d-4a5a-a3c5-f3030327bf7b",
+            "kind": "insert",
+            "target": {
+              "ancestorTags": [
+                "div",
+                "div",
+                "div",
+                "div",
+                "body",
+                "html"
+              ],
+              "owned": "view:91f829cc-3ebf-4dd7-86b7-077adf5bc56c",
+              "tag": "section",
+              "role": "",
+              "name": "Details",
+              "text": "Details",
+              "attrs": {},
+              "parent": {
+                "tag": "div",
+                "id": "live-app",
+                "role": "",
+                "label": ""
+              },
+              "previous": "",
+              "next": ""
+            },
+            "position": "inside",
+            "node": {
+              "id": "38bb7fbf-2d51-44dc-9481-034c96e86c11",
+              "kind": "button",
+              "text": "Approve",
+              "appearance": {}
+            }
+          }
+        ]
+      },
+      {
+        "id": "a3576e50-2642-4be8-aab4-535b884879aa",
+        "title": "Confirmation",
+        "parent": "91f829cc-3ebf-4dd7-86b7-077adf5bc56c",
+        "view": "panel",
+        "design": {
+          "surface": {
+            "box-sizing": "border-box",
+            "padding": "23px 12px 0px",
+            "margin": "16px 20px",
+            "gap": "normal",
+            "align-items": "normal",
+            "justify-content": "normal",
+            "color": "rgb(48, 54, 75)",
+            "background-color": "rgb(251, 252, 255)",
+            "border": "1px solid rgb(213, 220, 245)",
+            "border-radius": "0px",
+            "box-shadow": "none",
+            "font-family": "Inter, -apple-system, \"system-ui\", \"Segoe UI\", sans-serif",
+            "font-size": "16px",
+            "font-weight": "400",
+            "font-style": "normal",
+            "line-height": "normal",
+            "text-align": "start",
+            "text-decoration-line": "none",
+            "letter-spacing": "normal",
+            "white-space": "normal"
+          },
+          "heading": {
+            "font-family": "Inter, -apple-system, \"system-ui\", \"Segoe UI\", sans-serif",
+            "color": "rgb(48, 54, 75)"
+          },
+          "text": {
+            "font-family": "Inter, -apple-system, \"system-ui\", \"Segoe UI\", sans-serif",
+            "color": "rgb(48, 54, 75)",
+            "box-sizing": "border-box",
+            "padding": "0px",
+            "margin": "8px 0px 16px",
+            "gap": "normal",
+            "align-items": "normal",
+            "justify-content": "normal",
+            "background-color": "rgba(0, 0, 0, 0)",
+            "border": "0px none rgb(48, 54, 75)",
+            "border-radius": "0px",
+            "box-shadow": "none",
+            "font-size": "22px",
+            "font-weight": "600",
+            "font-style": "normal",
+            "line-height": "28.6px",
+            "text-align": "start",
+            "text-decoration-line": "none",
+            "letter-spacing": "normal",
+            "white-space": "normal"
+          },
+          "button": {
+            "box-sizing": "border-box",
+            "padding": "9px 14px",
+            "margin": "4px",
+            "gap": "8px",
+            "align-items": "center",
+            "justify-content": "center",
+            "color": "rgb(48, 54, 75)",
+            "background-color": "rgba(0, 0, 0, 0)",
+            "border": "0px none rgb(48, 54, 75)",
+            "border-radius": "8px",
+            "box-shadow": "none",
+            "font-family": "Inter, -apple-system, \"system-ui\", \"Segoe UI\", sans-serif",
+            "font-size": "16px",
+            "font-weight": "400",
+            "font-style": "normal",
+            "line-height": "normal",
+            "text-align": "center",
+            "text-decoration-line": "none",
+            "letter-spacing": "normal",
+            "white-space": "normal"
+          },
+          "field": {},
+          "card": {
+            "font-family": "Inter, -apple-system, \"system-ui\", \"Segoe UI\", sans-serif",
+            "color": "rgb(48, 54, 75)",
+            "background-color": "rgb(251, 252, 255)"
+          },
+          "table": {},
+          "tableHeader": {}
+        },
+        "operations": [
+          {
+            "id": "2da01af2-12a6-44e7-a4a3-f8c1de4099dd",
+            "kind": "insert",
+            "target": {
+              "ancestorTags": [
+                "div",
+                "div",
+                "div",
+                "div",
+                "body",
+                "html"
+              ],
+              "owned": "view:a3576e50-2642-4be8-aab4-535b884879aa",
+              "tag": "section",
+              "role": "",
+              "name": "Confirmation",
+              "text": "Confirmation",
+              "attrs": {},
+              "parent": {
+                "tag": "div",
+                "id": "live-app",
+                "role": "",
+                "label": ""
+              },
+              "previous": "",
+              "next": ""
+            },
+            "position": "inside",
+            "node": {
+              "id": "7e324555-192a-49c7-b893-b22be89a201d",
+              "kind": "text",
+              "text": "Approved",
+              "appearance": {
+                "font-family": "Inter, -apple-system, \"system-ui\", \"Segoe UI\", sans-serif",
+                "color": "rgb(48, 54, 75)",
+                "box-sizing": "border-box",
+                "padding": "0px",
+                "margin": "8px 0px 16px",
+                "gap": "normal",
+                "align-items": "normal",
+                "justify-content": "normal",
+                "background-color": "rgba(0, 0, 0, 0)",
+                "border": "0px none rgb(48, 54, 75)",
+                "border-radius": "0px",
+                "box-shadow": "none",
+                "font-size": "22px",
+                "font-weight": "600",
+                "font-style": "normal",
+                "line-height": "28.6px",
+                "text-align": "start",
+                "text-decoration-line": "none",
+                "letter-spacing": "normal",
+                "white-space": "normal"
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "edges": [
+      {
+        "id": "e5c4231b-984b-497d-9eb1-2c62421a3bf4",
+        "from": "f4e1e810-f718-4cfe-8301-86024195f3d9",
+        "source": "c32a1f5b-d563-47ed-a338-3a9c9fb532dd",
+        "to": "b7cc1d1f-8f41-4a75-a7f2-b9018ecfa4e0"
+      },
+      {
+        "id": "50696e87-1edc-4c38-8732-f0b887aa7bf8",
+        "from": "b7cc1d1f-8f41-4a75-a7f2-b9018ecfa4e0",
+        "source": "57f0f27d-ea0d-4dbe-a8a7-7f1a1a597ccc",
+        "to": "91f829cc-3ebf-4dd7-86b7-077adf5bc56c"
+      },
+      {
+        "id": "f0a89a36-3d37-43d0-b5bd-d8efb20f0cc3",
+        "from": "91f829cc-3ebf-4dd7-86b7-077adf5bc56c",
+        "source": "38bb7fbf-2d51-44dc-9481-034c96e86c11",
+        "to": "a3576e50-2642-4be8-aab4-535b884879aa"
+      }
+    ]
+  },
+  "enabled": true,
+  "currentVersion": 0,
+  "versions": []
+}

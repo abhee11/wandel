@@ -1,6 +1,6 @@
 # Wandel — Workflow Lab
 
-Release planning: [Deployment, security and missing functionality checklist](docs/RELEASE_CHECKLIST.md).
+Release planning: [Free launch checklist, with cloud and paid features deferred](docs/RELEASE_CHECKLIST.md#free-launch-checklist--do-this-first).
 
 A Chrome extension for prototyping **multi-step product workflows on top of a live application**. Select an element, describe the UI to add, connect a prototype button to a new state, and keep building with the same tools in every state. Save the complete graph as an immutable version and replay it later.
 
@@ -161,7 +161,7 @@ The optional AI planner now returns up to 20 validated operations (insert, text,
 
 A login fixture for testing is available at `http://127.0.0.1:5173/?fixture=login`. It does not connect to any sign-in service.
 
-The side panel defaults to **AI planner**. Before the first request, paste the local server token and click **Connect AI**. This checks the server configuration without making a model request. A connected server may still report provider credential, model, or quota errors when you run a prompt. **Offline presets** remains an explicit fallback for bounded commands. The on-page contextual prompt runs supported quick edits locally and uses the panel’s configured AI connection for broader requests.
+The extension defaults to **Wandel account** AI through the authenticated `/api/ai/plan` endpoint. Sign in under Account and configure the server's OpenAI key/model. To use a local companion instead, open AI connection settings, choose **Use local server**, paste its token and click **Connect AI**. This checks the server configuration without making a model request. A connected server may still report provider credential, model, or quota errors when you run a prompt. **Offline presets** remains an explicit fallback for bounded commands. The on-page contextual prompt runs supported quick edits locally and uses the panel’s configured AI connection for broader requests.
 
 The AI server automatically loads the project-root `.env` file on startup (Node 20.12+). Set `OPENAI_API_KEY` and `OPENAI_MODEL` there; restart `npm run ai` after changing them. The `.env` file is excluded from version control.
 
@@ -199,7 +199,7 @@ Reload Wandel in `chrome://extensions`. Sign in from the panel, finish Google au
 
 For successful Stripe test payments, use `4242 4242 4242 4242`, a future expiry, and any three-digit CVC in Stripe's test form. Never use a real card. Configure Stripe's test billing portal to manage/cancel subscriptions from Account. No payment information passes through Wandel.
 
-The local account server listens on loopback; deployment and a hosted/shared database are separate setup steps. The extension's AI prompt connection remains the existing local planner, separate from account authentication and save entitlements.
+The local account server listens on loopback; deployment and a hosted/shared database are separate setup steps. The extension's default AI path uses the account API and its usage limits. The local companion planner remains an optional connection.
 
 ### Validation and security
 
@@ -220,3 +220,31 @@ Edits are checkpointed locally after a short idle period without creating a vers
 The homepage demonstration now continues through Customers → Risk Analysis → Details → Approval. A visitor can take over the current scene and advance its workflow buttons. It remains a preset demonstration, not an AI call.
 
 Clerk development setup was linked with the official CLI to the Wandel app on October 4, 2026. `clerk doctor` verified the app connection and development key configuration; Google and email sign-in are enabled. Production setup and the first end-to-end extension login/account save remain separate verification steps.
+
+### One-prompt connected flows
+
+Select a control and ask “Build a risk review flow with customer details, approval and confirmation.” The planner can create a launch button and 2–8 connected prototype panels in one undoable change. The last panel ends the flow; intermediate actions open the next panel. Use **Try flow** to replay, or select a generated element to refine it with the same editing tools. The compact on-page trail opens any generated step. Saves include all screens and connections.
+
+Generated buttons borrow the selected control's colors and font size locally; this is basic appearance matching, not full component reconstruction. Only the explicit prompt and selection label/tag go to the provider. Plans are bounded structured data, never executable markup. Flow generation requires configured AI; offline commands do not generate arbitrary workflows.
+
+### Section redesign and Chrome sign-in
+
+Shift-click a page element to select its surrounding section, or use **↑ Section** and **↑ Parent** in the on-page toolbar. **Reimagine** fills a section-scoped prompt; press Enter to generate a replacement containing editable copy, cards, fields and an optional prototype button. The original section is hidden locally and restored by Undo, reset or closing the editor. It does not publish changes to the source application.
+
+After rebuilding, reload Wandel at `chrome://extensions` and refresh the target tab. Sign in to the helper from the same Chrome profile as the installed extension; signing in through Codex's in-app browser does not establish the Chrome session. Development registration can be stored as an explicit array of `chrome-extension://<id>` origins in `.data/development-extension-origins.json`; the local server merges these with the environment allowlist. Production ignores this file and requires `WANDEL_EXTENSION_ORIGINS`. Register the same exact origin with Clerk. No wildcard origins are accepted in the local registration file.
+
+### Guest AI previews
+
+The extension shows a visible Guest/Sign in profile row and allows two AI attempts per anonymous installation identifier without Clerk login. Guest prompts are capped at 600 characters, selection labels at 160 characters and request bodies at 2.4 KB. A relevance filter rejects obviously unrelated or instruction-override requests before the provider call. Guest output is capped at 1,500 model tokens and validated as at most five edits to the selected target or one section with at most three cards and three fields. Connected flows require sign-in. Signed-in planner output is capped at 4,000 tokens.
+
+SQLite reserves each guest attempt before calling AI, including failed attempts; duplicate successful request IDs replay their result without another call. Additional hard limits are 10 attempts per network address per UTC day and 50 guest attempts across this server per UTC day. Anonymous identifiers are resettable, so these are not verified-person quotas. Network limits use the direct peer address (forwarded headers are not trusted); deployments behind a proxy may share a conservative network cap. The relevance filter is heuristic; strict output validation and hard budgets provide the spend boundary. Profile identity refreshes when the extension regains focus. Local edits and temporary saves remain available after previews are exhausted.
+
+## Branching feature creation
+
+With the AI connection enabled, select an existing control and ask:
+
+> Add a risk analysis feature: a dashboard with sample metrics, customer details with a review note, separate Approve and Reject confirmations, and a return to the dashboard showing the decision.
+
+Generated flows support 2–8 screens per request, multiple actions per screen, return links, cards, metrics, and small tables. Edit any generated element, or use **On click → New state** to extend it. The existing 30-state engine limit still applies. Sample data assignments and bound fields are local simulation only; they do not call the application's backend. **Back** restores the preceding decision state; **Restart** resets all sample data. Replay input values are transient and excluded from saved workflows.
+
+For a deterministic engine demonstration, run `npm run dev`, open `/?fixture=feature`, and click **Build sample branching feature**. The fixture is labelled as scripted; it does not invoke AI. Reload the unpacked extension and restart/redeploy the planner service after updating, so both use the new graph contract. The local-only free build can replay saved graphs and create manual steps but does not call hosted AI.

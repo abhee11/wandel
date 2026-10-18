@@ -1,9 +1,10 @@
+import {guestPlan} from './guestAI';
 import {workflowStore} from './workflows';
 import {provisionIdentity,type IdentityProvider} from './clerk';
 import {randomUUID,createHash} from 'node:crypto';
 import {z} from 'zod';
 import {WorkflowSchema,type Workflow} from '../../extension/shared/model';
-import {validateWorkflow,createWorkflow,lineage} from '../../extension/prototype/engine';
+import {validateWorkflow,createWorkflow,workflowDepth} from '../../extension/prototype/engine';
 import {BatchSchema} from '../../extension/ai/planSchema';
 import type {DB} from './db';
 import {one,all} from './db';
@@ -12,7 +13,7 @@ import {APIError,checkPassword,hashPassword,rateLimit,secret,tokenHash} from './
 import {Entitlements} from './entitlements';
 import {MockBillingProvider,type BillingProvider,type Checkout} from './billing';
 import {LocalAnalytics,type Analytics} from './analytics';
-import type {AIProvider,MailProvider} from './providers';
+import {AIProviderError,type AIProvider,type MailProvider} from './providers';
 interface User {id:string;email:string;name:string|null;password_hash:string;created_at:string;updated_at:string;}
 interface Prototype {id:string;user_id:string;name:string;description:string;target_domain:string;current_version:number;revision:number;created_at:string;updated_at:string;definition?:string;}
 const email=z.string().trim().email().max(254).transform(x=>x.toLowerCase());
@@ -31,10 +32,10 @@ export function createPlatform(options:{db:DB;config:Config;ai:AIProvider;mail:M
  const cookie=(token:string,clear=false)=>`wandel_session=${token}; HttpOnly; Path=/; SameSite=Lax; Max-Age=${clear?0:2592000}${config.production?'; Secure':''}`;
  function issue(userId:string,kind:'web'|'extension') {const token=secret();db.prepare('INSERT INTO sessions VALUES (?,?,?,?,?)').run(tokenHash(token,config.pepper),userId,kind,new Date(clock().getTime()+2592000000).toISOString(),now());return token;}
  function credential(req:Request){const bearer=req.headers.get('authorization');if(bearer?.startsWith('Bearer '))return {raw:bearer.slice(7),kind:'extension'};return {raw:req.headers.get('cookie')?.match(/(?:^|;\s*)wandel_session=([^;]+)/)?.[1]||'',kind:'web'};}
- async function user(req:Request){const c=credential(req);if(config.authMode==='clerk'){if(!options.identity)throw new APIError(503,'AUTH_NOT_CONFIGURED','Clerk is not configured. Temporary local saves are available.');if(!req.headers.get('authorization')?.startsWith('Bearer '))throw new APIError(401,'AUTH_REQUIRED','Sign in to save to your account.');const identity=await options.identity.verify(c.raw);const id=provisionIdentity(db,identity,now());return one<User>(db,'SELECT * FROM users WHERE id=?',id)!;}const u=one<User>(db,'SELECT u.* FROM users u JOIN sessions s ON s.user_id=u.id WHERE s.token_hash=? AND s.kind=? AND s.expires_at>?',tokenHash(c.raw,config.pepper),c.kind,now());if(!u)throw new APIError(401,'AUTH_REQUIRED','Please log in to continue.');return u;}
+ async function user(req:Request){const c=credential(req);if(config.authMode==='clerk'){if(!options.identity)throw new APIError(503,'AUTH_NOT_CONFIGURED','Clerk is not configured. Temporary local saves are available.');if(!req.headers.get('authorization')?.startsWith('Bearer '))throw new APIError(401,'AUTH_REQUIRED','Sign in to save to your account.');const identity=await options.identity.verify(c.raw,req.headers.get('origin'));const id=provisionIdentity(db,identity,now());return one<User>(db,'SELECT * FROM users WHERE id=?',id)!;}const u=one<User>(db,'SELECT u.* FROM users u JOIN sessions s ON s.user_id=u.id WHERE s.token_hash=? AND s.kind=? AND s.expires_at>?',tokenHash(c.raw,config.pepper),c.kind,now());if(!u)throw new APIError(401,'AUTH_REQUIRED','Please log in to continue.');return u;}
  function owned(userId:string,id:string,definition=false){const p=one<Prototype>(db,definition?'SELECT p.*,d.definition FROM prototypes p JOIN prototype_definitions d ON d.prototype_id=p.id WHERE p.id=? AND p.user_id=?':'SELECT * FROM prototypes WHERE id=? AND user_id=?',id,userId);if(!p)throw new APIError(404,'NOT_FOUND','Prototype not found.');return p;}
- function definition(input:Workflow,domain:string,userId:string,previous?:Workflow){let w:Workflow;let origin:string;try{w=validateWorkflow(input);origin=new URL(w.origin).origin;}catch{throw new APIError(400,'INVALID_DEFINITION','The workflow definition has invalid states, interactions, or origin.');}if(origin!==domain)throw new APIError(400,'INVALID_TARGET','Workflow origin must match the target domain.');const depth=Math.max(...w.states.map(s=>lineage(w,s.id).length-1)),limit=entitlements.get(userId).limits.maxDepth;
-  if(limit!==null&&depth>limit){const old=previous?Math.max(...previous.states.map(s=>lineage(previous,s.id).length-1)):0;if(depth>old)throw new APIError(403,'DEPTH_LIMIT_REACHED',`Your plan allows ${limit} steps beyond the original page.`,{upgradeUrl:'/pricing'});}return w;
+ function definition(input:Workflow,domain:string,userId:string,previous?:Workflow){let w:Workflow;let origin:string;try{w=validateWorkflow(input);origin=new URL(w.origin).origin;}catch{throw new APIError(400,'INVALID_DEFINITION','The workflow definition has invalid states, interactions, or origin.');}if(origin!==domain)throw new APIError(400,'INVALID_TARGET','Workflow origin must match the target domain.');const depth=workflowDepth(w),limit=entitlements.get(userId).limits.maxDepth;
+  if(limit!==null&&depth>limit){const old=previous?workflowDepth(previous):0;if(depth>old)throw new APIError(403,'DEPTH_LIMIT_REACHED',`Your plan allows ${limit} steps beyond the original page.`,{upgradeUrl:'/pricing'});}return w;
  }
  async function body(req:Request){const raw=await req.text();if(Buffer.byteLength(raw)>1048576)throw new APIError(413,'BODY_TOO_LARGE','Request must be under 1 MB.');try{return JSON.parse(raw||'{}');}catch{throw new APIError(400,'INVALID_JSON','Invalid JSON request.');}}
  async function route(req:Request,ip:string):Promise<Response>{
@@ -67,6 +68,7 @@ export function createPlatform(options:{db:DB;config:Config;ai:AIProvider;mail:M
    db.transaction(()=>{const reset=one<{user_id:string}>(db,'SELECT user_id FROM password_resets WHERE token_hash=? AND expires_at>?',tokenHash(data.token,config.pepper),now());if(!reset)throw new APIError(400,'INVALID_RESET','This reset link is invalid or expired.');db.prepare('UPDATE users SET password_hash=?,updated_at=? WHERE id=?').run(hash,now(),reset.user_id);db.prepare('DELETE FROM sessions WHERE user_id=?').run(reset.user_id);db.prepare('DELETE FROM password_resets WHERE user_id=?').run(reset.user_id);}).immediate();
    return json({message:'Password updated. Please log in.'},200,{'Set-Cookie':cookie('',true)});
   }
+  if(path==='/api/ai/guest-plan'&&method==='POST'){rateLimit(db,`guest-request:${tokenHash(ip,config.pepper)}`,12,clock().getTime(),60000);const raw=await req.text();if(Buffer.byteLength(raw)>2400)throw new APIError(413,'BODY_TOO_LARGE','Free preview requests must be under 2.4 KB.');let data:unknown;try{data=JSON.parse(raw);}catch{throw new APIError(400,'INVALID_JSON','Invalid request.');}return json(await guestPlan(db,ai,config.pepper,ip,data,clock()));}
   const u=await user(req);
   if(path==='/api/auth/logout'&&method==='POST'){db.prepare('DELETE FROM sessions WHERE token_hash=?').run(tokenHash(credential(req).raw,config.pepper));return json({ok:true},200,{'Set-Cookie':cookie('',true)});}
   if(path==='/api/auth/token'&&method==='POST'){const data=z.object({password}).strict().parse(await body(req));if(!await checkPassword(data.password,u.password_hash))throw new APIError(401,'INVALID_CREDENTIALS','Password is incorrect.');return json({token:issue(u.id,'extension'),expiresIn:2592000});}
@@ -113,7 +115,7 @@ export function createPlatform(options:{db:DB;config:Config;ai:AIProvider;mail:M
     entitlements.requireAI(u.id);const usage=entitlements.get(u.id).usage;db.prepare('INSERT INTO ai_actions VALUES (?,?,?,?,?,?,\'pending\',NULL,?,?)').run(actionId,u.id,data.requestId,fingerprint,usage.periodStart,usage.resetsAt,now(),now());}).immediate();}catch(e){if(e instanceof APIError&&e.code==='AI_LIMIT_REACHED')track('ai_limit_reached',u.id);throw e;}
    if(cached)return json({plan:cached,usage:entitlements.get(u.id).usage});track('ai_edit_requested',u.id);
    try{const plan=BatchSchema.parse(await ai.plan({prompt:data.prompt,selection:data.selection}));db.prepare("UPDATE ai_actions SET status='succeeded',result=?,updated_at=? WHERE id=?").run(JSON.stringify(plan),now(),actionId);return json({plan,usage:entitlements.get(u.id).usage});}
-   catch{db.prepare("UPDATE ai_actions SET status='failed',updated_at=? WHERE id=?").run(now(),actionId);throw new APIError(502,'AI_UNAVAILABLE','AI could not complete the request. No edit was charged. Please retry.');}
+   catch(error){db.prepare("UPDATE ai_actions SET status='failed',updated_at=? WHERE id=?").run(now(),actionId);if(error instanceof AIProviderError){console.warn(JSON.stringify({event:'ai_request_failed',code:error.code}));throw new APIError(503,error.code,error.message+' No edit was charged.');}throw new APIError(502,'AI_UNAVAILABLE','AI could not complete the request. No edit was charged. Please retry.');}
   }
   if(path==='/api/billing'&&method==='GET')return json({subscription:entitlements.subscription(u.id),entitlements:entitlements.get(u.id),priceCents:config.priceCents,currency:config.currency,mock:!billing.mode&&config.mockBilling,billingMode:billing.mode||'mock'});
   if(path==='/api/billing/checkout'&&method==='POST'){rateLimit(db,`checkout:${u.id}`,10,clock().getTime());if(entitlements.get(u.id).plan==='PRO')throw new APIError(409,'ALREADY_SUBSCRIBED','You already have Pro.');track('upgrade_clicked',u.id);const checkout=await billing.start(u.id);track('checkout_started',u.id);return json(checkout,201);}

@@ -3,7 +3,7 @@ import {database,type DB} from '../platform/server/db';
 import {createPlatform} from '../platform/server/app';
 import {configuration} from '../platform/server/config';
 import {MockAIProvider,type AIProvider} from '../platform/server/providers';
-import {createWorkflow} from '../extension/prototype/engine';
+import {createWorkflow,addCapturedScreen} from '../extension/prototype/engine';
 import {randomUUID} from 'node:crypto';
 import {mkdtempSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
@@ -107,7 +107,7 @@ it('persists sessions and workflow definitions across a database reopen',async()
  app=createPlatform({db:disk,config:cfg,clock:()=>now,ai:provider,mail:{reset:async()=>{}}});
  expect((await request('/api/me','GET',undefined,cookie)).status).toBe(200);
  const restored=await request('/api/prototypes/'+p.id,'GET',undefined,cookie);expect(restored.body.name).toBe('Durable flow');expect(restored.body.definition.states).toHaveLength(1);
- expect((disk.prepare('SELECT count(*) n FROM schema_migrations').get() as any).n).toBe(2);
+ expect((disk.prepare('SELECT count(*) n FROM schema_migrations').get() as any).n).toBe(3);
  }finally{disk.close();rmSync(dir,{recursive:true,force:true});}
 });
 it('rejects malformed workflow graphs with useful validation errors',async()=>{
@@ -167,4 +167,33 @@ it('uses a verified Clerk subject, isolates accounts, and disables legacy auth i
  expect((await request('/api/workflows/'+workflow.id,'GET',undefined,undefined,b)).status).toBe(404);
  expect((await request('/api/me','GET',undefined,undefined,a)).body.user.id).toBe(me.body.user.id);
  expect((db.prepare('SELECT count(*) n FROM users').get() as any).n).toBe(2);
+});
+
+it('returns and caches a complete connected flow through the authenticated AI endpoint',async()=>{
+ const flow={name:'Risk review',entryLabel:'Review risk',screens:[{title:'Details',body:'Review the example.',fields:['Reason'],actionLabel:'Approve'},{title:'Approved',body:'Prototype complete.',fields:[],actionLabel:null}]};
+ const plan=vi.spyOn(provider,'plan').mockResolvedValue({steps:[],flow});const cookie=await signup();
+ const input={prompt:'Build a review flow',selection:{tag:'button',label:'Customers'},requestId:randomUUID()};
+ const first=await request('/api/ai/plan','POST',input,cookie);expect(first.status).toBe(200);expect(first.body.plan.flow).toEqual(flow);
+ const second=await request('/api/ai/plan','POST',input,cookie);expect(second.body.plan).toEqual(first.body.plan);expect(plan).toHaveBeenCalledTimes(1);expect(second.body.usage.used).toBe(1);
+});
+
+it('allows two bounded guest requests through HTTP without account auth and rejects untrusted origins',async()=>{
+ const guestId=randomUUID(),input={guestId,requestId:randomUUID(),prompt:'Add a button beside this',selection:{tag:'button',label:'Customers'}};
+ expect((await request('/api/ai/guest-plan','POST',input,undefined,{Origin:'https://untrusted.example'})).status).toBe(403);
+ expect((await request('/api/ai/guest-plan','POST',input)).body.remaining).toBe(1);
+ expect((await request('/api/ai/guest-plan','POST',{...input,requestId:randomUUID()})).body.remaining).toBe(0);
+ expect((await request('/api/ai/guest-plan','POST',{...input,requestId:randomUUID()})).body.error.code).toBe('GUEST_LIMIT');
+});
+it('persists conditional connections and fallback views through the workflow API',async()=>{
+ const cookie=await signup(),workflow=createWorkflow(new URL('https://example.com/signup'),'Conditional signup'),to=randomUUID(),source=randomUUID();
+ const locator=(tag:string,name:string,id:string)=>({tag,role:'',name,text:'',attrs:{id},parent:{tag:'main',id:'',role:'',label:''},previous:'',next:''});
+ workflow.states[0].operations.push({id:randomUUID(),kind:'trigger',target:locator('button','Continue','continue'),source});workflow.states.push({id:to,title:'Account details',parent:workflow.entry,view:'panel',operations:[]});
+ workflow.edges.push({id:randomUUID(),from:workflow.entry,source,to,event:'click',conditions:[{target:locator('input','Terms','terms'),test:'checked'},{target:locator('input','Email','email'),test:'valid'}],otherwise:workflow.entry});
+ const saved=await request('/api/workflows','POST',{workflow,revision:null,requestId:randomUUID()},cookie);expect(saved.status).toBe(200);const restored=await request('/api/workflows/'+workflow.id,'GET',undefined,cookie);expect(restored.body.record.draft.edges).toEqual(workflow.edges);
+});
+
+it('retains captured route metadata, thumbnails and editable content through cloud save and load',async()=>{
+ const cookie=await signup(),base=createWorkflow(new URL('https://example.com/start'));
+ const screen={id:randomUUID(),url:'https://example.com/settings',route:'/settings',title:'Settings',thumbnail:'data:image/png;base64,aGVsbG8=',nodes:Array.from({length:180},(_,i)=>({id:randomUUID(),parent:i-1,tag:'div',text:'',style:{}})),capturedAt:new Date().toISOString(),truncated:false};
+ const {workflow,stateId}=addCapturedScreen(base,base.entry,screen);const saved=await request('/api/workflows','POST',{workflow,revision:null,requestId:randomUUID()},cookie);expect(saved.status).toBe(200);const loaded=await request('/api/workflows/'+workflow.id,'GET',undefined,cookie);expect(loaded.body.record.draft.states.find((s:any)=>s.id===stateId)).toEqual(workflow.states.find(s=>s.id===stateId));
 });

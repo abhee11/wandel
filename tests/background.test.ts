@@ -1,3 +1,5 @@
+vi.mock('../extension/background/liveNavigation',()=>({registerLiveNavigation:vi.fn()}));
+vi.mock('../extension/background/screens',()=>({registerScreenCatalog:vi.fn()}));
 vi.mock('../extension/background/account',()=>({registerAccountBridge:vi.fn()}));
 import {it,expect,vi,afterEach} from 'vitest';
 afterEach(()=>{vi.unstubAllGlobals();vi.resetModules();});
@@ -19,4 +21,14 @@ it('collapses only the requesting extension tab',async()=>{
  await import('../extension/background/index');setOptions.mockClear();const reply=vi.fn();
  receive({type:'WANDEL_COLLAPSE'},{id:'other',tab:{id:8},frameId:0},reply);expect(setOptions).not.toHaveBeenCalled();
  receive({type:'WANDEL_COLLAPSE'},{id:'wandel',tab:{id:8},frameId:0},reply);await Promise.resolve();expect(setOptions).toHaveBeenCalledWith({tabId:8,enabled:false});expect(reply).toHaveBeenCalledWith({ok:true});
+});
+
+it('opens Connections only for the requesting extension tab and handles a lost gesture',async()=>{
+ let receive:any;const setOptions=vi.fn(async()=>{}),open=vi.fn(async()=>{});
+ vi.stubGlobal('chrome',{runtime:{id:'wandel',onMessage:{addListener:(fn:any)=>{receive=fn;}}},sidePanel:{setOptions,open,setPanelBehavior:vi.fn(async()=>{})},action:{onClicked:{addListener:vi.fn()}},tabs:{onCreated:{addListener:vi.fn()}},webNavigation:{onHistoryStateUpdated:{addListener:vi.fn()},onReferenceFragmentUpdated:{addListener:vi.fn()}}});
+ await import('../extension/background/index');const reply=vi.fn();setOptions.mockClear();
+ receive({type:'WANDEL_OPEN_CONNECTIONS'},{id:'other',tab:{id:8},frameId:0},reply);expect(open).not.toHaveBeenCalled();
+ receive({type:'WANDEL_OPEN_CONNECTIONS'},{id:'wandel',tab:{id:8},frameId:1},reply);expect(open).not.toHaveBeenCalled();
+ setOptions.mockImplementationOnce(()=>new Promise<void>(()=>{}));receive({type:'WANDEL_OPEN_CONNECTIONS'},{id:'wandel',tab:{id:8},frameId:0},reply);expect(open).toHaveBeenCalledWith({tabId:8});expect(setOptions).toHaveBeenLastCalledWith({tabId:8,path:'sidepanel.html?tabId=8',enabled:true});await Promise.resolve();expect(reply).toHaveBeenCalledWith({ok:true});
+ open.mockRejectedValueOnce(new Error('User gesture required'));receive({type:'WANDEL_OPEN_CONNECTIONS'},{id:'wandel',tab:{id:8},frameId:0},reply);await Promise.resolve();await Promise.resolve();expect(reply).toHaveBeenLastCalledWith({error:'Click the Wandel extension icon to open Connections.'});
 });

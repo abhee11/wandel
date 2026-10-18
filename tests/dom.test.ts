@@ -11,6 +11,15 @@ beforeEach(()=>{document.body.innerHTML='<main id="host"><nav id="nav"><button i
 afterEach(()=>{session?.destroy();session=undefined;});
 const host=()=>document.getElementById('host')!;
 describe('conservative locators',()=>{
+ it('resolves the selected nested dialog wrapper after rerender but rejects duplicate sibling dialogs',()=>{
+  host().innerHTML='<div><div><div><h2>Advanced</h2><h3>Rubrics</h3><button>Engagement</button><h3>Metrics</h3><button>Talk Time</button></div></div></div>';
+  const selected=host().querySelector('div div')!,locator=describeElement(selected).locator;
+  expect(resolve(locator,host(),new Map())).toBe(selected);
+  host().innerHTML=host().innerHTML;
+  expect(resolve(locator,host(),new Map())).toBe(host().querySelector('div div'));
+  host().append(host().firstElementChild!.cloneNode(true));
+  expect(resolve(locator,host(),new Map())).toBeNull();
+ });
  it('relocates after a rerender and refuses ambiguous duplicates',()=>{
   const l=describeElement(document.getElementById('customers')!).locator;
   document.querySelector('nav')!.innerHTML='<span>New label</span><button id="customers">Customers</button>';
@@ -443,4 +452,81 @@ it('edits a mirrored field placeholder without touching its value and undoes cle
  await session.dispatch({type:'duplicateElement'});const id=session.selected!.locator.owned!;await session.dispatch({type:'mirror'});await session.dispatch({type:'text',text:'Work email'});
  expect((session.renderer.owned.get(id) as HTMLInputElement).placeholder).toBe('Work email');expect(field.placeholder).toBe('Email');expect(field.value).toBe('private');
  await session.dispatch({type:'undo'});expect((session.renderer.owned.get(id) as HTMLInputElement).placeholder).toBe('Email');
+});
+
+const generatedFlow={name:'Risk Analysis Flow',entryLabel:'Risk Analysis',screens:[
+ {title:'Risk analysis',body:'Review the illustrative risk summary.',fields:[],actionLabel:'View details'},
+ {title:'Customer details',body:'Review this prototype before approval.',fields:['Approval reason'],actionLabel:'Approve'},
+ {title:'Confirmation',body:'Review approved in this prototype.',fields:[],actionLabel:null}
+]};
+it('generates a whole flow atomically, refines it, saves and replays after reload',async()=>{
+ const repository=new Repository(new BrowserStorage()),url=new URL('https://example.com/customers');
+ const planner=vi.fn().mockResolvedValue({steps:[],flow:generatedFlow});
+ document.getElementById('customers')!.style.cssText='background-color:rgb(20, 100, 70);color:rgb(255,255,255);font-size:16px';
+ session=new Session(host(),repository,url,{requestPlan:planner});await session.init();await session.dispatch({type:'edit'});document.getElementById('customers')!.click();
+ await session.promptHere('Add a risk review workflow with details and confirmation','element');
+ expect(planner).toHaveBeenCalledTimes(1);expect(session.workflow.states).toHaveLength(4);expect(session.workflow.edges).toHaveLength(3);
+ const launch=session.selected!.locator.owned!;expect(session.renderer.owned.get(launch)!.style.backgroundColor).toBe('rgb(20, 100, 70)');
+ await session.dispatch({type:'undo'});expect(session.workflow.states).toHaveLength(1);expect(host().textContent).toBe('Customers');
+ await session.dispatch({type:'redo'});expect(session.workflow.states).toHaveLength(4);
+ const details=session.workflow.states[2];await session.dispatch({type:'state',id:details.id});
+ const field=[...session.renderer.owned.values()].find(el=>el.dataset.dxLabel==='Approval reason')!;expect(field).toBeTruthy();
+ session.renderer.owned.get(`heading:${details.id}`)!.click();await session.promptHere('Rename this to Review details','element');
+ expect(session.renderer.owned.get(`heading:${details.id}`)!.textContent).toBe('Review details');expect(planner).toHaveBeenCalledTimes(1);
+ await session.dispatch({type:'saveTemporary'});const id=session.workflow.id;session.destroy();
+ session=new Session(host(),repository,url);await session.init();await session.dispatch({type:'load',id});await session.dispatch({type:'replay'});
+ for(const edge of session.workflow.edges){session.renderer.owned.get(edge.source)!.click();expect(session.stateId).toBe(edge.to);expect(session.unresolved).toEqual([]);}
+ expect(session.renderer.owned.has(`view:${details.id}`)).toBe(false);
+ expect(host().textContent).toContain('Review approved in this prototype.');
+ await session.dispatch({type:'back'});expect(session.stateId).toBe(details.id);expect(session.renderer.owned.get(`view:${details.id}`)!.style.display).not.toBe('none');
+ await session.dispatch({type:'reset'});expect(host().textContent).toBe('Customers');
+});
+it('rejects incomplete flow plans without partially modifying the page',async()=>{
+ session=new Session(host(),new Repository(new BrowserStorage()),new URL('https://example.com'));await session.init();await session.dispatch({type:'edit'});document.getElementById('customers')!.click();
+ const before=JSON.stringify(session.workflow);
+ await expect(session.dispatch({type:'prompt',prompt:'Build a flow',plan:{steps:[],flow:{...generatedFlow,screens:[{...generatedFlow.screens[0],actionLabel:null},generatedFlow.screens[2]]}}})).rejects.toThrow();
+ expect(JSON.stringify(session.workflow)).toBe(before);expect(host().textContent).toBe('Customers');expect(session.history.past).toHaveLength(0);
+});
+
+it('selects a div-based section and reimagines it without changing neighboring content',async()=>{
+ host().innerHTML='<div id="hero"><div><h2>Automate weekly reporting</h2><p>Bring your work together.</p></div><button>Get started</button></div><footer>Keep this footer</footer>';
+ const plan={steps:[],section:{title:'A calmer workspace',description:'Your priorities in one place.',cards:[{title:'Today',body:'Focus on what matters.'}],fields:['Project name'],actionLabel:'Start a project'}};
+ const planner=vi.fn().mockResolvedValue(plan);session=new Session(host(),new Repository(new BrowserStorage()),new URL('https://www.notion.com'),{requestPlan:planner});await session.init();await session.dispatch({type:'edit'});
+ host().querySelector('h2')!.dispatchEvent(new MouseEvent('click',{bubbles:true,shiftKey:true}));expect(session.selected?.locator.attrs.id).toBe('hero');
+ const original=host().querySelector<HTMLElement>('#hero')!;
+ await session.promptHere('Reimagine this section with cards and fields','element');expect(original.style.display).toBe('none');expect(session.unresolved).toEqual([]);expect(host().querySelector('footer')!.textContent).toBe('Keep this footer');
+ const panel=session.findSelected()!;expect(panel.textContent).toContain('A calmer workspace');expect(panel.textContent!.match(/A calmer workspace/g)).toHaveLength(1);expect(panel.querySelector('input')!.placeholder).toBe('Project name');
+ await session.dispatch({type:'undo'});expect(original.style.display).toBe('');expect(host().querySelector('[data-dx-owned]')).toBeNull();
+ await session.dispatch({type:'redo'});expect(session.unresolved).toEqual([]);expect(original.style.display).toBe('none');
+});
+it('selects a Notion-like editable block by its stable ID without reading editor values',async()=>{
+ host().innerHTML='<div data-block-id="first"><div contenteditable="true">Private document content</div></div><div data-block-id="second"><div contenteditable="true">Other content</div></div>';
+ session=new Session(host(),new Repository(new BrowserStorage()),new URL('https://www.notion.so'));await session.init();await session.dispatch({type:'edit'});
+ host().querySelector('[contenteditable]')!.dispatchEvent(new MouseEvent('click',{bubbles:true}));
+ expect(session.selected?.locator.attrs['data-block-id']).toBe('first');expect(JSON.stringify(session.selected)).not.toContain('Private document content');expect(session.findSelected()).toBe(host().firstElementChild);
+ await session.dispatch({type:'style',style:{x:20,y:10}});expect((host().firstElementChild as HTMLElement).style.translate).toBe('20px 10px');
+ await session.dispatch({type:'undo'});expect((host().firstElementChild as HTMLElement).style.translate).toBe('');
+});
+
+it('previews five local layouts, preserves images, applies an isolated editable copy and restores cleanly',async()=>{
+ host().innerHTML='<section id="feature" style="overflow:hidden"><h2>Weekly reporting</h2><p>Keep this exact copy.</p><img alt="Team" src="https://example.com/team.png"><button>Start</button></section>';
+ const original=host().innerHTML,repo=new Repository(new BrowserStorage()),url=new URL('https://example.com');
+ session=new Session(host(),repo,url);await session.init();await session.dispatch({type:'edit'});host().querySelector('h2')!.click();
+ await session.promptHere('Generate 5 more layouts for this','section');
+ const preview=document.querySelector<HTMLElement>('[popover]')!;expect(preview).toBeTruthy();const buttons=preview.shadowRoot!.querySelectorAll('button[aria-label^="Use "]');expect(buttons).toHaveLength(5);expect(preview.shadowRoot!.querySelector('img')!.src).toBe('https://example.com/team.png');
+ (buttons[2] as HTMLButtonElement).click();await session.dispatch({type:'snapshot'});
+ const canvas=host().querySelector<HTMLElement>('[data-dx-canvas]')!;expect(canvas.parentElement).toBe(host());expect(canvas.textContent).toContain('Keep this exact copy.');expect(host().querySelector('#feature')!.outerHTML).toContain('overflow:hidden');
+ const image=canvas.querySelector('img')!;image.click();await session.dispatch({type:'image',src:'data:image/png;base64,YQ==',fit:'cover'});expect(session.unresolved).toEqual([]);expect(host().querySelector<HTMLImageElement>('#feature img')!.src).toBe('https://example.com/team.png');
+ await session.dispatch({type:'saveTemporary'});const id=session.workflow.id;session.destroy();session=new Session(host(),repo,url);await session.init();await session.dispatch({type:'load',id});expect(host().querySelector('[data-dx-canvas] img')!.getAttribute('src')).toBe('data:image/png;base64,YQ==');
+ await session.dispatch({type:'reset'});expect(host().innerHTML).toBe(original);
+});
+it('cancels layout previews without changing the workflow and refuses stale choices',async()=>{
+ host().innerHTML='<section id="feature"><h2>Heading</h2><p>Body</p></section>';session=new Session(host(),new Repository(new BrowserStorage()),new URL('https://example.com'));await session.init();await session.dispatch({type:'edit'});host().querySelector('h2')!.click();const before=JSON.stringify(session.workflow);
+ await session.dispatch({type:'layouts'});const dialog=document.querySelector<HTMLElement>('[popover]')!;dialog.shadowRoot!.querySelector<HTMLButtonElement>('button')!.click(); // Show two more is first button.
+ document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));expect(JSON.stringify(session.workflow)).toBe(before);expect(document.querySelector('[popover]')).toBeNull();
+ await session.dispatch({type:'layouts'});await session.dispatch({type:'text',text:'New heading'});document.querySelector('[popover]')!.shadowRoot!.querySelector<HTMLButtonElement>('[aria-label="Use Split layout"]')!.click();await session.dispatch({type:'snapshot'});expect(host().querySelector('[data-dx-canvas]')).toBeNull();expect(session.unresolved.join(' ')).toContain('workflow changed');
+});
+it('raises moved items above siblings and restores stacking on undo; rejects executable image URLs',async()=>{
+ session=new Session(host(),new Repository(new BrowserStorage()),new URL('https://example.com'));await session.init();await session.dispatch({type:'edit'});document.getElementById('customers')!.click();const button=document.getElementById('customers')!;const before=button.style.cssText;await session.dispatch({type:'style',style:{x:30,y:10}});expect(button.style.zIndex).toBe('1000');await session.dispatch({type:'undo'});expect(button.style.cssText).toBe(before);
+ host().innerHTML='<img id="picture" src="https://example.com/a.png" srcset="https://example.com/b.png 2x">';const img=host().querySelector('img')!;img.click();await expect(session.dispatch({type:'image',src:'javascript:alert(1)',fit:'cover'})).rejects.toThrow();await session.dispatch({type:'image',src:'https://example.com/c.png',fit:'cover'});expect(img.hasAttribute('srcset')).toBe(false);await session.dispatch({type:'undo'});expect(img.getAttribute('srcset')).toBe('https://example.com/b.png 2x');
 });

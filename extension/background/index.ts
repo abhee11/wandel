@@ -1,7 +1,16 @@
+import {registerLiveNavigation} from './liveNavigation';
+registerLiveNavigation();
+import {registerScreenCatalog} from './screens';
+registerScreenCatalog();
 import {registerAccountBridge} from './account';
 registerAccountBridge();
 chrome.runtime.onMessage.addListener((message,sender,reply)=>{
- if(message?.type!=='WANDEL_COLLAPSE'||sender.id!==chrome.runtime.id||sender.tab?.id===undefined||sender.frameId!==0)return;
+ if(!['WANDEL_COLLAPSE','WANDEL_OPEN_CONNECTIONS'].includes(message?.type)||sender.id!==chrome.runtime.id||sender.tab?.id===undefined||sender.frameId!==0)return;
+ if(message.type==='WANDEL_OPEN_CONNECTIONS'){
+  const tabId=sender.tab.id;
+  void chrome.sidePanel.setOptions({tabId,path:`sidepanel.html?tabId=${tabId}`,enabled:true}).catch(()=>{});
+  chrome.sidePanel.open({tabId}).then(()=>reply({ok:true})).catch(()=>reply({error:'Click the Wandel extension icon to open Connections.'}));return true;
+ }
  chrome.sidePanel.setOptions({tabId:sender.tab.id,enabled:false}).then(()=>reply({ok:true})).catch(error=>reply({error:String(error)}));return true;
 });
 // Global panels follow the active tab. Keep the default disabled and opt in

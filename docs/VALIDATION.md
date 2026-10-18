@@ -130,3 +130,40 @@ The homepage now plays a roughly 20-second guided loop: moves a card, resizes it
 - Added homepage coverage for the complete risk workflow and takeover from Details to Approval without subsequent autoplay overwriting the visitor's scene.
 - Browser sandbox verified: selecting a nested label in the host Sign in button exposes On click; creating Risk Analysis selects the new panel; the contextual prompt inserts View Details. Visually inspected the breadcrumb, compact toolbar, plus points and resize handle.
 - Native Chrome side-panel integration and real third-party application mirroring were not exercised in this verification. Input forwarding depends on the host application's standard DOM event handling.
+
+## One-prompt flow generation
+
+- 103 automated tests pass. Coverage includes generating a three-panel flow from one plan, local button color matching, atomic undo/redo, refining a generated heading, saving/reloading, clicking every transition, returning to a prior panel, and restoring the host page.
+- Invalid intermediate actions are rejected without mutation. The authenticated AI endpoint returns and caches the full flow with a single usage debit. Both local and hosted providers use the same structured response contract.
+- A live provider check with a synthetic Customers selection returned a valid four-screen Risk analysis → Customer details → Approval → Confirmation plan. No real page data or input values were sent.
+- Native Chrome authentication and the deployed extension-to-API round trip still require end-to-end verification. The homepage demo remains a preset demonstration, not this live planner.
+
+## Section redesign and installed extension auth diagnosis
+
+- Confirmed Chrome loaded Wandel from `Documents/DesignX/dist`. Reloading replaced the missing-Clerk-key error with an actual development sign-in-session error. The compiled build contains the public key.
+- Registered the installed extension's exact origin with Clerk, preserving the existing allowlist, and explicitly registered it for the local API. Production continues to require an environment allowlist.
+- DOM regressions cover shift-selecting a div-based section, scoped replacement with editable fields/cards, preserving a neighboring footer, undo/redo, and selecting/moving a Notion-like editable block by its stable block ID without reading editor values.
+- Native Chrome verification reached the public Notion page and extension account error. Further interaction was interrupted by Chrome window changes; authenticated Notion workspace editing is not claimed as verified.
+
+## Guest AI and visible profile
+
+- 114 tests pass; both builds pass. Guest tests cover anonymous HTTP access, untrusted origins, two-attempt enforcement, cached retries, invalid scope and oversized prompts, failed-attempt accounting, reset-identifier network limits and out-of-scope model output.
+- Profile tests verify visible Guest/sign-in status without expanding a menu and identity refresh after returning from sign-in.
+- Guest restrictions are server enforced. Anonymous identity is not proof of a unique person; daily network and server-wide reservations bound spending.
+
+## Branching feature prototypes (October 6, 2026)
+
+- The planner contract supports 2–8 connected screens with explicit actions, return links, bounded string data, bound prototype fields, metrics, cards, and tabular sample content. Legacy linear plans remain accepted.
+- The compiler validates screen reachability, destinations, declared data keys, and table dimensions before committing. Navigation cycles are separate from acyclic visual ancestry. Each generated feature uses independent data keys.
+- Replay applies declared assignments and carries typed prototype values between screens. Back restores the prior decision state; Restart resets sample values. Typed replay values are not stored in drafts, versions, or AI requests.
+- Automated acceptance covers both branches, returning to an updated dashboard, data reset, save/load/replay, recursive editing, undo, and atomic rejection of malformed graphs. Save limits include navigation depth; return loops do not inflate depth.
+- Browser acceptance at `/?fixture=feature`: built the scripted risk feature, opened details, entered a synthetic review note, approved, and returned to a dashboard displaying Approved. Visually inspected metrics, card, table, navigation controls and the separate screen layer. This fixture explicitly says it is scripted and sends no AI request.
+- Live provider output for the revised graph contract and installed-Chrome acceptance on third-party sites remain unverified. This does not establish broad website compatibility or public-launch readiness.
+
+## Check-in on October 16, 2026
+
+- Reran `npm test`: 122 tests passed across 15 files.
+- Standard and free extension builds passed (`npm run build`, `npm run build:free`).
+- Results cover the current uncommitted working tree, not a released artifact.
+- Installed-Chrome/user acceptance remains pending. The active sign-off card is [J1 in the current checkpoint](CURRENT_CHECKPOINT.md): manually create a three-step onboarding prototype on Maeris, save temporarily, refresh the page, load and replay in the same Chrome session.
+- J1 explicitly excludes AI generation and persistence across Chrome exit. Those are separate acceptance journeys.

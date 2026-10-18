@@ -1,4 +1,5 @@
 import { OperationSchema, uid, type Operation, type Locator } from '../shared/model';
+import { nativeChoices } from '../content/nativeChoices';
 import { describe } from '../content/locator';
 import { editableText } from '../content/text';
 import { localOperation, operationFromPlan } from './planner';
@@ -28,6 +29,13 @@ export function promptOperations(prompt:string,plan:unknown,selected:HTMLElement
   if(plan===undefined&&(!prompt.trim()||prompt.length>2000))throw new Error('Enter a change under 2,000 characters.');
   const batch=plan===undefined?formPreset(prompt):typeof plan==='object'&&plan!==null&&'steps' in plan?BatchSchema.parse(plan):null;
   if(!batch)return [plan===undefined?localOperation(prompt,locator):operationFromPlan(plan,locator)];
+  // A matching native choice section supplies its own precise anchor. Resolve it
+  // before generic form targets: dialogs often have choices but no HTML form.
+  if(batch.steps.every(step=>step.kind==='insert')){
+    const candidates:Operation[]=batch.steps.map(step=>({id:uid(),kind:'insert',target:locator,position:step.position,node:{id:uid(),kind:step.element,text:step.text,...(step.control?{control:step.control}:{}),...(step.required?{required:true}:{}),...(step.inputType?{inputType:step.inputType}:{})}}));
+    const matched=nativeChoices(prompt,candidates,selected);
+    if(matched!==candidates)return matched;
+  }
   let form=selected.closest<HTMLElement>('form,[role="form"]');
   if(!form){let parent:HTMLElement|null=selected;while(parent&&root.contains(parent)&&!parent.matches('body,html')){if(parent.querySelector('input')&&parent.querySelector('button')){form=parent;break;}parent=parent.parentElement;}}
   const controls=form?Array.from(form.querySelectorAll<HTMLElement>('button,[role="button"],input[type="submit"]')).filter(el=>!el.closest('[data-dx-ignore],[data-dx-owned]')):[];
@@ -43,7 +51,7 @@ export function promptOperations(prompt:string,plan:unknown,selected:HTMLElement
     if(step.kind==='text'&&!editableText(el))throw new Error('Select the specific button text to rename it.');
     if(step.kind==='insert'&&step.position==='inside'&&el.matches('button,a,input,textarea,select,img,br,hr'))throw new Error('Select a container to add elements inside it.');
     if(step.kind==='insert'&&el.closest('table')&&!el.closest('td,th'))throw new Error('Select a table cell or a container outside the table.');
-    return OperationSchema.parse(step.kind==='insert'?{id:uid(),kind:'insert',target,position:step.position,node:{id:uid(),kind:step.element,text:step.text}}:step.kind==='text'?{id:uid(),kind:'text',target,text:step.text}:step.kind==='style'?{id:uid(),kind:'style',target,style:step.style}:{id:uid(),kind:'remove',target});
+    return OperationSchema.parse(step.kind==='insert'?{id:uid(),kind:'insert',target,position:step.position,node:{id:uid(),kind:step.element,text:step.text,...(step.control?{control:step.control}:{}),...(step.required?{required:true}:{}),...(step.inputType?{inputType:step.inputType}:{})}}:step.kind==='text'?{id:uid(),kind:'text',target,text:step.text}:step.kind==='style'?{id:uid(),kind:'style',target,style:step.style}:{id:uid(),kind:'remove',target});
   });
   // Text changes can alter host locators. Apply insertions/styles first.
   return ops.sort((a,b)=>Number(a.kind==='text'||a.kind==='remove')-Number(b.kind==='text'||b.kind==='remove'));

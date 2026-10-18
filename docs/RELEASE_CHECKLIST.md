@@ -1,6 +1,81 @@
 # Wandel release checklist
 
-Updated October 4, 2026. This is the working checklist for taking Wandel from the current local prototype to a Chrome beta and then a paid release. It covers packaging, security, hosting, authentication, payments, product gaps and operational readiness.
+Updated October 17, 2026. Release direction: publish a useful free extension first; add paid features later. The free-launch checklist below is the immediate plan. The detailed cloud/account/billing checklist retained afterward is reference for a later release, not a prerequisite for a local-only free launch.
+
+
+## Current beta decision
+
+Target J1: Customers → Risk Analysis → Details → Approve → Confirmation → save v1 → restart Chrome → load/replay. Current validation: 220 tests passed and standard/free builds passed. Core editing and individual save/reload journeys have local browser evidence. The exact packaged free extension has not completed the full installed-Chrome journey, so this is a beta candidate rather than a release approval.
+
+Chrome distribution: **Private** limits installation to designated Google-account trusted testers or a Google Group you own/manage. **Unlisted** allows anyone with the listing URL to install; it is not access restricted. Both visibility settings require review and the usual policies/disclosures. For a separate parallel beta listing, label the name BETA and identify its beta-testing purpose. Prefer Private for the first controlled cohort. See [Chrome distribution documentation](https://developer.chrome.com/docs/webstore/cws-dashboard-distribution) and [submission steps](https://developer.chrome.com/docs/webstore/publish/).
+
+Remaining before submission: installed free-candidate J1 evidence; permission/package review; developer account; store screenshots and reviewer instructions; accurate privacy policy and support contact. Upload/submission has not been performed. Local-only editing/replay requires no hosted API, database, Clerk or Stripe; hosted AI does.
+
+## Free launch checklist — do this first
+
+Recommended scope: local editing, workflow creation, replay and durable local saves, without sign-in or a payment requirement. A dedicated `dist-free` build implements this scope in code; installed-candidate acceptance remains open. Hosted AI, account sync and subscriptions can follow once the free version is useful and stable.
+
+### 1. Define the free release
+
+- [ ] Confirm the initial free feature set: select, rename, add/remove/duplicate, appearance, move/resize, undo/redo, workflow states, replay and saved versions.
+- [ ] Keep bounded offline prompts, clearly labeled as presets. Remove AI connection setup from the public free experience; a new user must not need Node, an API key or a localhost server.
+- [ ] Remove sign-in requirements, Upgrade/Pro prompts, checkout, billing management and account-only saving from the free build. Retain the existing account/billing implementation for future work.
+- [ ] Set clear technical limits for workflow size and storage. Do not promise unlimited use or impose a limit whose only recovery is an unavailable upgrade.
+- [ ] Defer mirrored host actions from the first public build to keep the initial experience focused on prototyping; ensure existing mirrored workflows cannot silently execute live actions when loaded. If retained, complete the mirrored-action safety and acceptance checks below before shipping.
+
+### 2. Make saving dependable — installed verification remains open
+
+The account build still has session-only temporary saves. The separate free build now uses background-mediated `chrome.storage.local`, has a local library and export/import, and removes account saving. Verify that exact free candidate through Chrome restart and update before closing the durability gate.
+
+- [ ] Add durable local workflow/version saving using `chrome.storage.local`; make it the default Save action in the free build.
+- [ ] Keep temporary drafts distinct from explicit saved versions. Explain what is saved, what survives a restart, and that local data does not sync across devices and is removed on uninstall.
+- [ ] Preserve existing local records and provide a safe transition for available session drafts. Do not delete or silently overwrite previous saves.
+- [ ] Provide local list/open/rename/duplicate/delete controls and clear storage-full errors that preserve the current draft.
+- [ ] Add workflow export/import for backup, with schema validation and useful errors for invalid or incompatible files.
+- [ ] Verify saved flows survive page reload, Chrome restart and extension update; test export/import round trips and restoration on the matching URL.
+
+### 3. Produce a self-contained free package
+
+`npm run build:free` now produces `dist-free` with no cookies permission, declarative host access or externally-connectable sign-in bridge, and a `connect-src none` policy. The standard account build retains service connections. Audit and test the generated free candidate; a build alone is not store acceptance.
+
+- [ ] Add an explicit free build configuration that excludes unused auth, billing and AI connections and their runtime entry points.
+- [ ] Remove `cookies` and unused connection origins from the generated free manifest. Review every remaining permission and broad HTTP/HTTPS access; document the need or reduce it.
+- [ ] Confirm installed editing, saving and replay make no requests to Clerk, Stripe, the account API or the planner. Audit the packaged code for remote executable code and secrets.
+- [ ] Build from a clean output directory with a recorded source revision and manifest version. Inspect the generated manifest and ZIP, not just source configuration.
+
+### 4. Validate the actual user experience
+
+- [ ] Run `npm ci`, `npm test` and `npm run build` using the free build configuration once implemented; add focused regression coverage for durable storage, migration and disabled service paths.
+- [ ] Install the candidate in a clean Chrome profile with no local services running. Complete select → edit → build a multi-step flow → save → restart Chrome → open → replay.
+- [ ] Verify undo/redo, Restore original page, panel close, tab switching and SPA navigation leave the original application usable.
+- [ ] Test on at least three representative sites, including an SPA and a form-heavy page, using synthetic data. Check denied site access, missing anchors and unsupported pages produce useful messages.
+- [ ] Check keyboard use, small windows, zoom, long editing sessions and the oldest supported Chrome version. Fix data-loss, broken-save and page-interference defects before submission.
+- [ ] Update onboarding and README to describe the free experience, offline preset limits, local storage and unsupported page types accurately.
+
+### 5. Prepare and submit the Chrome Web Store listing
+
+- [ ] Register/secure the developer account and complete its registration requirements. A free product still requires the developer registration fee; see [developer registration](https://developer.chrome.com/docs/webstore/register/).
+- [ ] Prepare the name, concise description, icons, screenshots of the shipped free build, support contact and a short first-workflow walkthrough.
+- [ ] Publish a privacy policy matching the free artifact. Describe locally stored workflow text, selectors and URLs, deletion/export behavior and any actual network traffic; do not infer “no data handled” from “no account.”
+- [ ] Complete the single-purpose statement, permission explanations and data-use disclosures according to [Chrome privacy fields](https://developer.chrome.com/docs/webstore/cws-dashboard-privacy).
+- [ ] ZIP only the release output contents with `manifest.json` at the root; exclude environment files, databases, logs and unrelated project files. Record the ZIP checksum and test this candidate.
+- [ ] Upload the ZIP, complete listing/distribution/test instructions, and submit for review using [Chrome's publishing steps](https://developer.chrome.com/docs/webstore/publish). Reviewer instructions must work without credentials or developer services.
+- [ ] Start with a small tester cohort, resolve reported blockers, then publish publicly. Keep a support channel and a procedure for shipping a corrected higher-version package.
+
+**Free launch gate:** a new user can install, create, save, restart Chrome and replay a workflow without an account, payment, API key or local server; the listing and privacy disclosures match that tested package. All required items above remain open until evidence is recorded. This planning update does not certify a build or submit anything to the store.
+
+### 6. Add paid features later — not free-launch blockers
+
+- [ ] Choose paid features from user feedback; candidates include cloud sync, hosted AI, collaboration and higher service quotas. Pricing and entitlements remain undecided.
+- [ ] Keep the same store extension identity and preserve free users' local workflows through updates. Offer explicit opt-in migration/copying to an account rather than automatic upload.
+- [ ] Implement and verify production hosting, authentication, database backups, account deletion and service quotas before enabling cloud features.
+- [ ] Complete the existing billing checklist below before enabling paid checkout. Current Stripe integration is test-only; live payments require deliberate implementation and validation.
+- [ ] Add pricing, usage limits, billing support and cancellation flows; test upgrades, failed payments, cancellations and downgrades without losing access to saved data.
+- [ ] Update privacy disclosures and store copy for new network services, and test the upgrade from the published free version before release.
+
+## Detailed cloud and paid-release reference
+
+The sections below retain the previous broader release plan. Apply shared packaging, security and editor checks to the free build where relevant. Hosted-beta, Clerk, server, AI-service and Stripe requirements become release gates only when those features are included.
 
 **Current conclusion: ready for focused internal testing, not yet verified for a public paid launch.** The latest recorded run has 99 passing automated tests and successful extension and platform builds. Those checks do not establish that production Google login, installed Chrome behavior, real payments or arbitrary application mirroring work.
 
@@ -129,7 +204,7 @@ The custom build reads the project `.env` and process environment; do not assume
 
 ## AI deployment and connections
 
-- [ ] Replace or complement the extension's hardcoded `http://127.0.0.1:4319` planner for public use. The authenticated server `/api/ai/plan` exists, but the current extension prompt path is separate and does not use its account usage accounting.
+- [ ] Verify the extension's default authenticated `/api/ai/plan` route on the deployed service with a signed-in Chrome user. The local `http://127.0.0.1:4319` planner is now an optional fallback connection.
 - [ ] Wire hosted AI to Clerk auth, server-side usage limits, retry/idempotency behavior, cost monitoring and clear model/provider errors. Validate plans on both sides.
 - [ ] Decide what “bring your own connection” means: a local companion, a hosted provider connection or another supported option. A developer-managed `.env` is not a finished user-facing BYOK product.
 - [ ] Publish accurate disclosure of what is sent to the model. Selected labels and prompts can contain private information; avoid silently expanding collection to the whole DOM.
@@ -141,7 +216,7 @@ The custom build reads the project `.env` and process environment; do not assume
 | Gap or limit | Current state | Priority or decision |
 | --- | --- | --- |
 | Installed Chrome acceptance | Sandbox browser checks and automated tests exist; real-app coverage remains incomplete | P0 beta gate |
-| Public AI onboarding | Requires a local planner/token; hosted endpoint not wired into extension prompt path | P0 public beta |
+| Public AI onboarding | Hosted account route implemented; deployed sign-in, model configuration and full Chrome round trip still need verification | P0 public beta |
 | External service verification | Production Clerk/Google, shared saves and Stripe test checkout need end-to-end evidence | P0 hosted beta |
 | Live payments | Explicitly blocked by implementation | P0 paid launch |
 | Data controls | Account deletion, export and retention need product/operations completion | P0 public launch |

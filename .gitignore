@@ -19,3 +19,8 @@ dist-platform/
 ._*
 .codex/
 .agents/
+
+dist-free/
+
+# Local release candidates
+releases/

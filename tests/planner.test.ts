@@ -29,3 +29,11 @@ it('does not label an invalid or unauthorized server as connected',async()=>{
  vi.stubGlobal('fetch',vi.fn().mockResolvedValue({ok:true,json:async()=>({})}));
  await expect(checkAIConnection('local-token')).rejects.toThrow('Update and restart');
 });
+
+it('accepts a connected flow response and refuses a missing intermediate action',async()=>{
+ const flow={name:'Review',entryLabel:'Review risk',screens:[{title:'Review',body:'Example review',fields:[],actionLabel:'Approve'},{title:'Done',body:'Approved',fields:[],actionLabel:null}]};
+ vi.stubGlobal('fetch',vi.fn().mockResolvedValue({ok:true,json:async()=>({steps:[],flow})}));
+ expect(await requestAI('Create a review flow',{tag:'button',label:'Customers'},'token')).toEqual({steps:[],flow});
+ flow.screens[0].actionLabel=null;
+ await expect(requestAI('Create a review flow',{tag:'button',label:'Customers'},'token')).rejects.toThrow('next action');
+});

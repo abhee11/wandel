@@ -1,7 +1,7 @@
 import {createHash,randomUUID} from 'node:crypto';
 import {z} from 'zod';
 import {WorkflowSchema,type SavedRecord} from '../../extension/shared/model';
-import {validateWorkflow,lineage} from '../../extension/prototype/engine';
+import {validateWorkflow,workflowDepth} from '../../extension/prototype/engine';
 import {type DB,one,all} from './db';
 import type {Entitlements} from './entitlements';
 import {APIError} from './security';
@@ -20,7 +20,7 @@ export function workflowStore(db:DB,entitlements:Entitlements,clock:()=>Date){
   return db.transaction(()=>{
    const replay=one<{fingerprint:string;revision:number}>(db,'SELECT * FROM workflow_saves WHERE user_id=? AND request_key=?',userId,data.requestId);
    if(replay){if(replay.fingerprint!==fingerprint)throw new APIError(409,'IDEMPOTENCY_CONFLICT','This save key was used for another change.');return {...read(userId,w.id),savedRevision:replay.revision};}
-   const existing=get(userId,w.id),e=entitlements.get(userId),depth=Math.max(...w.states.map(s=>lineage(w,s.id).length-1));
+   const existing=get(userId,w.id),e=entitlements.get(userId),depth=workflowDepth(w);
    if(e.limits.maxDepth!==null&&depth>e.limits.maxDepth)throw new APIError(403,'DEPTH_LIMIT_REACHED',`This flow has ${depth} steps. Free account saves allow ${e.limits.maxDepth}. Upgrade or save temporarily.`,{upgradeUrl:'/extension/upgrade'});
    if(!existing)entitlements.requireCreate(userId);
    if(existing?data.revision!==existing.revision:data.revision!==null)throw new APIError(409,'REVISION_CONFLICT','A different saved version exists. Open it from Account saves before replacing it; your current draft is still here.');

@@ -25,7 +25,7 @@ export class Repository {
     for (const key of await this.adapter.keys()) {
       if (!key.startsWith('dx:workflow:')) continue;
       // A damaged record must not prevent other workflows from loading.
-      try { const r=await this.get(key.slice(12)); if(r?.draft.origin===origin && r.draft.route===route) records.push(r); } catch { /* skip invalid record */ }
+      try { const r=await this.get(key.slice(12)); if(r?.draft.origin===origin && (r.draft.route===route||r.draft.states.some(s=>s.liveURL===origin+route))) records.push(r); } catch { /* skip invalid record */ }
     }
     return records.sort((a,b)=>b.draft.updatedAt.localeCompare(a.draft.updatedAt));
   }
@@ -44,12 +44,20 @@ export class Repository {
     record.currentVersion=number;record.draft=clone(version.workflow); record.draft.updatedAt=new Date().toISOString(); await this.put(record); return record;
   }
   async active(origin:string,route:string):Promise<string|null> { const id=await this.adapter.read(`dx:active:${origin}${route}`); return typeof id==='string'?id:null; }
-  async setActive(w:Workflow) { await this.adapter.write(`dx:active:${w.origin}${w.route}`,w.id); }
+  async setActive(w:Workflow) {for(const url of new Set([w.origin+w.route,...w.states.flatMap(s=>s.liveURL?[s.liveURL]:[])]))await this.adapter.write(`dx:active:${url}`,w.id); }
 }
 
 /** Browser-session storage via the background worker; never enables token access for content scripts. */
 export class TemporaryChromeStorage implements StorageAdapter {
  private async call(action:string,key?:string,value?:unknown){const response=await chrome.runtime.sendMessage({type:'WANDEL_TEMP_STORAGE',action,key,value});if(response?.error)throw new Error(response.error);return response?.value;}
+ read(key:string){return this.call('read',key);}
+ async write(key:string,value:unknown){await this.call('write',key,value);}
+ async remove(key:string){await this.call('remove',key);}
+ keys():Promise<string[]>{return this.call('keys');}
+}
+
+export class PersistentChromeStorage implements StorageAdapter {
+ private async call(action:string,key?:string,value?:unknown){const response=await chrome.runtime.sendMessage({type:'WANDEL_LOCAL_STORAGE',action,key,value});if(!response||response.error)throw new Error(response?.error||'Local storage is unavailable. Your draft is still open.');return response.value;}
  read(key:string){return this.call('read',key);}
  async write(key:string,value:unknown){await this.call('write',key,value);}
  async remove(key:string){await this.call('remove',key);}

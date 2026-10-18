@@ -1,0 +1,7 @@
+/** Deterministic fictional feature used for browser and engine acceptance. */
+export const riskFeature={name:'Risk analysis',entryLabel:'Risk analysis',variables:[{key:'status',value:'Pending'},{key:'reason',value:'Review supporting documents'}],screens:[
+ {id:'dashboard',title:'Risk dashboard',body:'Illustrative customer review. Status: {{status}}',fields:[],actionLabel:null,metrics:[{label:'Risk score',value:'72 / 100'},{label:'Decision',value:'{{status}}'}],cards:[{title:'Aster Labs · sample customer',body:'Review the signals before making a prototype decision.'}],table:{columns:['Signal','Assessment'],rows:[['Payment history','Stable'],['Exposure','Elevated']]},actions:[{label:'View details',to:'details',effects:[]}]},
+ {id:'details',title:'Customer details',body:'Decision: {{status}}',fields:[],actionLabel:null,boundFields:[{label:'Review note',key:'reason'}],actions:[{label:'Approve',to:'approved',effects:[{key:'status',value:'Approved'}]},{label:'Reject',to:'rejected',effects:[{key:'status',value:'Rejected'}]},{label:'Back to dashboard',to:'dashboard',effects:[]}]},
+ {id:'approved',title:'Review approved',body:'{{status}} · {{reason}}',fields:[],actionLabel:null,actions:[{label:'Return to dashboard',to:'dashboard',effects:[]}]},
+ {id:'rejected',title:'Review rejected',body:'{{status}} · {{reason}}',fields:[],actionLabel:null,actions:[{label:'Return to dashboard',to:'dashboard',effects:[]}]}
+]};

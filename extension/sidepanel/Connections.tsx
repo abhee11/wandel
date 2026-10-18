@@ -1,0 +1,48 @@
+import {MinimizeButton} from './MinimizeButton';
+import {ScreenGallery} from './ScreenGallery';
+import {useState,useEffect,useRef} from 'react';
+import type {Bridge} from './bridge';
+import type {Snapshot,ConnectionAction,ConnectionCondition} from '../shared/model';
+import './connections.css';
+/** Connection authoring replaces the panel, never clones the host page into it. */
+export function Connections({snapshot,bridge}:{snapshot:Snapshot;bridge:Bridge}){
+ const c=snapshot.connectionWorkspace!;
+ const workspace=useRef<HTMLDivElement>(null);
+ const [port,setPort]=useState<{x:number;y:number}|null>(null);
+ const heading=useRef<HTMLHeadingElement>(null);
+ useEffect(()=>{heading.current?.focus();},[]);
+ useEffect(()=>{const escape=(event:KeyboardEvent)=>{if(event.key!=='Escape'||event.repeat||event.isComposing)return;event.preventDefault();event.stopImmediatePropagation();void send({action:c.picking?'cancelPick':'close'});};window.addEventListener('keydown',escape,true);return()=>window.removeEventListener('keydown',escape,true);},[c.picking]);
+ const [busy,setBusy]=useState(false),[error,setError]=useState('');
+ const state=snapshot.workflow.states.find(s=>s.id===c.to);
+ const destination=c.pendingScreen?.title||c.newTitle||state?.title||'';
+ const route=c.pendingScreen?.route||(state?.screen?new URL(state.screen.url).pathname:'');
+ useEffect(()=>{setError('');},[c.pendingScreen?.id,c.to,c.newTitle]);
+ useEffect(()=>{let timer:ReturnType<typeof setTimeout>|undefined,last=-1;const measure=()=>{clearTimeout(timer);timer=setTimeout(()=>{const node=workspace.current?.querySelector<HTMLElement>('[data-screen-selected="true"]'),summary=workspace.current?.querySelector<HTMLElement>('.wc-connection-summary');const rect=node?.getBoundingClientRect();const target=rect&&rect.top>=62&&rect.bottom<=innerHeight-110?rect:summary?.getBoundingClientRect();if(!target)return;const bounds=workspace.current!.getBoundingClientRect(),y=Math.max(24,Math.min(innerHeight-24,target.top+target.height/2))-bounds.top,x=Math.max(6,target.left-bounds.left+5),ratio=y/Math.max(bounds.height,1);setPort(old=>old&&Math.abs(old.y-y)<1&&Math.abs(old.x-x)<1?old:{x,y});if(Math.abs(last-ratio)>.003){last=ratio;void bridge.send({type:'connectionAnchor',ratio}).catch(()=>{});}},60);};measure();window.addEventListener('resize',measure);workspace.current?.addEventListener('scroll',measure,true);const root=workspace.current;return()=>{clearTimeout(timer);window.removeEventListener('resize',measure);root?.removeEventListener('scroll',measure,true);};},[bridge,c.pendingScreen?.id,c.to,c.newTitle,c.saved]);
+
+ async function editDestination(){setBusy(true);setError('');try{await bridge.send({type:'state',id:c.to});}catch(e){setError(e instanceof Error?e.message:'Could not open screen.');}finally{setBusy(false);}}
+ async function send(change:ConnectionAction){setError('');const blocking=['save','test','close'].includes(change.action);if(blocking)setBusy(true);try{await bridge.send({type:'connectionAction',change});}catch(e){setError(e instanceof Error?e.message:'Could not update connection.');}finally{if(blocking)setBusy(false);}}
+ const fieldName=(condition:ConnectionCondition)=>c.fields.find(f=>JSON.stringify(f.locator)===JSON.stringify(condition.target))?.label||condition.target.name||'Selected field';
+ return <div ref={workspace} className="wandel-connections" role="region" aria-label="Connection workspace">
+  {port&&<svg className="wc-panel-string" aria-hidden="true"><path d={`M 0 ${port.y} C ${port.x/2} ${port.y-12}, ${port.x/2} ${port.y}, ${port.x} ${port.y}`} fill="none" stroke={c.saved?'#2f9d79':'#8061eb'} strokeWidth="3" strokeDasharray={c.saved?undefined:'7 5'}/><circle cx={port.x} cy={port.y} r="4" fill={c.saved?'#2f9d79':'#8061eb'}/></svg>}
+  <header><strong>Wandel <span>/ Connections</span></strong><div className="dx-header-actions"><button disabled={busy} onClick={()=>void send({action:'close'})}>Back to editing</button><span className="dx-dot" title="Local prototype"/><MinimizeButton disabled={busy} onClick={()=>{void bridge.send({type:'minimizePanel'}).catch(e=>setError(e.message));}}/></div></header>
+  <main>
+   <h1 ref={heading} tabIndex={-1}>Connect to a screen</h1><p className="wc-muted">Choose what opens when this control is used. Your application stays visible on the left.</p>
+   <section className="wc-source"><small>SELECTED CONTROL</small><strong>{c.source.label}</strong><span>{snapshot.workflow.states.find(s=>s.id===c.from)?.title}</span></section>
+   {c.picking?<div className="wc-picking" role="status"><strong>Click a field in the application</strong><p>Its value will become a condition for this connection.</p><button onClick={()=>void send({action:'cancelPick'})}>Cancel field selection</button></div>:<>
+   <label>When<select aria-label="Connection trigger" value={c.event} onChange={e=>void send({action:'event',value:e.target.value})}>{c.events.map(event=><option key={event} value={event}>{event==='click'?'Clicked':event==='change'?'Changed / selected':'Enter pressed'}</option>)}</select></label>
+   {bridge.screens&&<ScreenGallery browser={bridge.screens} origin={snapshot.workflow.origin} selectedId={c.pendingScreen?.id||(state?.screen?.id)} onChoose={async screen=>{await bridge.send({type:'connectionAction',change:{action:'screen',screen}});}}/>}
+   <section><h2>Saved destinations</h2>{snapshot.workflow.states.some(s=>s.screen)&&<div className="wc-screen-grid">{snapshot.workflow.states.filter(s=>s.screen).map(s=><button key={s.id} aria-pressed={!c.pendingScreen&&c.to===s.id} data-screen-selected={!c.pendingScreen&&c.to===s.id?'true':undefined} aria-label={'Connect to saved screen '+s.title} disabled={busy} onClick={()=>void send({action:'destination',value:s.id})}><img src={s.screen!.thumbnail} alt={'Saved layout of '+s.title}/><strong>{s.title}</strong><small>{new URL(s.screen!.url).pathname}</small></button>)}</div>}<label>Saved screen<select aria-label="Destination screen" value={c.newTitle?'':c.to} onChange={e=>{if(e.target.value)void send({action:'destination',value:e.target.value});}}><option value="">Choose a screen…</option>{snapshot.workflow.states.map(s=><option key={s.id} value={s.id}>{s.title}{s.screen?' · '+new URL(s.screen.url).pathname:snapshot.visited?.includes(s.id)?' · visited':''}</option>)}</select></label>
+   <label>Or create a new screen<input aria-label="New screen name" value={c.newTitle} maxLength={300} placeholder="e.g. Feedback settings" onChange={e=>void send({action:'title',value:e.target.value})}/></label>
+   {c.pendingScreen&&<div className="wc-destination"><small>SELECTED APP SCREEN</small><strong>{c.pendingScreen.title}</strong><small>{c.pendingScreen.route}</small><img className="wc-selected-preview" src={c.pendingScreen.thumbnail} alt="Selected screen layout"/><p>Opens the real application page. Wandel restores your edits after it loads.</p></div>}
+   {(c.newTitle||state)&&<div className="wc-destination"><small>DESTINATION</small><strong>{c.newTitle||state?.title}</strong><p>{c.newTitle?'A new editable screen will be created.':state?.view==='base'?'Return to the existing application.':`${state?.operations.filter(op=>op.kind==='insert').length||0} prototype elements. Open the screen to edit its contents.`}</p>{!c.newTitle&&c.saved&&<button disabled={busy} onClick={()=>void editDestination()}>Edit destination screen</button>}</div>}</section>
+   <section><h2>Only when <span>optional</span></h2><p className="wc-muted">All conditions must pass.</p>{c.conditions.map((condition,index)=><div className="wc-condition" key={index}><div><strong>{fieldName(condition)}</strong><button aria-label={'Remove condition '+(index+1)} onClick={()=>void send({action:'remove',index})}>Remove</button></div><select aria-label={'Condition '+(index+1)+' rule'} value={condition.test} onChange={e=>void send({action:'condition',index,test:e.target.value as ConnectionCondition['test']})}>{['checkbox','radio'].includes(condition.target.attrs.type||'')?<><option value="checked">Is checked</option><option value="unchecked">Is unchecked</option></>:<><option value="filled">Is filled</option><option value="valid">Is valid</option><option value="equals">Equals</option></>}</select>{condition.test==='equals'&&<input aria-label={'Condition '+(index+1)+' value'} value={condition.value||''} maxLength={300} onChange={e=>void send({action:'condition',index,test:'equals',value:e.target.value})}/>}</div>)}<button className="wc-pick" disabled={c.conditions.length>=8} onClick={()=>void send({action:'pick'})}>+ Pick a condition field</button></section>
+   <label>Otherwise<select aria-label="Otherwise screen" value={c.otherwise} onChange={e=>void send({action:'otherwise',value:e.target.value})}><option value="">Stay here and show feedback</option>{snapshot.workflow.states.map(s=><option key={s.id} value={s.id}>{s.title}</option>)}</select></label>
+   </>}
+  </main>
+  <footer className="wc-connect-footer">
+   <div className={'wc-connection-summary'+(c.saved?' connected':'')} role="status"><span>{c.saved?'✓ Connected':'Connecting'}</span><strong>{c.source.label} <span aria-hidden="true">⟶</span> {destination||'Choose a destination'}</strong>{route&&<small>{route}</small>}</div>
+   {(error||c.error)&&<p role="alert" className="wc-message">{error||c.message}</p>}
+   <div className="wc-connect-actions"><button disabled={busy||c.busy||!c.saved||c.picking} onClick={()=>void send({action:'test'})}>Test connection</button><button className="wc-primary" disabled={busy||c.busy||c.picking||!!c.saved||(!c.pendingScreen&&!c.to&&!c.newTitle.trim())} onClick={()=>void send({action:'save'})}>{busy||c.busy?'Connecting…':c.saved?'✓ Connected':'Connect views'}</button></div>
+  </footer>
+ </div>;
+}
