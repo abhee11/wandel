@@ -351,6 +351,8 @@ export class Session {
     if(['appearance','alignText','insertElement','fieldSettings','pasteStyle','image','prompt','text','child','link','style','remove','drag','duplicateElement','mirror'].includes(c.type)&&!this.enabled)throw new Error('Enable the workflow before editing.');
     if(c.type==='connectionAnchor'){this.pageEditor.connectionAnchor(c.ratio);return this.snapshot();}
     if(c.type==='snapshot')return this.snapshot();
+    if(c.type==='checkpointDraft'){await this.checkpoint();if(c.navigating){clearTimeout(this.draftTimer);this.navigating=true;}return this.snapshot();}
+    if(c.type==='cancelWorkflowNavigation'){if(this.workflow.id===c.workflowId)this.navigating=false;return this.snapshot();}
     if(c.type.startsWith('assistant')){
       if(!assistantBuild&&!this.options.assistantEnabled)throw new Error('Use the separate assistant beta build for this feature.');
       if(!this.isAuthoring())throw new Error('Switch to Edit to use the conversational assistant.');

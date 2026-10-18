@@ -1,3 +1,5 @@
+import {registerWorkflowOpener} from './openWorkflow';
+registerWorkflowOpener();
 import {registerRecordingLauncher} from './recording';
 registerRecordingLauncher();
 import {registerLiveNavigation} from './liveNavigation';

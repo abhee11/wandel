@@ -61,6 +61,8 @@ export type ConnectionWorkspace = {busy?:boolean;pendingScreen?:Pick<VisitedScre
 export type ConnectionAction = {action:'close'|'pick'|'cancelPick'|'save'|'test'} | {action:'destination'|'title'|'event'|'otherwise';value:string} | {action:'remove';index:number} | {action:'condition';index:number;test:ConnectionCondition['test'];value?:string} | {action:'screen';screen:VisitedScreen};
 export type Snapshot = {assistant?:AssistantSnapshot;liveSession?:boolean;panelMinimized?:boolean;panelRestoring?:boolean;connectionWorkspace?:ConnectionWorkspace|null;visited?:string[];mode?:'edit'|'interact'|'replay'|'closed';styleSource?:Selection|null; workflow: Workflow; stateId: string; selected: Selection | null; picking: boolean; dragging:boolean; replay: boolean; enabled: boolean; dirty: boolean; canUndo: boolean; canRedo: boolean; canBack: boolean; unresolved: string[]; currentVersion: number; versions: { number: number; savedAt: string; name: string }[]; library: { id: string; name: string; versions: number }[] };
 export type Command =
+ | {type:'checkpointDraft';navigating?:boolean}
+ | {type:'cancelWorkflowNavigation';workflowId:string}
  | {type:'assistantContext'|'assistantReset'}
  | {type:'assistantStyle';ref:string}
  | {type:'assistantApply';plan:unknown;token:string}

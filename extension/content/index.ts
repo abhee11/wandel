@@ -18,7 +18,7 @@ chrome.runtime.onMessage.addListener((message,_sender,reply)=>{
   if(message.type==='WANDEL_CAPTURE_SCREEN'){ready.then(()=>reply({screen:captureScreen()})).catch(error=>reply({error:error.message}));return true;}
   if(message.type!=='DX_COMMAND')return;
   if(message.command?.type==='save'){chrome.runtime.sendMessage({type:'WANDEL_SAVE_REQUEST'}).catch(()=>{});ready.then(()=>reply({snapshot:session.snapshot()}));return true;}
-  ready.then(()=>session.dispatch(message.command)).then(snapshot=>reply({snapshot,capabilities:['live-routes-v1','panel-lifecycle-v1','connection-wire-v3','connection-panel-v2','connections-v1','settings-widgets-v1','selection-preflight-v1','native-design-v1','manual-editor-v1']})).catch(error=>reply({error:error.message}));return true;
+  ready.then(()=>session.dispatch(message.command)).then(snapshot=>reply({snapshot,capabilities:['workflow-view-v1','live-routes-v1','panel-lifecycle-v1','connection-wire-v3','connection-panel-v2','connections-v1','settings-widgets-v1','selection-preflight-v1','native-design-v1','manual-editor-v1']})).catch(error=>reply({error:error.message}));return true;
 });
 window.addEventListener('popstate',()=>{void ready.then(()=>session.navigate(new URL(location.href)));});
 window.addEventListener('hashchange',()=>{void ready.then(()=>session.navigate(new URL(location.href)));});
