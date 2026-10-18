@@ -1,3 +1,4 @@
+import {MAX_RECORDING_BYTES} from '../../extension/shared/recording';
 import Stripe from 'stripe';
 import {StripeBilling,UnavailableBilling} from './stripe';
 import {ClerkIdentity} from './clerk';
@@ -31,12 +32,15 @@ const server=createServer(async(req,res)=>{
    const asset=extname(file);const data=await readFile(asset?file:resolve(webRoot,'index.html'));
    res.writeHead(200,{'Content-Type':({'.js':'text/javascript','.css':'text/css','.svg':'image/svg+xml','.png':'image/png'} as Record<string,string>)[asset]||'text/html','Content-Security-Policy':webCSP,'Referrer-Policy':'no-referrer','X-Content-Type-Options':'nosniff'});res.end(data);return;
   }
-  let size=0;const chunks:Buffer[]=[];for await(const chunk of req){size+=chunk.length;if(size>1048576){res.writeHead(413,{'Content-Type':'application/json'});res.end(JSON.stringify({error:{code:'BODY_TOO_LARGE',message:'Request exceeds 1 MB.'}}));return;}chunks.push(chunk);}
+  const limit=url.pathname==='/api/recordings'&&req.method==='POST'?MAX_RECORDING_BYTES:1048576;
+  let size=0;const chunks:Buffer[]=[];for await(const chunk of req){size+=chunk.length;if(size>limit){res.writeHead(413,{'Content-Type':'application/json'});res.end(JSON.stringify({error:{code:'BODY_TOO_LARGE',message:limit===MAX_RECORDING_BYTES?'Videos must be under 20 MB.':'Request exceeds 1 MB.'}}));return;}chunks.push(chunk);}
   const headers=new Headers();for(const [key,value]of Object.entries(req.headers))if(value)headers.set(key,Array.isArray(value)?value.join(','):value);
   const result=await app.handle(new Request(url,{method:req.method,headers,...(!['GET','HEAD'].includes(req.method||'GET')?{body:Buffer.concat(chunks)}:{})}),req.socket.remoteAddress||'unknown');
   res.writeHead(result.status,Object.fromEntries(result.headers));res.end(Buffer.from(await result.arrayBuffer()));
  }catch{res.writeHead(404,{'Content-Type':'application/json'});res.end(JSON.stringify({error:{code:'NOT_FOUND',message:'Page not found. Build the web app with npm run platform:build.'}}));}
 });
+const recordingCleanup=setInterval(()=>{try{db.prepare('DELETE FROM recordings WHERE expires_at<=?').run(new Date().toISOString());}catch{console.error('Expired video cleanup failed.');}},60*60*1000);recordingCleanup.unref();
+db.prepare('DELETE FROM recordings WHERE expires_at<=?').run(new Date().toISOString());
 const address=serverAddress(process.env);
 server.listen(address.port,address.host,()=>console.log(`Wandel platform API on http://${address.host}:${address.port} · AI: ${config.aiMode} · billing: ${billing.mode}`));
-const stop=()=>{server.close(()=>{db.close();process.exit(0);});};process.on('SIGINT',stop);process.on('SIGTERM',stop);
+const stop=()=>{clearInterval(recordingCleanup);server.close(()=>{db.close();process.exit(0);});};process.on('SIGINT',stop);process.on('SIGTERM',stop);

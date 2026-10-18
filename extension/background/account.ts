@@ -1,6 +1,13 @@
 import {createClerkClient} from '@clerk/chrome-extension/client';
 import {accountConfig} from '../shared/accountConfig';
 export function registerAccountBridge(){
+ const trustedSurface=(sender:chrome.runtime.MessageSender)=>{
+  if(sender.id!==chrome.runtime.id||!sender.url||sender.frameId&&sender.frameId!==0)return false;
+  try{const url=new URL(sender.url),base=new URL(chrome.runtime.getURL(''));
+   if(url.protocol!==base.protocol||url.host!==base.host)return false;
+   return url.pathname==='/sidepanel.html'&&!sender.tab||url.pathname==='/recorder.html'&&sender.tab?.id!==undefined;
+  }catch{return false;}
+ };
  const notify=()=>{void chrome.runtime.sendMessage({type:'WANDEL_ACCOUNT_CHANGED'}).catch(()=>{});};
  chrome.cookies?.onChanged?.addListener(change=>{
   const host=new URL(accountConfig.syncHost).hostname;
@@ -27,9 +34,9 @@ export function registerAccountBridge(){
  });
  chrome.runtime.onMessage.addListener((message,sender,reply)=>{
   if(message?.type==='WANDEL_ACCOUNT_SIGN_IN'){
-   if(sender.id!==chrome.runtime.id||sender.tab||!sender.url?.startsWith(chrome.runtime.getURL('sidepanel.html')))return;
+   if(!trustedSurface(sender))return;
    (async()=>{
-    const source=Number(new URL(sender.url!).searchParams.get('tabId'));
+    const source=new URL(sender.url!).pathname==='/recorder.html'?sender.tab!.id!:Number(new URL(sender.url!).searchParams.get('tabId'));
     if(!Number.isInteger(source)||source<=0)throw new Error('Open Wandel on your app tab before signing in.');
     const tab=await chrome.tabs.get(source),nonce=crypto.randomUUID();
     const url=new URL('/extension/sign-in',accountConfig.appOrigin);
@@ -46,8 +53,8 @@ export function registerAccountBridge(){
    const work=message.action==='read'?storage.get(key).then(x=>x[key]):message.action==='keys'?storage.get(null).then(x=>Object.keys(x).filter(k=>k.startsWith('dx:'))):message.action==='write'?storage.set({[key]:message.value}):message.action==='remove'?storage.remove(key):Promise.reject(new Error('Invalid storage action'));
    work.then(value=>reply({value})).catch(()=>reply({error:'Temporary storage unavailable.'}));return true;
   }
-  // Account tokens are never exposed to page content scripts.
-  if(message?.type!=='WANDEL_ACCOUNT_TOKEN'||sender.id!==chrome.runtime.id||sender.tab||!sender.url?.startsWith(chrome.runtime.getURL('sidepanel.html')))return;
+  // Only exact packaged UI pages can request tokens; host-page content scripts cannot.
+  if(message?.type!=='WANDEL_ACCOUNT_TOKEN'||!trustedSurface(sender))return;
   (async()=>{
    if(!accountConfig.publishableKey)throw new Error('This extension build has no Clerk key. Rebuild Wandel and click Reload in chrome://extensions, then refresh this page.');
    if(accountConfig.publishableKey.startsWith('pk_test_')&&!await chrome.cookies.get({url:accountConfig.syncHost,name:'__clerk_db_jwt'}))return {token:null};

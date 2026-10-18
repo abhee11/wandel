@@ -102,12 +102,12 @@ it('persists sessions and workflow definitions across a database reopen',async()
  const dir=mkdtempSync(join(tmpdir(),'wandel-persistence-'));let disk=database(join(dir,'test.sqlite'));
  try{
  app=createPlatform({db:disk,config:cfg,clock:()=>now,ai:provider,mail:{reset:async()=>{}}});
- const cookie=await signup('durable@example.com');const p=(await create(cookie,'Durable flow')).body;
+ const cookie=await signup('durable@example.com');const p=(await create(cookie,'Durable flow')).body;const migrations=disk.prepare('SELECT name FROM schema_migrations ORDER BY name').all();
  disk.close();disk=database(join(dir,'test.sqlite'));
  app=createPlatform({db:disk,config:cfg,clock:()=>now,ai:provider,mail:{reset:async()=>{}}});
  expect((await request('/api/me','GET',undefined,cookie)).status).toBe(200);
  const restored=await request('/api/prototypes/'+p.id,'GET',undefined,cookie);expect(restored.body.name).toBe('Durable flow');expect(restored.body.definition.states).toHaveLength(1);
- expect((disk.prepare('SELECT count(*) n FROM schema_migrations').get() as any).n).toBe(3);
+ expect(disk.prepare('SELECT name FROM schema_migrations ORDER BY name').all()).toEqual(migrations);
  }finally{disk.close();rmSync(dir,{recursive:true,force:true});}
 });
 it('rejects malformed workflow graphs with useful validation errors',async()=>{

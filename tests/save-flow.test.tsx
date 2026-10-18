@@ -42,7 +42,7 @@ it('keeps an empty name editable and rejects saving it before touching storage o
  await mount();await rename('   ');await click('Save temporarily');expect(send).not.toHaveBeenCalled();expect(accountAPI).not.toHaveBeenCalled();expect(element.textContent).toContain('Give your flow a name');
 });
 it('shows sharing and interactive preview directly in the save dialog',async()=>{
- await mount();expect(element.querySelector('details')?.open).toBe(true);await click('Try flow on app');expect(send).toHaveBeenCalledWith({type:'replay'});expect(element.textContent).toContain('not a video or standalone public playback link');
+ await mount();expect(element.querySelector('details')?.open).toBe(true);await click('Try flow on app');expect(send).toHaveBeenCalledWith({type:'replay'});expect(element.textContent).toContain('Record walkthrough');
 });
 it('does not rename or save a different workflow if the active app changed',async()=>{
  await mount();send.mockResolvedValue({...snapshot,workflow:{...snapshot.workflow,id:'different'}});await rename('My flow');await click('Save to my account');expect(accountAPI).not.toHaveBeenCalled();expect(element.textContent).toContain('active workflow changed');expect(send).not.toHaveBeenCalledWith(expect.objectContaining({type:'rename'}));

@@ -1,3 +1,4 @@
+import {recordingStore} from './recordings';
 import {guestPlan} from './guestAI';
 import {workflowStore} from './workflows';
 import {provisionIdentity,type IdentityProvider} from './clerk';
@@ -26,6 +27,7 @@ const publicPrototype=(p:Prototype)=>({id:p.id,name:p.name,description:p.descrip
 const json=(data:unknown,status=200,headers:Record<string,string>={})=>new Response(JSON.stringify(data),{status,headers:{'Content-Type':'application/json','Cache-Control':'no-store',...headers}});
 export function createPlatform(options:{db:DB;config:Config;ai:AIProvider;mail:MailProvider;clock?:()=>Date;analytics?:Analytics;billing?:BillingProvider;identity?:IdentityProvider}){
  const {db,config,ai,mail}=options,clock=options.clock||(()=>new Date()),entitlements=new Entitlements(db,config,clock),analytics=options.analytics||new LocalAnalytics(db,clock),billing:BillingProvider=options.billing||new MockBillingProvider(db,config,clock);
+ const recordings=recordingStore(db,config.publicAPIOrigin||config.origin,clock);
  const workflows=workflowStore(db,entitlements,clock);
  const now=()=>clock().toISOString();
  const track=(name:string,id:string,properties:Record<string,string|number|boolean>={})=>analytics.track(name,id,properties);
@@ -41,6 +43,8 @@ export function createPlatform(options:{db:DB;config:Config;ai:AIProvider;mail:M
  async function route(req:Request,ip:string):Promise<Response>{
   const path=new URL(req.url).pathname,method=req.method;
   if(path==='/api/billing/webhook'&&method==='POST'){if(!billing.webhook)throw new APIError(503,'BILLING_UNAVAILABLE','Stripe is not configured.');await billing.webhook(await req.text(),req.headers.get('stripe-signature')||'');return json({received:true});}
+  const playback=path.match(/^\/api\/playback\/([a-f0-9]{64})(\/video)?$/);
+  if(playback&&['GET','HEAD'].includes(method)){rateLimit(db,`video-view:${tokenHash(ip,config.pepper)}`,120,clock().getTime(),60000);return recordings.public(req,playback[1],!!playback[2]);}
   if(path==='/api/plans'&&method==='GET')return json({plans:config.plans,proPriceCents:config.priceCents,currency:config.currency,mockBilling:!billing.mode&&config.mockBilling,billingMode:billing.mode||'mock',authMode:config.authMode,aiMode:config.aiMode});
   if(config.authMode==='clerk'&&path.startsWith('/api/auth/'))throw new APIError(410,'CLERK_AUTH_REQUIRED','Use Clerk to manage your account.');
   if(path.startsWith('/api/auth/')&&method==='POST')rateLimit(db,`auth:ip:${ip}`,25,clock().getTime());
@@ -70,6 +74,10 @@ export function createPlatform(options:{db:DB;config:Config;ai:AIProvider;mail:M
   }
   if(path==='/api/ai/guest-plan'&&method==='POST'){rateLimit(db,`guest-request:${tokenHash(ip,config.pepper)}`,12,clock().getTime(),60000);const raw=await req.text();if(Buffer.byteLength(raw)>2400)throw new APIError(413,'BODY_TOO_LARGE','Free preview requests must be under 2.4 KB.');let data:unknown;try{data=JSON.parse(raw);}catch{throw new APIError(400,'INVALID_JSON','Invalid request.');}return json(await guestPlan(db,ai,config.pepper,ip,data,clock()));}
   const u=await user(req);
+  if(path==='/api/recordings'&&method==='GET')return json({recordings:recordings.list(u.id)});
+  if(path==='/api/recordings'&&method==='POST'){rateLimit(db,`video-upload:${u.id}`,5,clock().getTime(),60000);return json({recording:await recordings.create(u.id,req)},201);}
+  const recording=path.match(/^\/api\/recordings\/([a-f0-9-]{36})$/);
+  if(recording&&method==='DELETE'){recordings.revoke(u.id,recording[1]);return json({ok:true});}
   if(path==='/api/auth/logout'&&method==='POST'){db.prepare('DELETE FROM sessions WHERE token_hash=?').run(tokenHash(credential(req).raw,config.pepper));return json({ok:true},200,{'Set-Cookie':cookie('',true)});}
   if(path==='/api/auth/token'&&method==='POST'){const data=z.object({password}).strict().parse(await body(req));if(!await checkPassword(data.password,u.password_hash))throw new APIError(401,'INVALID_CREDENTIALS','Password is incorrect.');return json({token:issue(u.id,'extension'),expiresIn:2592000});}
   if(path==='/api/auth/tokens'&&method==='DELETE'){db.prepare("DELETE FROM sessions WHERE user_id=? AND kind='extension'").run(u.id);return json({ok:true});}
@@ -134,6 +142,6 @@ export function createPlatform(options:{db:DB;config:Config;ai:AIProvider;mail:M
    else {if(!['GET','HEAD'].includes(req.method)&&!req.headers.get('authorization')&&!allowed&&new URL(req.url).pathname!=='/api/billing/webhook')throw new APIError(403,'CSRF_REJECTED','A trusted Origin header is required.');response=await route(req,ip);}
   }catch(error){if(error instanceof APIError)response=json({error:{code:error.code,message:error.message,...error.details},requestId},error.status,error.status===429?{'Retry-After':String(error.details.retryAfter||60)}:{});else if(error instanceof z.ZodError)response=json({error:{code:'INVALID_INPUT',message:'Check the request fields.',fields:error.issues.map(x=>({path:x.path.join('.'),message:x.message}))},requestId},400);else{console.error(JSON.stringify({requestId,error:'unhandled_api_error'}));response=json({error:{code:'INTERNAL_ERROR',message:'Something went wrong. Please retry.'},requestId},500);}}
   response.headers.set('X-Request-Id',requestId);response.headers.set('X-Content-Type-Options','nosniff');response.headers.set('Referrer-Policy','no-referrer');if(allowed&&origin){response.headers.set('Access-Control-Allow-Origin',origin);response.headers.set('Access-Control-Allow-Credentials','true');response.headers.set('Vary','Origin');response.headers.set('Access-Control-Allow-Headers','Content-Type, Authorization');response.headers.set('Access-Control-Allow-Methods','GET, POST, PUT, DELETE, OPTIONS');}
-  console.info(JSON.stringify({requestId,method:req.method,path:new URL(req.url).pathname,status:response.status}));return response;
+  console.info(JSON.stringify({requestId,method:req.method,path:new URL(req.url).pathname.replace(/^(\/api\/playback\/)[^/]+/,'$1[redacted]'),status:response.status}));return response;
  }};
 }

@@ -14,6 +14,7 @@ await Promise.all([
   build({entryPoints:['extension/content/index.ts'],outfile:out+'/content.js',bundle:true,format:'iife',target:'chrome116',define:{WANDEL_FREE:JSON.stringify(free)}}),
   build({entryPoints:[free?'extension/sidepanel/free.tsx':'extension/sidepanel/index.tsx'],outfile:out+'/sidepanel.js',bundle:true,format:'esm',target:'chrome116',minify:true,define:defines})
 ]);
+await build({entryPoints:[free?'extension/recording/free.tsx':'extension/recording/index.tsx'],outfile:out+'/recorder.js',bundle:true,format:'esm',target:'chrome116',minify:true,define:defines});
 await cp('public/brand',out+'/brand',{recursive:true});
 const {readFile}=await import('node:fs/promises');
 const manifest=JSON.parse(await readFile('extension/manifest.json','utf8'));
@@ -25,4 +26,5 @@ if(!free)manifest.externally_connectable={matches:[new URL(publicConfig.APP_ORIG
 if(!free&&process.env.WANDEL_EXTENSION_KEY)manifest.key=process.env.WANDEL_EXTENSION_KEY;
 await writeFile(out+'/manifest.json',JSON.stringify(manifest,null,2));
 await writeFile(out+'/sidepanel.html','<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Wandel</title><link rel="stylesheet" href="sidepanel.css"></head><body><div id="root"></div><script type="module" src="sidepanel.js"></script></body></html>');
+await writeFile(out+'/recorder.html','<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Wandel walkthrough studio</title><link rel="stylesheet" href="recorder.css"></head><body><div id="root"></div><script type="module" src="recorder.js"></script></body></html>');
 console.log(`Unpacked ${free?'local-only ':''}extension ready in ${out}/`);

@@ -21,3 +21,9 @@ it('reattaches the Chrome panel without resetting Interact or replay state',asyn
  document.body.innerHTML='<main><button>Continue</button></main>';const session=new Session(document.querySelector('main')!,new Repository(new BrowserStorage()),new URL('https://example.com/'));
  try{await session.init();await session.dispatch({type:'edit'});await session.dispatch({type:'interact'});await session.dispatch({type:'minimizePanel'});await session.dispatch({type:'restorePanel'});expect(session.panelAttached()).toBe(true);expect(session.mode()).toBe('interact');expect(session.panelAttached()).toBe(false);}finally{session.destroy();}
 });
+it('keeps the prototype interactive after the recorder minimizes the panel and its port disconnects',async()=>{
+ localStorage.clear();document.body.innerHTML='<main><button id="continue">Continue</button></main>';const session=new Session(document.querySelector('main')!,new Repository(new BrowserStorage()),new URL('https://example.com/'));
+ try{await session.init();await session.dispatch({type:'edit'});document.querySelector<HTMLButtonElement>('#continue')!.click();await session.dispatch({type:'child',text:'Confirmation'});const child=session.stateId;await session.dispatch({type:'state',id:session.workflow.entry});
+ await session.dispatch({type:'interact'});await session.dispatch({type:'minimizePanel'});await session.dispatch({type:'pause'});document.querySelector<HTMLButtonElement>('#continue')!.click();expect(session.mode()).toBe('interact');expect(session.stateId).toBe(child);expect(session.snapshot().panelMinimized).toBe(true);expect(document.querySelector('main')!.textContent).toContain('Confirmation');
+ }finally{session.destroy();}
+});

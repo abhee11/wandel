@@ -1,3 +1,5 @@
+import {registerRecordingLauncher} from './recording';
+registerRecordingLauncher();
 import {registerLiveNavigation} from './liveNavigation';
 registerLiveNavigation();
 import {registerScreenCatalog} from './screens';
