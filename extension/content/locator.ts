@@ -1,3 +1,4 @@
+import {deepElements} from '../assistant/dom';
 import type { Locator, Selection } from '../shared/model';
 const normalize = (text:string|null|undefined,max=300) => (text||'').replace(/\s+/g,' ').trim().slice(0,max);
 const forbidden = 'script,style,noscript,input,textarea,select,option,[contenteditable="true"],[data-dx-ignore]';
@@ -37,7 +38,7 @@ function parentScore(el:Element,l:Locator) {
 export function resolve(l:Locator,root:ParentNode,owned:Map<string,HTMLElement>):HTMLElement|null {
   if(l.owned) { const node=owned.get(l.owned); return node?.isConnected?node:null; }
   if(!/^[a-z][a-z0-9-]*$/.test(l.tag)) return null;
-  const candidates=[...(root instanceof HTMLElement&&root.matches(l.tag)?[root]:[]),...Array.from(root.querySelectorAll<HTMLElement>(l.tag))].filter(el=>!el.closest('[data-dx-ignore],[data-dx-owned]') && !el.matches('script,style,noscript,option,[contenteditable="true"],[data-dx-ignore]') && !el.hidden && el.getAttribute('aria-hidden')!=='true');
+  const candidates=[...(root instanceof HTMLElement&&root.matches(l.tag)?[root]:[]),...deepElements(root,l.tag)].filter(el=>!el.closest('[data-dx-ignore],[data-dx-owned]') && !el.matches('script,style,noscript,option,[contenteditable="true"],[data-dx-ignore]') && !el.hidden && el.getAttribute('aria-hidden')!=='true');
   const ranked=candidates.map(el=>{
     const name=nameOf(el),text=safeText(el),role=roleOf(el);
     const semantic=(!l.name||l.name===name)&&(!l.role||l.role===role);

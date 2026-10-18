@@ -404,3 +404,10 @@ This is a manual walkthrough recording, not automatic stitching of saved thumbna
 Final verification: 310 tests passed across 37 files; standard extension, free extension and platform builds passed. The free recorder bundle was inspected and contains no account-token request, upload endpoint or hosted-sharing UI. Native Chrome recording/preview/download and anonymous localhost playback were verified with the actual recorded fixture file; real HTTP revocation returned 404 for both player and video. Production Clerk sign-in/upload and public Internet playback still require acceptance after redeploy.
 
 Recorder launch is orchestrated in the background worker: validate the source workflow, switch its current view to Interact, minimize the source panel while preserving the prototype, then open the recorder. This avoids side-panel disconnect cleanup removing prototype edits when the recorder tab becomes active. It preserves the current screen rather than restarting the flow.
+
+
+## Isolated conversational assistant — October 18, 2026
+
+Implemented on `codex/context-aware-assistant`, based on main `30c810d`. See [ASSISTANT_CHECKPOINT.md](ASSISTANT_CHECKPOINT.md) for build isolation, the exact acceptance journey, privacy/retention, provider setup and remaining real-site checks. Build with `npm run build:assistant` into dist-assistant/; existing main/free build output is retained. No deployment or environment changes were made. Generated choice connections require the matching assistant runtime until deliberately released.
+
+Validation: 334 tests across 41 files, TypeScript, assistant/platform builds and whitespace checks passed. Synthetic browser authoring/playback and real provider/transcription contracts passed. Native installed-Chrome MirrorTalk, actual microphone and recipient acceptance remain pending.

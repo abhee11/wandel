@@ -1,0 +1,3 @@
+export function inScope(root:HTMLElement,node:Element){for(let current:Node|null=node;current;){if(current===root||root.contains(current))return true;const tree=current.getRootNode();current=tree instanceof ShadowRoot?tree.host:null;}return false;}
+export function deepElements(root:ParentNode,selector='*'):HTMLElement[]{const out:HTMLElement[]=[];for(const node of root.querySelectorAll<HTMLElement>(selector))out.push(node);for(const node of root.querySelectorAll<HTMLElement>('*'))if(node.shadowRoot)out.push(...deepElements(node.shadowRoot,selector));return out;}
+export function parentOf(node:HTMLElement):HTMLElement|null{return node.parentElement||(node.getRootNode() instanceof ShadowRoot?(node.getRootNode() as ShadowRoot).host as HTMLElement:null);}

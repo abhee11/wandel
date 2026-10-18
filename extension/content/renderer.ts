@@ -53,7 +53,7 @@ export class Renderer {
     }finally{this.forwarding=false;}
   }
 
-  constructor(public root:HTMLElement,private onClick:(id:string)=>void) {}
+  constructor(public root:HTMLElement,private onClick:(id:string)=>void,private onChoice?:(id:string)=>void) {}
   idFor(el:Element) { for(const [id,node] of this.owned) if(node===el) return id; return undefined; }
   findOwned(el:Element) { let node:Element|null=el; while(node && node!==this.root.parentElement) { const id=this.idFor(node); if(id) return {id,node}; node=node.parentElement; } return null; }
   private make(id:string,kind:'button'|'panel'|'text'|'field',text:string) {
@@ -184,7 +184,7 @@ export class Renderer {
     if(op.position==='inside') target.append(insertion);
     else if(op.position==='before') target.before(insertion);
     else target.after(insertion);
-    if(op.node.choices)mountChoices(node,op.node.choices,op.node.text);
+    if(op.node.choices)mountChoices(node,op.node.choices,op.node.text,(id,button)=>this.owned.set(id,button),this.onChoice);
     if(op.node.widget){this.widgetCleanup.get(op.id)?.();this.widgetCleanup.set(op.id,mountSettings(node,target,op.node.widget));}
     this.applied.set(op.id,{node:insertion,target});
   }

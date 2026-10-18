@@ -23,7 +23,7 @@ export function lineage(workflow: Workflow, stateId: string) {
 }
 export function renderLineage(w:Workflow,stateId:string){const chain=lineage(w,stateId);const boundary=chain.reduce((index,s,i)=>s.liveURL?i:index,-1);return boundary<0?chain:chain.slice(boundary);}
 export function visibleNodeIds(workflow: Workflow, stateId: string) {
-  return new Set(renderLineage(workflow, stateId).flatMap(s => [ ...(s.view === 'panel' ? [`view:${s.id}`, `heading:${s.id}`] : []), ...s.operations.flatMap(o => o.kind === 'insert' ? [o.node.id,...(o.node.kind==='field'?[o.node.id+':input']:[]),...(o.node.copy?.map(n=>n.id)||[])] : o.kind==='trigger'?[o.source]:[]) ]));
+  return new Set(renderLineage(workflow, stateId).flatMap(s => [ ...(s.view === 'panel' ? [`view:${s.id}`, `heading:${s.id}`] : []), ...s.operations.flatMap(o => o.kind === 'insert' ? [o.node.id,...(o.node.kind==='field'?[o.node.id+':input']:[]),...(o.node.copy?.map(n=>n.id)||[]),...(o.node.choices?.options.map((_,i)=>o.node.id+':choice:'+i)||[])] : o.kind==='trigger'?[o.source]:[]) ]));
 }
 export function validateWorkflow(input: unknown): Workflow {
   const w = WorkflowSchema.parse(input);
@@ -42,7 +42,7 @@ export function validateWorkflow(input: unknown): Workflow {
     for (const o of s.operations) {
       if (ops.has(o.id)) throw new Error('Duplicate operation.'); ops.add(o.id);
       if(o.kind==='trigger'){if(nodes.has(o.source)||/^(view|heading|wrap):/.test(o.source))throw new Error('Duplicate/reserved trigger ID.');nodes.add(o.source);}
-      if (o.kind === 'insert') { if(o.node.binding&&(!dataKeys.has(o.node.binding)||o.node.kind!=='field'||o.node.copy))throw new Error('Invalid field binding.'); if (nodes.has(o.node.id) || /^(view|heading|wrap):/.test(o.node.id)) throw new Error('Duplicate/reserved node ID.'); nodes.add(o.node.id); for(const n of o.node.copy||[]){if(nodes.has(n.id)||/^(view|heading|wrap):/.test(n.id))throw new Error('Duplicate/reserved copy ID.');nodes.add(n.id);} }
+      if (o.kind === 'insert') { if(o.node.binding&&(!dataKeys.has(o.node.binding)||o.node.kind!=='field'||o.node.copy))throw new Error('Invalid field binding.'); if (nodes.has(o.node.id) || /^(view|heading|wrap):/.test(o.node.id)) throw new Error('Duplicate/reserved node ID.'); nodes.add(o.node.id);for(const [index]of o.node.choices?.options.entries()||[]){const source=o.node.id+':choice:'+index;if(nodes.has(source))throw new Error('Duplicate option ID.');nodes.add(source);} for(const n of o.node.copy||[]){if(nodes.has(n.id)||/^(view|heading|wrap):/.test(n.id))throw new Error('Duplicate/reserved copy ID.');nodes.add(n.id);} }
     }
   }
   const triggers = new Set<string>(),edgeIds=new Set<string>();

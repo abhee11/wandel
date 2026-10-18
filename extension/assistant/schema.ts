@@ -1,0 +1,13 @@
+import {z} from 'zod';
+import {StyleSchema} from '../shared/model';
+const ref=z.string().min(1).max(100),text=z.string().max(300);
+export const ElementContextSchema=z.object({ref,tag:text,role:text,name:text,text,attributes:z.record(z.string().max(300)),classes:z.array(text).max(8),bounds:z.object({x:z.number(),y:z.number(),width:z.number(),height:z.number()}).strict(),visible:z.boolean(),disabled:z.boolean(),parent:ref.nullable(),children:z.array(ref).max(8),style:z.record(z.string().max(300)),interactive:z.boolean(),owned:z.boolean()}).strict();
+export const PageContextSchema=z.object({token:ref,workflowId:ref,stateId:ref,route:z.string().max(2048),selected:ref.nullable(),hover:ref.nullable(),styleReference:ref.nullable(),elements:z.array(ElementContextSchema).max(32),recent:z.array(ref).max(8),lastGroup:ref.nullable(),lastView:ref.nullable(),views:z.array(z.object({id:ref,title:text}).strict()).max(30),limitations:z.array(text).max(8)}).strict();
+export type PageContext=z.infer<typeof PageContextSchema>;
+export const AssistantActionSchema=z.object({kind:z.enum(['create','choices','text','style','move','remove','default','connect']),targets:z.array(ref).min(1).max(8),element:z.enum(['button','text','panel','field']).nullable(),text:text.nullable(),labels:z.array(z.string().min(1).max(100)).max(8),position:z.enum(['before','after','inside','below']).nullable(),styleRef:ref.nullable(),style:StyleSchema.nullable(),destination:ref.nullable(),newViewTitle:text.nullable()}).strict();
+export type AssistantAction=z.infer<typeof AssistantActionSchema>;
+export const AssistantPlanSchema=z.object({status:z.enum(['edit','clarify','unsupported','undo','redo','save']),message:z.string().min(1).max(300),question:text.nullable(),candidates:z.array(ref).max(8),actions:z.array(AssistantActionSchema).max(12)}).strict().superRefine((p,ctx)=>{if(p.status==='edit'?!p.actions.length:!!p.actions.length)ctx.addIssue({code:'custom',message:'Only edit plans may contain actions.'});});
+export type AssistantPlan=z.infer<typeof AssistantPlanSchema>;
+export function action(kind:AssistantAction['kind'],targets:string[],extra:Partial<AssistantAction>={}):AssistantAction{return {kind,targets,element:null,text:null,labels:[],position:null,styleRef:null,style:null,destination:null,newViewTitle:null,...extra};}
+export function response(status:AssistantPlan['status'],message:string,actions:AssistantAction[]=[],candidates:string[]=[]):AssistantPlan{return {status,message,question:status==='clarify'?message:null,candidates,actions};}
+export type AssistantSnapshot={context:PageContext|null;message:string;transactions:{id:string;message:string;createdAt:string}[]};

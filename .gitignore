@@ -24,3 +24,5 @@ dist-free/
 
 # Local release candidates
 releases/
+
+dist-assistant/

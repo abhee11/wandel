@@ -19,6 +19,7 @@ export class PageEditor {
   private toast=document.createElement('div');
   private toastTimer:ReturnType<typeof setTimeout>|undefined;
   private selectionKey='';
+  private assistantToolsKey='';
   private placement:'auto'|'after'|'before'|'inside'|'below'='auto';
   private inserting=false;
   private current:Snapshot;
@@ -80,6 +81,13 @@ export class PageEditor {
       this.button('×','Close Wandel and keep draft',()=>{void this.run({type:'closeEditor'});});this.bar.hidden=false;this.position();return;
     }
     if(!active&&!s.replay)return;
+    const assistantKey=JSON.stringify(s.selected?.locator||null)+(s.assistant?.transactions.at(-1)?.id||'');
+    if(active&&s.assistant&&this.assistantToolsKey!==assistantKey){
+      const target=this.session.findSelected();this.bar.hidden=false;
+      if(target&&editableText(target))this.button('Text','Edit text in place',()=>this.startInline(target));
+      this.button('Visual tools','Open visual editing tools',()=>{this.assistantToolsKey=assistantKey;this.update(s);});
+      this.button('Interact','Interact with page',()=>{void this.run({type:'interact'});});this.handles.hidden=true;this.position();return;
+    }
     if(active&&s.styleSource){const hint=document.createElement('span');hint.textContent='Style copied → Click a destination';hint.style.cssText='font-size:10px;color:#625c9a;';this.bar.append(hint);this.button('Cancel','Cancel style transfer',()=>{void this.run({type:'cancelStyle'});});this.position();return;}
     if(active){this.button('−','Minimize Wandel panel',()=>{void this.run({type:'minimizePanel'});});this.button('Interact (I)','Interact with page (V)',()=>{void this.run({type:'interact'});});}
 

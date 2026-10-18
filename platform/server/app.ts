@@ -1,3 +1,4 @@
+import {assistantService,type AssistantProvider} from './assistant';
 import {recordingStore} from './recordings';
 import {guestPlan} from './guestAI';
 import {workflowStore} from './workflows';
@@ -25,8 +26,9 @@ const update=z.object({name:z.string().trim().min(1).max(300).optional(),descrip
 const publicUser=(u:User)=>({id:u.id,email:u.email,name:u.name,createdAt:u.created_at,updatedAt:u.updated_at});
 const publicPrototype=(p:Prototype)=>({id:p.id,name:p.name,description:p.description,targetDomain:p.target_domain,currentVersion:p.current_version,revision:p.revision,createdAt:p.created_at,updatedAt:p.updated_at,...(p.definition?{definition:JSON.parse(p.definition)}:{})});
 const json=(data:unknown,status=200,headers:Record<string,string>={})=>new Response(JSON.stringify(data),{status,headers:{'Content-Type':'application/json','Cache-Control':'no-store',...headers}});
-export function createPlatform(options:{db:DB;config:Config;ai:AIProvider;mail:MailProvider;clock?:()=>Date;analytics?:Analytics;billing?:BillingProvider;identity?:IdentityProvider}){
+export function createPlatform(options:{db:DB;config:Config;ai:AIProvider;mail:MailProvider;clock?:()=>Date;analytics?:Analytics;billing?:BillingProvider;identity?:IdentityProvider;assistant?:AssistantProvider}){
  const {db,config,ai,mail}=options,clock=options.clock||(()=>new Date()),entitlements=new Entitlements(db,config,clock),analytics=options.analytics||new LocalAnalytics(db,clock),billing:BillingProvider=options.billing||new MockBillingProvider(db,config,clock);
+ const assistant=assistantService(db,entitlements,options.assistant,clock);
  const recordings=recordingStore(db,config.publicAPIOrigin||config.origin,clock);
  const workflows=workflowStore(db,entitlements,clock);
  const now=()=>clock().toISOString();
@@ -74,6 +76,7 @@ export function createPlatform(options:{db:DB;config:Config;ai:AIProvider;mail:M
   }
   if(path==='/api/ai/guest-plan'&&method==='POST'){rateLimit(db,`guest-request:${tokenHash(ip,config.pepper)}`,12,clock().getTime(),60000);const raw=await req.text();if(Buffer.byteLength(raw)>2400)throw new APIError(413,'BODY_TOO_LARGE','Free preview requests must be under 2.4 KB.');let data:unknown;try{data=JSON.parse(raw);}catch{throw new APIError(400,'INVALID_JSON','Invalid request.');}return json(await guestPlan(db,ai,config.pepper,ip,data,clock()));}
   const u=await user(req);
+  if(['/api/assistant/plan','/api/assistant/transcribe'].includes(path)&&method==='POST')return json(await assistant.handle(u.id,req));
   if(path==='/api/recordings'&&method==='GET')return json({recordings:recordings.list(u.id)});
   if(path==='/api/recordings'&&method==='POST'){rateLimit(db,`video-upload:${u.id}`,5,clock().getTime(),60000);return json({recording:await recordings.create(u.id,req)},201);}
   const recording=path.match(/^\/api\/recordings\/([a-f0-9-]{36})$/);

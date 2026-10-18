@@ -1,3 +1,5 @@
+import {AssistantController} from '../assistant/controller';
+import {inScope} from '../assistant/dom';
 import {stateURL,sameApplicationURL,type LiveNavigation,type LiveContext} from '../shared/liveNavigation';
 import {isTextEntry} from '../shared/keyboard';
 import {fieldFor,eventsFor,conditionPasses} from './connections';
@@ -6,7 +8,7 @@ import {captureDesign,nativeOperations,inferDestination,readStyle} from './nativ
 import {nativeChoices} from './nativeChoices';
 import {advancedTarget,isSettingsRequest} from './settingsFeature';
 import {chooseLayout} from './layouts';
-import {freeBuild} from '../shared/build';
+import {freeBuild,assistantBuild} from '../shared/build';
 import {sectionOperations} from '../ai/section';
 import {sectionTarget} from './selection';
 import {compileFlow,buttonTheme} from '../ai/flow';
@@ -23,6 +25,7 @@ import { textAlignment } from './textAlignment';
 import { Renderer } from './renderer';
 import { describe, resolve } from './locator';
 export class Session {
+  private assistant:AssistantController|undefined;
   workflow:Workflow; stateId:string; selected:Selection|null=null; picking=false; dragging=false; replay=false; enabled=true; dirty=false;
   connectionWorkspace:ConnectionWorkspace|null=null;
   get connectionViewport(){return this.options.connectionViewport?.()||{width:innerWidth,height:innerHeight};}
@@ -51,9 +54,9 @@ export class Session {
   renderer:Renderer; private observer:MutationObserver; private timer:ReturnType<typeof setTimeout>|undefined;
   private draftTimer:ReturnType<typeof setTimeout>|undefined;
   private listeners=new Set<(s:Snapshot)=>void>(); private outline:HTMLElement; private queue:Promise<unknown>=Promise.resolve();
-  constructor(public root:HTMLElement,public repository:Repository,public url:URL, private options:{ liveNavigation?:LiveNavigation;connectionViewport?:()=>{width:number;height:number};externalConnections?:boolean;requestConnections?:()=>void|Promise<void>;directSelection?:boolean;requestSave?:()=>void;requestSignIn?:()=>Promise<void>;requestClose?:()=>Promise<void>;requestPlan?:(prompt:string,selection:Selection)=>Promise<unknown> } = {}) {
+  constructor(public root:HTMLElement,public repository:Repository,public url:URL, private options:{ assistantEnabled?:boolean;liveNavigation?:LiveNavigation;connectionViewport?:()=>{width:number;height:number};externalConnections?:boolean;requestConnections?:()=>void|Promise<void>;directSelection?:boolean;requestSave?:()=>void;requestSignIn?:()=>Promise<void>;requestClose?:()=>Promise<void>;requestPlan?:(prompt:string,selection:Selection)=>Promise<unknown> } = {}) {
     this.projectionActive=!!options.directSelection;this.workflow=createWorkflow(url);this.stateId=this.workflow.entry;
-    this.renderer=new Renderer(root,id=>this.click(id));
+    this.renderer=new Renderer(root,id=>this.click(id),id=>{if(this.runningConnections)this.click(id);else{const node=this.renderer.owned.get(id);if(node)this.select(node);}});
     this.outline=document.createElement('div');this.outline.dataset.dxIgnore='true';this.outline.style.cssText='position:fixed;pointer-events:none;z-index:2147483647;border:2px solid #6473f4;border-radius:4px;background:#6c7afa12;display:none;box-sizing:border-box;';document.documentElement.append(this.outline);
     this.selectionOutline.dataset.dxIgnore='true';this.selectionOutline.dataset.dxSelection='true';this.selectionOutline.setAttribute('aria-hidden','true');
     this.selectionOutline.style.cssText='position:fixed;pointer-events:none;z-index:2147483646;border:2px solid #7770df;border-radius:4px;background:rgba(119,112,223,.10);display:none;box-sizing:border-box;';document.documentElement.append(this.selectionOutline);
@@ -120,10 +123,10 @@ export class Session {
     try{await this.options.liveNavigation.go(url,{workflowId:this.workflow.id,stateId:id,visits:visits.slice(-60),mode,minimized:this.panelMinimized,dialogs:this.liveDialogs});}catch(error){this.navigating=false;throw error;}return true;
   }
   /** Synchronous teardown also runs before BFCache/pagehide freezes the document. */
-  suspend(){this.restoringPanel=false;this.panelMinimized=false;this.styleClipboard=null;this.replayData={};this.replayHistory=[];this.closeLayouts?.();this.resizeHeld=false;this.cancelDrag();this.projectionActive=false;this.picking=false;this.dragging=false;this.replay=false;this.selected=null;this.hovered=null;this.render(true);}
+  suspend(){this.assistant?.reset();this.restoringPanel=false;this.panelMinimized=false;this.styleClipboard=null;this.replayData={};this.replayHistory=[];this.closeLayouts?.();this.resizeHeld=false;this.cancelDrag();this.projectionActive=false;this.picking=false;this.dragging=false;this.replay=false;this.selected=null;this.hovered=null;this.render(true);}
 
   subscribe(listener:(s:Snapshot)=>void) {this.listeners.add(listener);listener(this.snapshot());return()=>{this.listeners.delete(listener);};}
-  snapshot():Snapshot {this.seenViews.add(this.stateId);return clone({liveSession:this.liveSession,panelMinimized:this.panelMinimized,panelRestoring:this.restoringPanel,connectionWorkspace:this.connectionWorkspace,visited:[...this.seenViews],mode:this.mode(),styleSource:this.styleClipboard?.selection||null,workflow:this.workflow,stateId:this.stateId,selected:this.selected,picking:this.picking,dragging:this.dragging,replay:this.replay,enabled:this.enabled,dirty:this.dirty,canUndo:!!this.history.past.length,canRedo:!!this.history.future.length,canBack:!!this.visits.length,unresolved:this.unresolved,currentVersion:this.record?.currentVersion||this.record?.versions.at(-1)?.number||0,versions:this.record?.versions.map(({number,savedAt,workflow})=>({number,savedAt,name:workflow.name}))||[],library:[...this.library.map(r=>({id:r.draft.id,name:this.routeDrafts.has(r.draft.id)?this.routeDrafts.get(r.draft.id)!.workflow.name+' (unsaved)':r.draft.name,versions:r.versions.length})),...[...this.routeDrafts.values()].filter(d=>d.workflow.origin===this.url.origin&&d.workflow.route===routeOf(this.url)&&!this.library.some(r=>r.draft.id===d.workflow.id)).map(d=>({id:d.workflow.id,name:d.workflow.name+' (unsaved)',versions:d.record?.versions.length||0}))]});}
+  snapshot():Snapshot {this.seenViews.add(this.stateId);return clone({...(this.assistant?{assistant:this.assistant.snapshot()}:{}),liveSession:this.liveSession,panelMinimized:this.panelMinimized,panelRestoring:this.restoringPanel,connectionWorkspace:this.connectionWorkspace,visited:[...this.seenViews],mode:this.mode(),styleSource:this.styleClipboard?.selection||null,workflow:this.workflow,stateId:this.stateId,selected:this.selected,picking:this.picking,dragging:this.dragging,replay:this.replay,enabled:this.enabled,dirty:this.dirty,canUndo:!!this.history.past.length,canRedo:!!this.history.future.length,canBack:!!this.visits.length,unresolved:this.unresolved,currentVersion:this.record?.currentVersion||this.record?.versions.at(-1)?.number||0,versions:this.record?.versions.map(({number,savedAt,workflow})=>({number,savedAt,name:workflow.name}))||[],library:[...this.library.map(r=>({id:r.draft.id,name:this.routeDrafts.has(r.draft.id)?this.routeDrafts.get(r.draft.id)!.workflow.name+' (unsaved)':r.draft.name,versions:r.versions.length})),...[...this.routeDrafts.values()].filter(d=>d.workflow.origin===this.url.origin&&d.workflow.route===routeOf(this.url)&&!this.library.some(r=>r.draft.id===d.workflow.id)).map(d=>({id:d.workflow.id,name:d.workflow.name+' (unsaved)',versions:d.record?.versions.length||0}))]});}
   private lastEmission='';
   private emit() {this.updateSelection();const s=this.snapshot(),serialized=JSON.stringify(s);if(serialized===this.lastEmission)return;this.lastEmission=serialized;this.listeners.forEach(fn=>fn(s));}
   private updateSelection(){
@@ -152,8 +155,8 @@ export class Session {
   }
   private hover=(event:PointerEvent)=>{
     if(this.dragData)return;
-    const target=event.target instanceof HTMLElement?event.target:event.target instanceof Element?event.target.closest<HTMLElement>('button,a,[role="button"],[role="link"]'):null;
-    if(!this.selecting||!target||!this.root.contains(target)||target.closest('[data-dx-ignore]')){this.hovered=null;this.outline.style.display='none';return;}
+    const origin=(assistantBuild||this.options.assistantEnabled)?event.composedPath()[0]:event.target;const target=origin instanceof HTMLElement?origin:origin instanceof Element?origin.closest<HTMLElement>('button,a,[role="button"],[role="link"]'):null;
+    if(!this.selecting||!target||!((assistantBuild||this.options.assistantEnabled)?inScope(this.root,target):this.root.contains(target))||target.closest('[data-dx-ignore]')){this.hovered=null;this.outline.style.display='none';return;}
     this.hovered=target;this.paintHover(target);
   };
   private dragData:{el:HTMLElement;selection:Selection;mode:'move'|'resize';startX:number;startY:number;x:number;y:number;width:number;height:number;styles:{key:string;value:string;priority:string}[];dx:number;dy:number;pointerId?:number;pending:boolean}|null=null;
@@ -231,7 +234,7 @@ export class Session {
   private handleClick=(event:MouseEvent)=>{
     if(this.renderer.forwarding)return;
     if(this.suppressClick){event.preventDefault();event.stopImmediatePropagation();return;}
-    const original=event.target;const target=original instanceof HTMLElement?original:original instanceof Element?original.closest('button,a,[role=button]'):null;if(!(target instanceof HTMLElement)||!this.root.contains(target)||target.closest('[data-dx-ignore]'))return;
+    const original=(this.assistant||assistantBuild||this.options.assistantEnabled)?(event.composedPath()[0]||event.target):event.target;const target=original instanceof HTMLElement?original:original instanceof Element?original.closest('button,a,[role=button]'):null;if(!(target instanceof HTMLElement)||!((this.assistant||assistantBuild||this.options.assistantEnabled)?inScope(this.root,target):this.root.contains(target))||target.closest('[data-dx-ignore]'))return;
     if(target.closest('[data-dx-interactive]'))return;
     if(this.selecting&&(event.ctrlKey||event.metaKey||this.styleClipboard)){
       event.preventDefault();event.stopImmediatePropagation();
@@ -348,6 +351,27 @@ export class Session {
     if(['appearance','alignText','insertElement','fieldSettings','pasteStyle','image','prompt','text','child','link','style','remove','drag','duplicateElement','mirror'].includes(c.type)&&!this.enabled)throw new Error('Enable the workflow before editing.');
     if(c.type==='connectionAnchor'){this.pageEditor.connectionAnchor(c.ratio);return this.snapshot();}
     if(c.type==='snapshot')return this.snapshot();
+    if(c.type.startsWith('assistant')){
+      if(!assistantBuild&&!this.options.assistantEnabled)throw new Error('Use the separate assistant beta build for this feature.');
+      if(!this.isAuthoring())throw new Error('Switch to Edit to use the conversational assistant.');
+      this.assistant??=new AssistantController(this.root,this.renderer.owned);
+      if(c.type==='assistantContext')this.assistant.collect(this.workflow,this.stateId,this.selected,this.hovered);
+      if(c.type==='assistantReset')this.assistant.reset();
+      if(c.type==='assistantStyle')this.assistant.style(c.ref);
+      if(c.type==='assistantCandidates')this.assistant.highlight(c.refs);
+      if(c.type==='assistantCandidate'){this.assistant.clearHighlights();const node=this.assistant.collector.get(c.ref);this.select(node);}
+      if(c.type==='assistantApply'){
+        const result=this.assistant.apply(c.plan,c.token,this.workflow,this.stateId,(next,stateId)=>{
+          const previous=this.workflow,previousState=this.stateId,dirty=this.dirty,past=[...this.history.past],future=[...this.history.future];
+          try{this.commit(next,stateId);if(this.unresolved.length)throw new Error('Preview could not be applied: '+this.unresolved[0]);}
+          catch(error){this.workflow=previous;this.stateId=previousState;this.dirty=dirty;this.history.past=past;this.history.future=future;this.render(true);throw error;}
+        });
+        if(result.view){const heading=this.renderer.owned.get('heading:'+result.view);if(heading)this.select(heading);}
+        const recent=result.view?null:this.assistant.collector.recent.at(-1);if(recent){try{this.select(this.assistant.collector.get(recent));}catch{this.selected=null;}}
+      }
+      this.emit();return this.snapshot();
+    }
+
     if(c.type==='minimizePanel'){
       await this.checkpoint();this.cancelDrag();if(!this.runningConnections)this.replayData=this.defaults();this.panelMinimized=true;this.outline.style.display='none';this.emit();
       try{await this.rememberLivePosition();await this.options.requestClose?.();}catch(error){this.panelMinimized=false;this.emit();throw error;}return this.snapshot();
@@ -590,5 +614,5 @@ export class Session {
     if(this.dirty&&editing.includes(c.type))this.scheduleDraft();
     this.emit();return this.snapshot();
   }
-  destroy(){this.closeLayouts?.();clearTimeout(this.draftTimer);window.removeEventListener('change',this.connectionChange,true);window.removeEventListener('keydown',this.connectionEnter,true);window.removeEventListener('input',this.inputMirror,true);window.removeEventListener('change',this.inputMirror,true);if(this.selectionFrame!==undefined)window.cancelAnimationFrame(this.selectionFrame);this.selectionFrame=undefined;window.removeEventListener('scroll',this.paintSelection,true);window.removeEventListener('resize',this.paintSelection);this.selectionOutline.remove();this.pageEditor.destroy();this.cancelDrag();window.removeEventListener('dragstart',this.nativeDrag,true);window.removeEventListener('pointerdown',this.dragStart,true);window.removeEventListener('pointermove',this.dragMove,true);window.removeEventListener('pointerup',this.dragEnd,true);window.removeEventListener('pointercancel',this.cancelDrag,true);window.removeEventListener('blur',this.blur);this.observer.disconnect();clearTimeout(this.timer);window.removeEventListener('click',this.handleClick,true);window.removeEventListener('pointermove',this.hover,true);window.removeEventListener('keydown',this.escape,true);window.removeEventListener('keyup',this.keyup,true);this.renderer.reset();this.outline.remove();this.listeners.clear();}
+  destroy(){this.assistant?.reset();this.closeLayouts?.();clearTimeout(this.draftTimer);window.removeEventListener('change',this.connectionChange,true);window.removeEventListener('keydown',this.connectionEnter,true);window.removeEventListener('input',this.inputMirror,true);window.removeEventListener('change',this.inputMirror,true);if(this.selectionFrame!==undefined)window.cancelAnimationFrame(this.selectionFrame);this.selectionFrame=undefined;window.removeEventListener('scroll',this.paintSelection,true);window.removeEventListener('resize',this.paintSelection);this.selectionOutline.remove();this.pageEditor.destroy();this.cancelDrag();window.removeEventListener('dragstart',this.nativeDrag,true);window.removeEventListener('pointerdown',this.dragStart,true);window.removeEventListener('pointermove',this.dragMove,true);window.removeEventListener('pointerup',this.dragEnd,true);window.removeEventListener('pointercancel',this.cancelDrag,true);window.removeEventListener('blur',this.blur);this.observer.disconnect();clearTimeout(this.timer);window.removeEventListener('click',this.handleClick,true);window.removeEventListener('pointermove',this.hover,true);window.removeEventListener('keydown',this.escape,true);window.removeEventListener('keyup',this.keyup,true);this.renderer.reset();this.outline.remove();this.listeners.clear();}
 }
