@@ -370,3 +370,11 @@ To test on MirrorTalk: export any important current draft, reload the unpacked e
 ## Git checkpoint — October 17, 2026
 
 Prepared the current implementation, fixtures, tests and acceptance evidence for the Wandel repository. Final pre-push validation: 278 tests passed across 32 test files; whitespace checks passed. Local environment files, databases, generated builds and release archives remain excluded. A configured-secret comparison found no exact secret values in candidate source/document files. Native Chrome/MirrorTalk acceptance and public release readiness remain as described above.
+
+## Deployment startup repair — October 18, 2026
+
+Fixed the startup crash when WANDEL_DB points into a missing directory. The database helper now creates the configured file's parent directories recursively with restricted permissions before opening SQLite; in-memory/temporary databases retain their existing behavior. Invalid database URLs fail with a clear SQLite file-path requirement. Production no longer creates the unrelated development .data directory when a custom volume path is used. Existing database contents are retained and migrations still run once.
+
+Container startup now listens on 0.0.0.0 in production, supports hosting-provided PORT, and allows WANDEL_HOST overrides. Explicit WANDEL_PORT takes precedence; otherwise PORT, then 4320. Local defaults remain 127.0.0.1:4320. Updated .env.example and the deployment checklist.
+
+Verified the compiled server using isolated production settings, a nonexistent nested database directory, a dynamically chosen PORT and a temporary working directory. Startup created the SQLite file, applied migrations and returned HTTP 200 from /api/plans. Unit regressions also cover reopening persistent data, in-memory operation, invalid paths and bind/port settings. All 283 tests across 33 files and the platform build passed. Deployment must still mount a writable persistent volume and set WANDEL_DB to a file within it; creating a folder does not make container storage durable. No production deployment was accessed from this chat.

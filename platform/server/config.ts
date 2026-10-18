@@ -12,3 +12,8 @@ export function configuration(env:NodeJS.ProcessEnv,pepper:string):Config {
  z.string().min(32).parse(pepper);
  return {authMode:env.WANDEL_AUTH_MODE==='legacy'?'legacy':'clerk',production,mockBilling:!production&&env.WANDEL_MOCK_BILLING!=='false',origin,extensionOrigins:(env.WANDEL_EXTENSION_ORIGINS||'').split(',').filter(Boolean),pepper,plans,priceCents:z.coerce.number().int().positive().parse(env.WANDEL_PRO_PRICE_CENTS||1500),currency:'USD',dbPath:env.WANDEL_DB||'.data/wandel.sqlite',aiMode:env.WANDEL_AI_MODE==='mock'&&!production?'mock':'openai'};
 }
+
+/** Keep local development private; container production listens on its service interface. */
+export function serverAddress(env:NodeJS.ProcessEnv){
+ return {host:env.WANDEL_HOST||(env.NODE_ENV==='production'?'0.0.0.0':'127.0.0.1'),port:z.coerce.number().int().min(1).max(65535).parse(env.WANDEL_PORT||env.PORT||4320)};
+}

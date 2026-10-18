@@ -149,14 +149,14 @@ This checklist is a release review plan, not a completed security audit.
 
 ## Hosting and database deployment
 
-**Current implementation:** the Node server listens on `127.0.0.1:4320`, serves `dist-platform/web`, and uses `better-sqlite3` at `WANDEL_DB` (default `.data/wandel.sqlite`). SQL migrations run at startup from `platform/migrations`. There is no verified shared production deployment.
+**Current implementation:** the Node server defaults to `127.0.0.1:4320` locally and `0.0.0.0` in production; port precedence is `WANDEL_PORT`, hosting-provided `PORT`, then `4320`. `WANDEL_HOST` overrides the bind address. It serves `dist-platform/web`, and uses `better-sqlite3` at `WANDEL_DB` (default `.data/wandel.sqlite`). SQL migrations run at startup from `platform/migrations`. There is no verified shared production deployment.
 
 Recommended initial topology: HTTPS reverse proxy → one Node API instance → SQLite on a persistent local volume. The same deployment can serve the homepage and browser auth/checkout-return helpers. If choosing a managed SQL service or multiple writers, plan a database adapter/migration project; the current code is not a drop-in PostgreSQL client.
 
 - [ ] Choose domains and hosting; separate development, staging and production data, credentials and webhook destinations.
 - [ ] Deploy compiled server code, web assets, migrations and required runtime dependencies. Verify supported Node version and the `better-sqlite3` native binary on the target platform.
-- [ ] If using a same-host reverse proxy, retain the loopback listener. If using container networking, explicitly implement/configure the required bind address and keep public access behind HTTPS. Current code does not expose a bind-address setting.
-- [ ] Create the database parent directory and restrict filesystem access. Persist database files across redeploys. Do not run SQLite on ephemeral storage or assume independent replicas share data.
+- [ ] If using a same-host reverse proxy, retain the loopback listener. If using container networking, use the production default `0.0.0.0` or explicitly set `WANDEL_HOST=0.0.0.0`, and keep public access behind HTTPS. For a same-host reverse proxy, set `WANDEL_HOST=127.0.0.1` when needed.
+- [ ] Verify the database parent directory is writable; startup creates missing parent directories with restricted permissions. Persist database files across redeploys. Do not run SQLite on ephemeral storage or assume independent replicas share data.
 - [ ] Take transactionally consistent SQLite backups, including correct WAL handling. Encrypt/restrict backups and test restoration into an isolated environment. Set recovery-time and acceptable-data-loss targets.
 - [ ] Rehearse migrations on a production-like copy. Back up before migration and document app/schema compatibility for rollback.
 - [ ] Add deployment health/readiness checks, uptime/error alerts, storage monitoring and webhook/AI failure alerts. Test a controlled restart and interrupted save.

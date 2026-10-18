@@ -5,6 +5,7 @@ import {createServer} from 'node:http';
 import {readFile} from 'node:fs/promises';
 import {resolve,extname} from 'node:path';
 import {environment} from './environment';
+import {serverAddress} from './config';
 import {database} from './db';
 import {createPlatform} from './app';
 import {DevMailbox,WebhookMailbox,MockAIProvider,OpenAIAIProvider} from './providers';
@@ -36,5 +37,6 @@ const server=createServer(async(req,res)=>{
   res.writeHead(result.status,Object.fromEntries(result.headers));res.end(Buffer.from(await result.arrayBuffer()));
  }catch{res.writeHead(404,{'Content-Type':'application/json'});res.end(JSON.stringify({error:{code:'NOT_FOUND',message:'Page not found. Build the web app with npm run platform:build.'}}));}
 });
-server.listen(Number(process.env.WANDEL_PORT||4320),'127.0.0.1',()=>console.log(`Wandel platform API on http://127.0.0.1:${process.env.WANDEL_PORT||4320} · AI: ${config.aiMode} · billing: ${billing.mode}`));
+const address=serverAddress(process.env);
+server.listen(address.port,address.host,()=>console.log(`Wandel platform API on http://${address.host}:${address.port} · AI: ${config.aiMode} · billing: ${billing.mode}`));
 const stop=()=>{server.close(()=>{db.close();process.exit(0);});};process.on('SIGINT',stop);process.on('SIGTERM',stop);
