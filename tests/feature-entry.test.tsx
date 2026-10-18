@@ -85,3 +85,9 @@ it('switches modes with E/I/V when focus is in the side panel rather than the we
 it('places the minimize icon directly beside the status dot at the right of the header',async()=>{
  await mount();const actions=el.querySelector('.dx-header .dx-header-actions')!;expect(actions.querySelector('.dx-dot')?.nextElementSibling?.getAttribute('aria-label')).toBe('Minimize Wandel panel');expect(actions.querySelector('svg')).not.toBeNull();await act(async()=>actions.querySelector<HTMLButtonElement>('button')!.click());expect(send).toHaveBeenCalledWith({type:'minimizePanel'});
 });
+it('keeps playback and sharing visible in the footer without saving or creating a connection first',async()=>{
+ await mount();const footer=el.querySelector('footer')!;expect(footer.textContent).toContain('Play flow');expect(footer.textContent).toContain('Share & playback');expect(s.workflow.edges).toHaveLength(0);
+ await act(async()=>button('Share & playback').click());const details=el.querySelector('main details') as HTMLDetailsElement;expect(details.open).toBe(true);expect(el.querySelector('main')!.textContent).toContain('Export workflow');expect(el.querySelector('main')!.textContent).toContain('Record walkthrough');expect(send).not.toHaveBeenCalled();
+ await act(async()=>button('Try flow on app').click());expect(send).toHaveBeenCalledWith({type:'replay'});expect(el.querySelector('main')!.textContent).not.toContain('Export workflow');
+ await act(async()=>button('Saved versions 0').click());expect(footer.textContent).toContain('Share & playback');await act(async()=>button('Share & playback').click());expect(el.querySelector('main details')?.hasAttribute('open')).toBe(true);
+});

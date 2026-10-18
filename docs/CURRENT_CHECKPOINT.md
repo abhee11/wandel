@@ -415,3 +415,11 @@ Validation: 334 tests across 41 files, TypeScript, assistant/platform builds and
 ## Owner and beta access — October 18, 2026
 
 Added server-enforced owner grants and bounded beta-code redemption inside the extension's Account & saved workflows section. Owner access has no expiry; tester codes have limited redemptions and grant durations. These enable Pro save/depth/version capabilities while retaining the finite AI budget and preserving Stripe subscription state. Migration 005 is additive. Local owner's three-save limit was verified removed, the local API restarted, and a limited tester code issued. No production database or main build was changed. See [BETA_ACCESS.md](BETA_ACCESS.md) for admin CLI, revocation and deployment instructions. Validation: 340 tests, assistant/platform builds and whitespace checks passed.
+
+## Visible sharing and playback — October 18, 2026
+
+Promoted Play flow and Share & playback into the persistent footer beside Save, including workflows with no connections and while viewing Saved versions. Sharing opens its own main-panel view with expanded export/import, live preview and Record walkthrough actions, without requiring a save or account. Starting preview returns to the workflow view. Sharing actions use a two-column layout to fit the narrow panel; the former collapsed section below the editor was removed. Save workflow retains its expanded sharing section.
+
+Browser acceptance on the synthetic feature fixture verified the visible footer, all four share actions fitting the panel, and Try flow on app switching into REPLAY MODE. Evidence: docs/acceptance/share-playback-entry.png. This verifies discovery and preview entry; it does not establish public video hosting or recipient acceptance. Reload dist-assistant/ in Chrome to receive the new UI. Interactive exports require matching Wandel and the recipient's own app access. Public video links still require an externally reachable configured API; localhost links are not remotely shareable.
+
+Validation: 341 tests passed across 42 files; TypeScript, assistant build and whitespace checks passed.

@@ -23,3 +23,7 @@
 .dx-assistant{border:1px solid #dcd5ff!important;border-radius:12px;padding:16px!important;margin:16px 0;background:#f7f5ff}.dx-assistant textarea{width:100%;border:1px solid #d5d0eb;border-radius:8px;padding:12px;margin-top:12px;font:inherit;resize:vertical}.dx-assistant .dx-row{flex-wrap:wrap}.dx-assistant-target{font-size:12px;color:#6b6488}.dx-assistant-target small{display:block;color:#83769e}.dx-assistant [aria-pressed=true]{background:#fff0f1;color:#ba2849;border-color:#f0a2b4}
 
 .dx-account form{display:flex;flex-wrap:wrap;align-items:end;gap:8px;margin:14px 0}.dx-account form label{display:grid;gap:5px;flex:1;min-width:180px}.dx-account form input{width:100%;box-sizing:border-box;border:1px solid #dddbea;border-radius:8px;padding:9px 10px;font:inherit;color:inherit;background:white}
+
+.dx-flow-actions{margin-bottom:8px}.dx-flow-actions>button{flex:1;min-width:0}.dx-flow-actions>button[aria-pressed="true"]{background:#efedff;border-color:#bcb5ff;color:#5145bb}
+
+.dx-workflow-share .dx-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.dx-workflow-share .dx-row>button,.dx-workflow-share .dx-row>label{min-width:0;white-space:normal;width:100%;box-sizing:border-box}.dx-workflow-share input[type="file"]{display:block;max-width:100%;font-size:10px;margin-top:5px}
