@@ -1,6 +1,7 @@
 vi.mock('../extension/background/liveNavigation',()=>({registerLiveNavigation:vi.fn()}));
 vi.mock('../extension/background/screens',()=>({registerScreenCatalog:vi.fn()}));
 vi.mock('../extension/background/account',()=>({registerAccountBridge:vi.fn()}));
+vi.mock('../extension/background/sharedWorkflow',()=>({registerSharedWorkflow:vi.fn()}));
 import {it,expect,vi,afterEach} from 'vitest';
 afterEach(()=>{vi.unstubAllGlobals();vi.resetModules();});
 it('disables new tabs and only opens a tab-specific panel on an explicit action',async()=>{

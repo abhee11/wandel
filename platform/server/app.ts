@@ -1,3 +1,4 @@
+import {workflowLinks} from './workflowLinks';
 import {redeemAccessCode} from './access';
 import {assistantService,type AssistantProvider} from './assistant';
 import {recordingStore} from './recordings';
@@ -32,6 +33,7 @@ export function createPlatform(options:{db:DB;config:Config;ai:AIProvider;mail:M
  const assistant=assistantService(db,entitlements,options.assistant,clock);
  const recordings=recordingStore(db,config.publicAPIOrigin||config.origin,clock);
  const workflows=workflowStore(db,entitlements,clock);
+ const links=workflowLinks(db,config.publicAPIOrigin||config.origin,config.pepper,clock);
  const now=()=>clock().toISOString();
  const track=(name:string,id:string,properties:Record<string,string|number|boolean>={})=>analytics.track(name,id,properties);
  const cookie=(token:string,clear=false)=>`wandel_session=${token}; HttpOnly; Path=/; SameSite=Lax; Max-Age=${clear?0:2592000}${config.production?'; Secure':''}`;
@@ -48,6 +50,8 @@ export function createPlatform(options:{db:DB;config:Config;ai:AIProvider;mail:M
   if(path==='/api/billing/webhook'&&method==='POST'){if(!billing.webhook)throw new APIError(503,'BILLING_UNAVAILABLE','Stripe is not configured.');await billing.webhook(await req.text(),req.headers.get('stripe-signature')||'');return json({received:true});}
   const playback=path.match(/^\/api\/playback\/([a-f0-9]{64})(\/video)?$/);
   if(playback&&['GET','HEAD'].includes(method)){rateLimit(db,`video-view:${tokenHash(ip,config.pepper)}`,120,clock().getTime(),60000);return recordings.public(req,playback[1],!!playback[2]);}
+  const publicFlow=path.match(/^\/api\/shared-workflows\/([a-f0-9]{64})$/);
+  if(publicFlow&&method==='GET'){rateLimit(db,'workflow-view:'+tokenHash(ip,config.pepper),60,clock().getTime(),60000);return json(links.read(publicFlow[1]));}
   if(path==='/api/plans'&&method==='GET')return json({plans:config.plans,proPriceCents:config.priceCents,currency:config.currency,mockBilling:!billing.mode&&config.mockBilling,billingMode:billing.mode||'mock',authMode:config.authMode,aiMode:config.aiMode});
   if(config.authMode==='clerk'&&path.startsWith('/api/auth/'))throw new APIError(410,'CLERK_AUTH_REQUIRED','Use Clerk to manage your account.');
   if(path.startsWith('/api/auth/')&&method==='POST')rateLimit(db,`auth:ip:${ip}`,25,clock().getTime());
@@ -78,6 +82,10 @@ export function createPlatform(options:{db:DB;config:Config;ai:AIProvider;mail:M
   if(path==='/api/ai/guest-plan'&&method==='POST'){rateLimit(db,`guest-request:${tokenHash(ip,config.pepper)}`,12,clock().getTime(),60000);const raw=await req.text();if(Buffer.byteLength(raw)>2400)throw new APIError(413,'BODY_TOO_LARGE','Free preview requests must be under 2.4 KB.');let data:unknown;try{data=JSON.parse(raw);}catch{throw new APIError(400,'INVALID_JSON','Invalid request.');}return json(await guestPlan(db,ai,config.pepper,ip,data,clock()));}
   const u=await user(req);
   if(['/api/assistant/plan','/api/assistant/transcribe'].includes(path)&&method==='POST')return json(await assistant.handle(u.id,req));
+  if(path==='/api/workflow-links'&&method==='GET')return json({links:links.list(u.id)});
+  if(path==='/api/workflow-links'&&method==='POST'){rateLimit(db,'workflow-publish:'+u.id,5,clock().getTime(),60000);return json({link:links.create(u.id,await body(req))},201);}
+  const workflowLink=path.match(/^\/api\/workflow-links\/([a-f0-9-]{36})$/);
+  if(workflowLink&&method==='DELETE'){links.revoke(u.id,workflowLink[1]);return json({ok:true});}
   if(path==='/api/recordings'&&method==='GET')return json({recordings:recordings.list(u.id)});
   if(path==='/api/recordings'&&method==='POST'){rateLimit(db,`video-upload:${u.id}`,5,clock().getTime(),60000);return json({recording:await recordings.create(u.id,req)},201);}
   const recording=path.match(/^\/api\/recordings\/([a-f0-9-]{36})$/);
@@ -140,13 +148,13 @@ export function createPlatform(options:{db:DB;config:Config;ai:AIProvider;mail:M
   if(path==='/api/billing/portal'&&method==='POST')return json(await billing.manage(u.id));
   throw new APIError(404,'NOT_FOUND','Endpoint not found.');
  }
- return {entitlements,async handle(req:Request,ip='local'):Promise<Response>{const requestId=randomUUID(),origin=req.headers.get('origin'),allowed=origin===config.origin||!!origin&&(config.extensionOrigins.includes(origin)||!config.production&&/^chrome-extension:\/\/[a-p]{32}$/.test(origin));let response:Response;
+ return {entitlements,async handle(req:Request,ip='local'):Promise<Response>{const requestId=randomUUID(),origin=req.headers.get('origin'),publicRead=req.method==='GET'&&/^\/api\/shared-workflows\/[a-f0-9]{64}$/.test(new URL(req.url).pathname),allowed=publicRead||origin===config.origin||!!origin&&(config.extensionOrigins.includes(origin)||!config.production&&/^chrome-extension:\/\/[a-p]{32}$/.test(origin));let response:Response;
   try{
    if(origin&&!allowed)throw new APIError(403,'ORIGIN_DENIED','This origin is not allowed.');
    if(req.method==='OPTIONS'){if(!allowed)throw new APIError(403,'ORIGIN_DENIED','This origin is not allowed.');response=new Response(null,{status:204});}
    else {if(!['GET','HEAD'].includes(req.method)&&!req.headers.get('authorization')&&!allowed&&new URL(req.url).pathname!=='/api/billing/webhook')throw new APIError(403,'CSRF_REJECTED','A trusted Origin header is required.');response=await route(req,ip);}
   }catch(error){if(error instanceof APIError)response=json({error:{code:error.code,message:error.message,...error.details},requestId},error.status,error.status===429?{'Retry-After':String(error.details.retryAfter||60)}:{});else if(error instanceof z.ZodError)response=json({error:{code:'INVALID_INPUT',message:'Check the request fields.',fields:error.issues.map(x=>({path:x.path.join('.'),message:x.message}))},requestId},400);else{console.error(JSON.stringify({requestId,error:'unhandled_api_error'}));response=json({error:{code:'INTERNAL_ERROR',message:'Something went wrong. Please retry.'},requestId},500);}}
-  response.headers.set('X-Request-Id',requestId);response.headers.set('X-Content-Type-Options','nosniff');response.headers.set('Referrer-Policy','no-referrer');if(allowed&&origin){response.headers.set('Access-Control-Allow-Origin',origin);response.headers.set('Access-Control-Allow-Credentials','true');response.headers.set('Vary','Origin');response.headers.set('Access-Control-Allow-Headers','Content-Type, Authorization');response.headers.set('Access-Control-Allow-Methods','GET, POST, PUT, DELETE, OPTIONS');}
-  console.info(JSON.stringify({requestId,method:req.method,path:new URL(req.url).pathname.replace(/^(\/api\/playback\/)[^/]+/,'$1[redacted]'),status:response.status}));return response;
+  response.headers.set('X-Request-Id',requestId);response.headers.set('X-Content-Type-Options','nosniff');response.headers.set('Referrer-Policy','no-referrer');if(allowed&&origin){response.headers.set('Access-Control-Allow-Origin',origin);if(!publicRead)response.headers.set('Access-Control-Allow-Credentials','true');response.headers.set('Vary','Origin');response.headers.set('Access-Control-Allow-Headers','Content-Type, Authorization');response.headers.set('Access-Control-Allow-Methods','GET, POST, PUT, DELETE, OPTIONS');}
+  console.info(JSON.stringify({requestId,method:req.method,path:new URL(req.url).pathname.replace(/^(\/api\/(?:playback|shared-workflows)\/)[^/]+/,'$1[redacted]'),status:response.status}));return response;
  }};
 }

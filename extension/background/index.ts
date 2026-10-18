@@ -1,3 +1,5 @@
+import {registerSharedWorkflow} from './sharedWorkflow';
+registerSharedWorkflow();
 import {registerWorkflowOpener} from './openWorkflow';
 registerWorkflowOpener();
 import {registerRecordingLauncher} from './recording';

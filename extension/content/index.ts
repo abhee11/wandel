@@ -1,3 +1,5 @@
+import {registerShareRelay} from './shareRelay';
+import {accountConfig} from '../shared/accountConfig';
 import {ChromeLiveNavigation} from '../shared/liveNavigation';
 import {DestinationBrowserControls} from './browserSession';
 import {captureScreen} from './screenCapture';
@@ -7,6 +9,7 @@ import { TemporaryChromeStorage, PersistentChromeStorage, Repository } from '../
 // Chrome may inject on demand while a declarative injection is still starting.
 const runtime=globalThis as typeof globalThis & {__wandelContentStarted?:boolean};
 if(!runtime.__wandelContentStarted){
+if(!freeBuild)registerShareRelay(accountConfig.apiOrigin);
 runtime.__wandelContentStarted=true;
 const session=new Session(document.body,new Repository((freeBuild?new PersistentChromeStorage():new TemporaryChromeStorage())),new URL(location.href),{liveNavigation:new ChromeLiveNavigation(),externalConnections:true,requestConnections:async()=>{const result=await chrome.runtime.sendMessage({type:'WANDEL_OPEN_CONNECTIONS'});if(result?.error)throw new Error(result.error);},...(freeBuild?{}:{requestSignIn:async()=>{const result=await chrome.runtime.sendMessage({type:'WANDEL_SIGN_IN_REQUEST'});if(result?.error)throw new Error(result.error);},requestPlan:async(prompt,selection)=>{const result=await chrome.runtime.sendMessage({type:'WANDEL_PLAN_REQUEST',prompt,selection});if(!result)throw new Error('Open the Wandel panel to use the connected planner.');if(result.error)throw new Error(result.error);return result.plan;}}),requestClose:async()=>{const result=await chrome.runtime.sendMessage({type:'WANDEL_COLLAPSE'});if(result?.error)throw new Error(result.error);},requestSave:()=>{chrome.runtime.sendMessage({type:'WANDEL_SAVE_REQUEST'}).catch(()=>{});}});
 const ready=session.init();
