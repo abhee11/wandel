@@ -40,7 +40,7 @@ export function assistantService(db:DB,entitlements:Entitlements,provider:Assist
   try{const result=await work();db.prepare("UPDATE ai_actions SET status='succeeded',result=?,updated_at=? WHERE id=?").run(JSON.stringify(result),clock().toISOString(),id);return result;}catch(error){db.prepare("UPDATE ai_actions SET status='failed',updated_at=? WHERE id=?").run(clock().toISOString(),id);throw error;}
  }
  return {async handle(userId:string,req:Request){
-  if(!provider)throw new APIError(503,'ASSISTANT_DISABLED','Enable the separate assistant beta service to use cloud interpretation or voice.');
+  if(!provider)throw new APIError(503,'ASSISTANT_DISABLED','Voice and cloud interpretation are disabled on this server. Typed local edits remain available.');
   rateLimit(db,'assistant:'+userId,10,clock().getTime(),60000);
   const path=new URL(req.url).pathname;
   if(path.endsWith('/transcribe')){

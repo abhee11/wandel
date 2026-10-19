@@ -248,3 +248,12 @@ With the AI connection enabled, select an existing control and ask:
 Generated flows support 2–8 screens per request, multiple actions per screen, return links, cards, metrics, and small tables. Edit any generated element, or use **On click → New state** to extend it. The existing 30-state engine limit still applies. Sample data assignments and bound fields are local simulation only; they do not call the application's backend. **Back** restores the preceding decision state; **Restart** resets all sample data. Replay input values are transient and excluded from saved workflows.
 
 For a deterministic engine demonstration, run `npm run dev`, open `/?fixture=feature`, and click **Build sample branching feature**. The fixture is labelled as scripted; it does not invoke AI. Reload the unpacked extension and restart/redeploy the planner service after updating, so both use the new graph contract. The local-only free build can replay saved graphs and create manual steps but does not call hosted AI.
+
+
+## Voice and conversational editing
+
+Voice is included in the regular extension: `npm run build` → reload `dist/` in Chrome. In Edit mode choose **Voice assistant** beside **Imagine a feature** and **Edit this page**. Select an element, enable scoped voice/context sharing, then hold **Hold to speak** and release to send (20-second maximum). Typed local instructions work without cloud consent; denied microphone permission or unavailable cloud service leaves typing available. Switching back retains the multi-step feature prompt.
+
+Server cloud interpretation/transcription uses the existing signed-in account and OpenAI configuration (`OPENAI_API_KEY`, `OPENAI_MODEL`, optional `OPENAI_TRANSCRIBE_MODEL`). Endpoints are enabled by default; set `WANDEL_ASSISTANT_ENABLED=false` to disable them. No microphone recording or provider request occurs merely by opening the interface. Never put secret API keys into the extension.
+
+`npm run build:assistant` remains an alias of `npm run build` for old instructions. It no longer creates `dist-assistant/` or a separately named extension. Disable/remove any previously installed Assistant Beta to avoid two editors on one page. The optional local-only free build remains offline and does not include cloud voice.

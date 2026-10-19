@@ -2,7 +2,7 @@ import {groundPlan} from './grounding';
 import {useEffect,useRef,useState} from 'react';
 import type {Bridge} from '../sidepanel/bridge';
 import type {Snapshot} from '../shared/model';
-import {interpret} from './interpret';
+import {interpret,interpretControl} from './interpret';
 import {planConversation,transcribeInstruction} from './client';
 import {PushToTalk} from './voice';
 import type {PageContext,AssistantPlan} from './schema';
@@ -12,13 +12,13 @@ export function AssistantPanel({bridge,snapshot,onSave}:{bridge:Bridge;snapshot:
  const epoch=useRef(0),abort=useRef<AbortController|null>(null),voice=useRef<PushToTalk|null>(null),voiceContext=useRef<Promise<PageContext>|null>(null),pending=useRef(''),voiceHeld=useRef(false);
  const scope=snapshot.workflow.id+':'+snapshot.stateId+':'+snapshot.workflow.route;
  const scopeRef=useRef(scope);scopeRef.current=scope;
- async function context(){const next=await bridge.send({type:'assistantContext'});if(!next.assistant?.context)throw new Error('Refresh this page to use the assistant beta.');return next.assistant.context;}
+ async function context(){const next=await bridge.send({type:'assistantContext'});if(!next.assistant?.context)throw new Error('Refresh this page to use the assistant.');return next.assistant.context;}
  function cancel(){epoch.current++;abort.current?.abort();abort.current=null;voice.current?.cancel();voiceHeld.current=false;setBusy(false);setListening(false);setError('');setMessage('Canceled. Your workflow is unchanged by this request.');}
  useEffect(()=>{epoch.current++;abort.current?.abort();voice.current?.cancel();voiceHeld.current=false;setBusy(false);setListening(false);setClarification(null);pending.current='';setInstruction('');setError('');setMessage('Select a target, then tell Wandel what to change.');},[scope]);
  useEffect(()=>()=>{epoch.current++;abort.current?.abort();voice.current?.cancel();},[]);
  async function submit(text:string,prepared?:Promise<PageContext>){
   const value=text.trim();if(!value)return;const request=++epoch.current,origin=scopeRef.current;abort.current?.abort();const controller=new AbortController();abort.current=controller;setBusy(true);setError('');setClarification(null);setMessage('Understanding your selection…');
-  try{const c=await (prepared||context());const combined=pending.current?pending.current+'\nLabels: '+value:value;let plan=interpret(combined,c);
+  try{const control=interpretControl(value);if(control){pending.current='';if(control.status==='save')onSave();else if(control.status==='undo'||control.status==='redo')await bridge.send({type:control.status});if(request===epoch.current){setMessage(control.message);setInstruction('');}return;}const c=await (prepared||context());const combined=pending.current?pending.current+'\nLabels: '+value:value;let plan=interpret(combined,c);
    if(!plan){if(!consent)throw new Error('This phrasing needs AI interpretation. Enable scoped context sharing below, or use an explicit local instruction.');setMessage('Interpreting scoped labels and styles…');plan=await planConversation(combined,c,controller.signal);}
    if(request!==epoch.current||origin!==scopeRef.current)return;plan=groundPlan(combined,c,plan);
    if(plan.status==='clarify'||plan.status==='unsupported'){setClarification(plan);if(plan.status==='clarify')setInstruction('');if(plan.candidates.length)await bridge.send({type:'assistantCandidates',refs:plan.candidates});pending.current=plan.status==='clarify'?combined:'';setMessage(plan.message);return;}
@@ -36,7 +36,7 @@ export function AssistantPanel({bridge,snapshot,onSave}:{bridge:Bridge;snapshot:
   setMessage('Hold to speak. Release to send; Cancel discards audio.');void voice.current.start();
  }
  const c=snapshot.assistant?.context,selected=c?.elements.find(e=>e.ref===c.selected),pinned=c?.elements.find(e=>e.ref===c.styleReference);
- return <section className="dx-assistant" aria-label="Conversational assistant"><div className="dx-section-title">ASSISTANT BETA <span>{listening?'● Microphone on':busy?'Processing…':'Point · speak · prototype'}</span></div>
+ return <section className="dx-assistant" aria-label="Conversational assistant"><div className="dx-section-title">VOICE & CONVERSATIONAL EDITS <span>{listening?'● Microphone on':busy?'Processing…':'Point · speak · prototype'}</span></div>
  <p className="dx-assistant-target">Target: <strong>{snapshot.selected?.label||'Select an element on the page'}</strong>{pinned&&<small>Style: {pinned.name}</small>}</p>
  <div className="dx-row"><button className="dx-small" disabled={busy||listening} onClick={()=>void style()}>Use selection as style</button><button className="dx-small" disabled={busy||listening} onClick={()=>void bridge.send({type:'assistantContext'}).catch(e=>setError(e.message))}>Refresh context</button></div>
  <label className="dx-muted"><input type="checkbox" checked={consent} disabled={busy||listening} onChange={e=>setConsent(e.target.checked)}/> Allow scoped labels/styles and recorded voice to Wandel’s server and OpenAI. No screenshots or typed field values. Voice and cloud requests use AI credits.</label>

@@ -91,3 +91,10 @@ it('keeps playback and sharing visible in the footer without saving or creating 
  await act(async()=>button('Try flow on app').click());expect(send).toHaveBeenCalledWith({type:'replay'});expect(el.querySelector('main')!.textContent).not.toContain('Export workflow');
  await act(async()=>button('Saved versions 0').click());expect(footer.textContent).toContain('Share & playback');await act(async()=>button('Share & playback').click());expect(el.querySelector('main details')?.hasAttribute('open')).toBe(true);
 });
+
+it('exposes voice in regular Wandel and retains the multi-step prompt when switching back',async()=>{
+ await mount();await act(async()=>button('Onboarding').click());const draft=el.querySelector('textarea')!.value;
+ await act(async()=>button('Voice assistant').click());expect(el.querySelector('[aria-label="Conversational assistant"]')).not.toBeNull();expect(button('Hold to speak')).toBeTruthy();expect(el.textContent).not.toContain('ASSISTANT BETA');
+ await act(async()=>button('Hold to speak').dispatchEvent(new KeyboardEvent('keydown',{key:' ',bubbles:true})));expect(el.textContent).toContain('Enable voice/context sharing first');expect(send).not.toHaveBeenCalledWith({type:'assistantContext'});
+ await act(async()=>button('Imagine a feature').click());expect(el.querySelector('[aria-label="Conversational assistant"]')).toBeNull();expect(el.querySelector('textarea')!.value).toBe(draft);expect(button('Approval flow')).toBeTruthy();
+});

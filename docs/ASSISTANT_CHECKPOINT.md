@@ -1,5 +1,11 @@
 # Conversational assistant checkpoint — October 18, 2026
 
+> **October 19 update — unified extension:** the voice/conversational assistant is now part of regular Wandel. Run `npm run build` and reload `dist/`; choose **Voice assistant** beside Imagine a feature / Edit this page. `npm run build:assistant` is now a compatibility alias for the same build, with no separate package, name or extension identity. Do not run an older Assistant Beta alongside it. The isolated-build instructions below are historical and superseded by this update.
+>
+> Server voice/context endpoints are enabled by default, with existing authentication, consent, size/rate/credit limits. `WANDEL_ASSISTANT_ENABLED=false` is an optional server kill switch. OpenAI credentials/model and functioning account sign-in are still needed for cloud requests. No microphone starts just by opening the panel. The separate offline/free build stays network-free.
+>
+> Validation: 362 tests; regular/free/platform builds. A browser check of the regular App and default Session verified voice discovery, Hold to speak, offline conversational rename and Undo without a beta flag. Microphone hardware/provider acceptance in installed Chrome remains pending.
+
 Branch: `codex/context-aware-assistant`. Base: `30c810d`. This is an isolated working slice, not a public-release sign-off. Main, existing beta builds, deployment and environment files were not changed.
 
 ## What is implemented

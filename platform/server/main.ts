@@ -17,7 +17,7 @@ const stripeKey=process.env.STRIPE_SECRET_KEY||'';
 if(stripeKey&&!stripeKey.startsWith('sk_test_'))throw new Error('Only Stripe test keys are permitted in this integration.');
 const billing=stripeKey&&process.env.STRIPE_PRICE_ID&&process.env.STRIPE_WEBHOOK_SECRET?new StripeBilling(db,new Stripe(stripeKey),process.env.STRIPE_PRICE_ID,process.env.STRIPE_WEBHOOK_SECRET,config.origin):new UnavailableBilling();
 const identity=new ClerkIdentity(process.env.CLERK_SECRET_KEY||'',[config.origin,...config.extensionOrigins]);
-const app=createPlatform({db,config,mail,billing,identity,...(process.env.WANDEL_ASSISTANT_ENABLED==='true'?{assistant:new OpenAIAssistant(process.env.OPENAI_API_KEY||'',process.env.OPENAI_MODEL||'',process.env.OPENAI_TRANSCRIBE_MODEL||'gpt-4o-mini-transcribe')}:{}) ,ai:config.aiMode==='mock'?new MockAIProvider():new OpenAIAIProvider(process.env.OPENAI_API_KEY||'',process.env.OPENAI_MODEL||'')});
+const app=createPlatform({db,config,mail,billing,identity,...(process.env.WANDEL_ASSISTANT_ENABLED!=='false'?{assistant:new OpenAIAssistant(process.env.OPENAI_API_KEY||'',process.env.OPENAI_MODEL||'',process.env.OPENAI_TRANSCRIBE_MODEL||'gpt-4o-mini-transcribe')}:{}) ,ai:config.aiMode==='mock'?new MockAIProvider():new OpenAIAIProvider(process.env.OPENAI_API_KEY||'',process.env.OPENAI_MODEL||'')});
 const webRoot=resolve('dist-platform/web');
 const publicKey=process.env.VITE_CLERK_PUBLISHABLE_KEY||process.env.CLERK_PUBLISHABLE_KEY||'';
 const clerkHost=publicKey?Buffer.from(publicKey.split('_').slice(2).join('_'),'base64').toString().replace(/\$$/,''):'';

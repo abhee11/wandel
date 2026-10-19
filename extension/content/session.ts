@@ -8,7 +8,7 @@ import {captureDesign,nativeOperations,inferDestination,readStyle} from './nativ
 import {nativeChoices} from './nativeChoices';
 import {advancedTarget,isSettingsRequest} from './settingsFeature';
 import {chooseLayout} from './layouts';
-import {freeBuild,assistantBuild} from '../shared/build';
+import {freeBuild,assistantEnabled} from '../shared/build';
 import {sectionOperations} from '../ai/section';
 import {sectionTarget} from './selection';
 import {compileFlow,buttonTheme} from '../ai/flow';
@@ -155,8 +155,8 @@ export class Session {
   }
   private hover=(event:PointerEvent)=>{
     if(this.dragData)return;
-    const origin=(assistantBuild||this.options.assistantEnabled)?event.composedPath()[0]:event.target;const target=origin instanceof HTMLElement?origin:origin instanceof Element?origin.closest<HTMLElement>('button,a,[role="button"],[role="link"]'):null;
-    if(!this.selecting||!target||!((assistantBuild||this.options.assistantEnabled)?inScope(this.root,target):this.root.contains(target))||target.closest('[data-dx-ignore]')){this.hovered=null;this.outline.style.display='none';return;}
+    const origin=(assistantEnabled||this.options.assistantEnabled)?event.composedPath()[0]:event.target;const target=origin instanceof HTMLElement?origin:origin instanceof Element?origin.closest<HTMLElement>('button,a,[role="button"],[role="link"]'):null;
+    if(!this.selecting||!target||!((assistantEnabled||this.options.assistantEnabled)?inScope(this.root,target):this.root.contains(target))||target.closest('[data-dx-ignore]')){this.hovered=null;this.outline.style.display='none';return;}
     this.hovered=target;this.paintHover(target);
   };
   private dragData:{el:HTMLElement;selection:Selection;mode:'move'|'resize';startX:number;startY:number;x:number;y:number;width:number;height:number;styles:{key:string;value:string;priority:string}[];dx:number;dy:number;pointerId?:number;pending:boolean}|null=null;
@@ -234,7 +234,7 @@ export class Session {
   private handleClick=(event:MouseEvent)=>{
     if(this.renderer.forwarding)return;
     if(this.suppressClick){event.preventDefault();event.stopImmediatePropagation();return;}
-    const original=(this.assistant||assistantBuild||this.options.assistantEnabled)?(event.composedPath()[0]||event.target):event.target;const target=original instanceof HTMLElement?original:original instanceof Element?original.closest('button,a,[role=button]'):null;if(!(target instanceof HTMLElement)||!((this.assistant||assistantBuild||this.options.assistantEnabled)?inScope(this.root,target):this.root.contains(target))||target.closest('[data-dx-ignore]'))return;
+    const original=(this.assistant||assistantEnabled||this.options.assistantEnabled)?(event.composedPath()[0]||event.target):event.target;const target=original instanceof HTMLElement?original:original instanceof Element?original.closest('button,a,[role=button]'):null;if(!(target instanceof HTMLElement)||!((this.assistant||assistantEnabled||this.options.assistantEnabled)?inScope(this.root,target):this.root.contains(target))||target.closest('[data-dx-ignore]'))return;
     if(target.closest('[data-dx-interactive]'))return;
     if(this.selecting&&(event.ctrlKey||event.metaKey||this.styleClipboard)){
       event.preventDefault();event.stopImmediatePropagation();
@@ -354,7 +354,7 @@ export class Session {
     if(c.type==='checkpointDraft'){await this.checkpoint();if(c.navigating){clearTimeout(this.draftTimer);this.navigating=true;}return this.snapshot();}
     if(c.type==='cancelWorkflowNavigation'){if(this.workflow.id===c.workflowId)this.navigating=false;return this.snapshot();}
     if(c.type.startsWith('assistant')){
-      if(!assistantBuild&&!this.options.assistantEnabled)throw new Error('Use the separate assistant beta build for this feature.');
+      if(!assistantEnabled&&!this.options.assistantEnabled)throw new Error('The offline build supports local editing. Open regular Wandel for voice and conversational edits.');
       if(!this.isAuthoring())throw new Error('Switch to Edit to use the conversational assistant.');
       this.assistant??=new AssistantController(this.root,this.renderer.owned);
       if(c.type==='assistantContext')this.assistant.collect(this.workflow,this.stateId,this.selected,this.hovered);
@@ -363,13 +363,14 @@ export class Session {
       if(c.type==='assistantCandidates')this.assistant.highlight(c.refs);
       if(c.type==='assistantCandidate'){this.assistant.clearHighlights();const node=this.assistant.collector.get(c.ref);this.select(node);}
       if(c.type==='assistantApply'){
+        const previousTarget=this.selected?resolve(this.selected.locator,this.root,this.renderer.owned):null;
         const result=this.assistant.apply(c.plan,c.token,this.workflow,this.stateId,(next,stateId)=>{
           const previous=this.workflow,previousState=this.stateId,dirty=this.dirty,past=[...this.history.past],future=[...this.history.future];
           try{this.commit(next,stateId);if(this.unresolved.length)throw new Error('Preview could not be applied: '+this.unresolved[0]);}
           catch(error){this.workflow=previous;this.stateId=previousState;this.dirty=dirty;this.history.past=past;this.history.future=future;this.render(true);throw error;}
         });
         if(result.view){const heading=this.renderer.owned.get('heading:'+result.view);if(heading)this.select(heading);}
-        const recent=result.view?null:this.assistant.collector.recent.at(-1);if(recent){try{this.select(this.assistant.collector.get(recent));}catch{this.selected=null;}}
+        const recent=result.view?null:this.assistant.collector.recent.at(-1);if(recent){try{this.select(this.assistant.collector.get(recent));}catch{this.selected=null;}}else if(!result.view){if(previousTarget?.isConnected)this.select(previousTarget);else this.selected=null;}
       }
       this.emit();return this.snapshot();
     }

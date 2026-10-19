@@ -25,3 +25,18 @@ it('runs a voice transcript through the same local editing pipeline and leaves i
  await act(async()=>button('Hold to speak').dispatchEvent(new KeyboardEvent('keydown',{key:' ',bubbles:true})));expect(element.textContent).toContain('Microphone on');await act(async()=>button('● Release to send').dispatchEvent(new KeyboardEvent('keyup',{key:' ',bubbles:true})));
  expect(transcribeInstruction).toHaveBeenCalledOnce();expect(planConversation).not.toHaveBeenCalled();expect(document.getElementById('heading')!.textContent).toBe('Voice edited');expect(element.textContent).toContain('Heard: Change this heading to Voice edited.');expect(session.snapshot().canUndo).toBeTruthy();
 });
+
+it('recovers from unavailable voice transcription without blocking typed local editing',async()=>{
+ vi.mocked(transcribeInstruction).mockRejectedValue(new Error('Voice service unavailable.'));
+ await act(async()=>element.querySelector<HTMLInputElement>('input[type=checkbox]')!.click());
+ await act(async()=>button('Hold to speak').dispatchEvent(new KeyboardEvent('keydown',{key:' ',bubbles:true})));
+ await act(async()=>button('● Release to send').dispatchEvent(new KeyboardEvent('keyup',{key:' ',bubbles:true})));
+ expect(element.textContent).toContain('Voice service unavailable.');expect(button('Hold to speak').disabled).toBe(false);
+ await type('Change this heading to Typed fallback.');await act(async()=>button('Send').click());expect(document.getElementById('heading')!.textContent).toBe('Typed fallback');expect(planConversation).not.toHaveBeenCalled();
+});
+
+it('keeps the renamed target current and allows Undo even after the host removes it',async()=>{
+ await type('Change this heading to Renamed.');await act(async()=>button('Send').click());expect(element.textContent).toContain('Target: Renamed');
+ document.getElementById('heading')!.remove();
+ await act(async()=>button('Undo').click());expect(session.workflow.states[0].operations).toHaveLength(0);expect(element.textContent).toContain('Undid the last edit');expect(element.textContent).not.toContain('unavailable, private, or ambiguous');
+});

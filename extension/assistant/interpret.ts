@@ -1,10 +1,16 @@
 import {action,response,type AssistantAction,type AssistantPlan,type PageContext} from './schema';
-/** Small evidence-based shortcuts; other phrasing goes through the same validated model contract. */
-export function interpret(instruction:string,c:PageContext):AssistantPlan|null{
- const p=instruction.trim(),lower=p.toLowerCase();
+/** History/save commands do not depend on a DOM selection or scoped capture. */
+export function interpretControl(instruction:string):AssistantPlan|null{
+ const p=instruction.trim();
  if(/^(?:actually[, ]*)?undo(?: that| the| last| change| one| please)*[.!]?$/i.test(p)||/^undo that last change[.!]?$/i.test(p))return response('undo','Undid the last edit.');
  if(/^redo\b/i.test(p))return response('redo','Redid the last edit.');
  if(/^save\b/i.test(p))return response('save','Name and save your flow in the save dialog.');
+ return null;
+}
+/** Small evidence-based shortcuts; other phrasing goes through the same validated model contract. */
+export function interpret(instruction:string,c:PageContext):AssistantPlan|null{
+ const p=instruction.trim(),lower=p.toLowerCase();
+ const control=interpretControl(p);if(control)return control;
  if(/\b(?:submit|purchase|buy|send an? email|delete account|backend|run javascript|execute code)\b/i.test(p))return response('unsupported','I can build a local prototype interaction, but cannot submit forms or change the production backend.');
  const target=c.selected||c.hover;
  const find=(name:string)=>{const matches=c.elements.filter(e=>e.name.replace(/\s*[✓✔]$/,'').toLowerCase()===name.trim().replace(/[.!]$/,'').toLowerCase());const semantic=matches.filter(e=>e.interactive||e.role==='heading'||/^h[1-6]$/.test(e.tag));return semantic.length?semantic:matches;};

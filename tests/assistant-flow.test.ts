@@ -9,7 +9,7 @@ import {parseSharedWorkflow} from '../extension/sidepanel/WorkflowShare';
 let session:Session;
 const url=new URL('https://example.com/settings');
 function fixture(){document.body.innerHTML='<main><div role="dialog"><h1>Advanced</h1><section id="rubrics"><h3>Rubrics</h3><button aria-pressed="true" style="background:rgb(242,232,255);color:rgb(134,68,255);border-radius:30px;padding:10px 20px;border:0">Engagement</button></section><section id="metrics"><h3>Metrics</h3><button aria-pressed="true" style="background:rgb(242,232,255);color:rgb(134,68,255);border-radius:30px;padding:10px 20px;border:0">Talk Time</button></section><footer><button>Cancel</button><button>Save</button></footer></div></main>';}
-async function setup(){session=new Session(document.querySelector('main')!,new Repository(new BrowserStorage()),url,{assistantEnabled:true});await session.init();await session.dispatch({type:'edit'});}
+async function setup(){session=new Session(document.querySelector('main')!,new Repository(new BrowserStorage()),url);await session.init();await session.dispatch({type:'edit'});}
 async function run(prompt:string){const snapshot=await session.dispatch({type:'assistantContext'}),context=snapshot.assistant!.context!;const plan=interpret(prompt,context);expect(plan,`No interpretation: ${prompt}`).not.toBeNull();if(plan!.status==='edit')await session.dispatch({type:'assistantApply',plan,token:context.token});else if(plan!.status==='undo'||plan!.status==='redo')await session.dispatch({type:plan!.status});return plan!;}
 const click=(selector:string)=>document.querySelector<HTMLElement>(selector)!.click();
 beforeEach(()=>{localStorage.clear();fixture();});afterEach(()=>{session?.destroy();vi.restoreAllMocks();});
