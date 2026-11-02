@@ -91,7 +91,7 @@ export type SavedRecord = z.infer<typeof RecordSchema>;
 export type Selection = { locator: Locator; label: string; tag: string; owned: boolean };
 export type ConnectionWorkspace = {busy?:boolean;pendingScreen?:Pick<VisitedScreen,'id'|'title'|'route'|'thumbnail'>;source:Selection;from:string;to:string;newTitle:string;event:ConnectionEvent;conditions:ConnectionCondition[];otherwise:string;saved:string;picking:boolean;fields:Selection[];events:ConnectionEvent[];message:string;error:boolean};
 export type ConnectionAction = {action:'close'|'pick'|'cancelPick'|'save'|'test'} | {action:'destination'|'title'|'event'|'otherwise';value:string} | {action:'remove';index:number} | {action:'condition';index:number;test:ConnectionCondition['test'];value?:string} | {action:'screen';screen:VisitedScreen};
-export type Snapshot = {previewOriginal?:boolean;navigationError?:string;resumeChoice?:{name:string;page:string};assistant?:AssistantSnapshot;liveSession?:boolean;panelMinimized?:boolean;panelRestoring?:boolean;connectionWorkspace?:ConnectionWorkspace|null;visited?:string[];mode?:'edit'|'interact'|'replay'|'closed';styleSource?:Selection|null; workflow: Workflow; stateId: string; selected: Selection | null; picking: boolean; dragging:boolean; replay: boolean; enabled: boolean; dirty: boolean; canUndo: boolean; canRedo: boolean; canBack: boolean; unresolved: string[]; currentVersion: number; versions: { number: number; savedAt: string; name: string }[]; library: { id: string; name: string; versions: number }[] };
+export type Snapshot = {revealed?:boolean;previewOriginal?:boolean;navigationError?:string;resumeChoice?:{name:string;page:string};assistant?:AssistantSnapshot;liveSession?:boolean;panelMinimized?:boolean;panelRestoring?:boolean;connectionWorkspace?:ConnectionWorkspace|null;visited?:string[];mode?:'edit'|'interact'|'replay'|'closed';styleSource?:Selection|null; workflow: Workflow; stateId: string; selected: Selection | null; picking: boolean; dragging:boolean; replay: boolean; enabled: boolean; dirty: boolean; canUndo: boolean; canRedo: boolean; canBack: boolean; unresolved: string[]; currentVersion: number; versions: { number: number; savedAt: string; name: string }[]; library: { id: string; name: string; versions: number }[] };
 export type Command =
  | {type:'previewOriginal';value:boolean}
  | {type:'compareOriginal'}
@@ -109,6 +109,7 @@ export type Command =
  | {type:'assistantCandidates';refs:string[]}
  | { type: 'resumeWorkflow' | 'continueWorkflowHere' | 'dismissResumeChoice' | 'validateSelection' | 'snapshot' | 'pick' | 'undo' | 'redo' | 'replay' | 'edit' | 'back' | 'save' | 'saveTemporary' | 'duplicate' | 'delete' | 'remove' | 'reset' | 'drag' | 'pause' | 'duplicateElement' | 'escape' | 'mirror' | 'selectSection' | 'selectParent' | 'signIn' }
  | {type:'new';discard?:boolean}
+ | {type:'revealChange'}
  | {type:'copyPrompt';prompt:string;context?:{workflowId:string;stateId:string;selection:string}}
  | {type:'minimizePanel'|'restorePanel'|'interact'|'closeEditor'|'copyStyle'|'pasteStyle'|'cancelStyle'}
  | {type:'insertElement';kind:'button'|'text'|'field'|'panel';text?:string;inputType?:FieldType;position:'before'|'after'|'inside'|'below'}

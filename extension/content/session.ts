@@ -298,7 +298,8 @@ export class Session {
       if(trigger){event.preventDefault();event.stopImmediatePropagation();this.click(trigger);return;}
       const owned=this.renderer.findOwned(target);
       if(owned&&this.workflow.edges.some(edge=>edge.from===this.stateId&&edge.source===owned.id&&(edge.event||'click')==='click')){event.preventDefault();event.stopImmediatePropagation();this.click(owned.id);return;}
-      if(this.replay)try{if(this.renderer.forwardClick(target)){event.preventDefault();event.stopImmediatePropagation();return;}}catch(error){event.preventDefault();event.stopImmediatePropagation();this.gestureError(error);return;}
+      // A prototype control linked to an app control runs it wherever the page is live: Interact and Play.
+      try{if(this.renderer.forwardClick(target)){event.preventDefault();event.stopImmediatePropagation();return;}}catch(error){event.preventDefault();event.stopImmediatePropagation();this.gestureError(error);return;}
       if(target.matches('input,textarea')&&this.renderer.findOwned(target)){event.stopImmediatePropagation();return;}
     }
     if(target.matches('[data-dx-field]'))return;
@@ -470,6 +471,8 @@ export class Session {
       this.emit();return this.snapshot();
     }
 
+    // Before the result screenshot, an off-screen change is scrolled into view so the review can see it.
+    if(c.type==='revealChange'){const node=this.findSelected();if(!node)return this.snapshot();const r=node.getBoundingClientRect(),off=r.top<0||r.bottom>innerHeight||r.right<=0||r.left>=innerWidth;if(off){node.scrollIntoView({block:r.height>innerHeight?'start':'center',inline:'nearest'});await new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve())));}return {...this.snapshot(),revealed:off};}
     if(c.type==='minimizePanel'){
       await this.checkpoint();this.cancelDrag();if(!this.runningConnections)this.replayData=this.defaults();this.panelMinimized=true;this.outline.style.display='none';this.emit();
       try{await this.rememberLivePosition();await this.options.requestClose?.();}catch(error){this.panelMinimized=false;this.emit();throw error;}return this.snapshot();

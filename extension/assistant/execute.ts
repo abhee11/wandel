@@ -162,6 +162,12 @@ export function compileAssistant(workflow:Workflow,stateId:string,planInput:unkn
     insert.node.choices={options:action.labels,selected:0,headingTag:'h3',headingStyle:heading?readStyle(heading):design.heading,buttonStyle:appearance||insert.node.choices!.buttonStyle,sectionStyle:{display:'block',margin:'20px 0',padding:'0',border:'0','box-shadow':'none','background-color':'transparent'}};
     created.push(...action.labels.map((_,i)=>id+':choice:'+i));group=id;
    }
+  }else if(action.kind==='connect'&&action.destination&&/^e_/.test(action.destination)){
+   // An existing application control as the destination: clicks on the trigger are forwarded to it, so its real modal, menu or action runs.
+   if(targets.length!==1)throw new Error('Choose one trigger.');const host=locate(action.destination);
+   if(host.id||!host.node.matches('button,a,summary,[role=button],[role=link],[role=tab],[role=menuitem],[aria-haspopup]'))throw new Error('Choose an existing button, link or menu of the application for this control to open.');
+   if(host.node===targets[0].node||targets[0].node.contains(host.node))throw new Error('A control cannot open itself. Choose a different application control.');
+   add({id:uid(),kind:'mirror',target:targets[0].locator,source:host.locator});
   }else if(action.kind==='connect'){
    if(targets.length!==1)throw new Error('Choose one trigger.');const target=targets[0];let source=target.id;
    if(!source){source=uid();add({id:uid(),kind:'trigger',target:target.locator,source});}

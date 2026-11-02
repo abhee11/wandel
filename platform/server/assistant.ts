@@ -51,9 +51,10 @@ export function validateWav(bytes:Uint8Array){
  if(bytes.length===44)throw new APIError(400,'EMPTY_AUDIO','No audio was recorded.');
 }
 export function assistantService(db:DB,entitlements:Entitlements,provider:AssistantProvider|undefined,clock:()=>Date){
- async function metered(userId:string,requestId:string,fingerprint:string,work:()=>Promise<unknown>){
+ async function metered(userId:string,requestId:string,fingerprint:string,work:()=>Promise<unknown>,turnId?:string){
   const id=randomUUID(),now=clock().toISOString(),key='assistant:'+requestId;let cached:unknown;
-  db.transaction(()=>{const previous=one<{status:string;result:string;fingerprint:string}>(db,'SELECT status,result,fingerprint FROM ai_actions WHERE user_id=? AND request_key=?',userId,key);if(previous){if(previous.fingerprint!==fingerprint)throw new APIError(409,'IDEMPOTENCY_CONFLICT','Use a new request ID for another instruction.');if(previous.status!=='succeeded')throw new APIError(409,'ASSISTANT_PENDING','This request is pending or failed. Retry with a new request.');cached=JSON.parse(previous.result);return;}entitlements.requireAI(userId);const usage=entitlements.get(userId).usage;db.prepare("INSERT INTO ai_actions VALUES (?,?,?,?,?,?,'pending',NULL,?,?)").run(id,userId,key,fingerprint,usage.periodStart,usage.resetsAt,now,now);}).immediate();
+  db.transaction(()=>{const previous=one<{status:string;result:string;fingerprint:string}>(db,'SELECT status,result,fingerprint FROM ai_actions WHERE user_id=? AND request_key=?',userId,key);if(previous){if(previous.fingerprint!==fingerprint)throw new APIError(409,'IDEMPOTENCY_CONFLICT','Use a new request ID for another instruction.');if(previous.status!=='succeeded')throw new APIError(409,'ASSISTANT_PENDING','This request is pending or failed. Retry with a new request.');cached=JSON.parse(previous.result);return;}// A message already under way finishes its follow-up calls; only a new message is checked against the allowance.
+   const continuing=!!turnId&&!!one(db,"SELECT 1 FROM ai_actions WHERE user_id=? AND turn_id=? AND status IN ('succeeded','pending')",userId,turnId);if(!continuing)entitlements.requireAI(userId);const usage=entitlements.get(userId).usage;db.prepare("INSERT INTO ai_actions (id,user_id,request_key,fingerprint,period_start,period_end,status,result,created_at,updated_at,turn_id) VALUES (?,?,?,?,?,?,'pending',NULL,?,?,?)").run(id,userId,key,fingerprint,usage.periodStart,usage.resetsAt,now,now,turnId||null);}).immediate();
   if(cached)return cached;
   try{const result=await work();db.prepare("UPDATE ai_actions SET status='succeeded',result=?,updated_at=? WHERE id=?").run(JSON.stringify(result),clock().toISOString(),id);return result;}catch(error){db.prepare("UPDATE ai_actions SET status='failed',updated_at=? WHERE id=?").run(clock().toISOString(),id);throw error;}
  }
@@ -63,17 +64,17 @@ export function assistantService(db:DB,entitlements:Entitlements,provider:Assist
   const path=new URL(req.url).pathname;
   if(path.endsWith('/transcribe')){
    if(req.headers.get('content-type')!=='audio/wav')throw new APIError(415,'INVALID_AUDIO','Use WAV audio from Wandel.');
-   const requestId=z.string().uuid().parse(new URL(req.url).searchParams.get('requestId'));const bytes=new Uint8Array(await req.arrayBuffer());validateWav(bytes);
-   return metered(userId,requestId,createHash('sha256').update(bytes).digest('hex'),async()=>({text:cleanText(await provider.transcribe(bytes),1600)}));
+   const requestId=z.string().uuid().parse(new URL(req.url).searchParams.get('requestId')),turnId=z.string().uuid().optional().parse(new URL(req.url).searchParams.get('turnId')||undefined);const bytes=new Uint8Array(await req.arrayBuffer());validateWav(bytes);
+   return metered(userId,requestId,createHash('sha256').update(bytes).digest('hex'),async()=>({text:cleanText(await provider.transcribe(bytes),1600)}),turnId);
   }
   const raw=await req.text();if(Buffer.byteLength(raw)>1000000)throw new APIError(413,'CONTEXT_LIMIT','Select a smaller section before asking for a change.');
   let decoded:unknown;try{decoded=JSON.parse(raw);}catch{throw new APIError(400,'INVALID_JSON','Invalid assistant request.');}
   if(path.endsWith('/verify')){
-   const input=z.object({instruction:z.string().trim().min(1).max(1600),plan:AssistantPlanSchema,before:ReferenceImageSchema,after:ReferenceImageSchema,requestId:z.string().uuid()}).strict().parse(decoded);
+   const input=z.object({instruction:z.string().trim().min(1).max(1600),plan:AssistantPlanSchema,before:ReferenceImageSchema,after:ReferenceImageSchema,requestId:z.string().uuid(),turnId:z.string().uuid().optional()}).strict().parse(decoded);
    if(!provider.verify)return {verdict:{status:'uncertain',message:'Visual review is unavailable for this provider.'}};
-   return metered(userId,input.requestId,createHash('sha256').update(raw).digest('hex'),async()=>({verdict:await provider.verify!(input)}));
+   return metered(userId,input.requestId,createHash('sha256').update(raw).digest('hex'),async()=>({verdict:await provider.verify!(input)}),input.turnId);
   }
-  const input=z.object({instruction:z.string().trim().min(1).max(1600),context:PageContextSchema,history:ConversationHistorySchema.optional(),referenceImage:ReferenceImageSchema.optional(),pageScreenshot:ReferenceImageSchema.optional(),requestId:z.string().uuid()}).strict().parse(decoded);
+  const input=z.object({instruction:z.string().trim().min(1).max(1600),context:PageContextSchema,history:ConversationHistorySchema.optional(),referenceImage:ReferenceImageSchema.optional(),pageScreenshot:ReferenceImageSchema.optional(),requestId:z.string().uuid(),turnId:z.string().uuid().optional()}).strict().parse(decoded);
   // Sanitize again at the trust boundary; no free-form transcript or page markup is retained.
   const context=PageContextSchema.parse(JSON.parse(JSON.stringify(input.context,(_key,value)=>typeof value==='string'?cleanText(value,2048):value)));
   return metered(userId,input.requestId,createHash('sha256').update(JSON.stringify({instruction:input.instruction,context,history:input.history,referenceImage:input.referenceImage,pageScreenshot:input.pageScreenshot})).digest('hex'),async()=>{
@@ -83,7 +84,7 @@ export function assistantService(db:DB,entitlements:Entitlements,provider:Assist
     try{
      plan=normalizePlan(await provider.plan({instruction:input.instruction,context,...(input.referenceImage?{referenceImage:input.referenceImage}:{}),...(input.pageScreenshot?{pageScreenshot:input.pageScreenshot}:{}),...history?{history}:{},...feedback?{feedback}:{}}));
      for(const action of plan.actions){if(action.kind!=='duplicate'||!action.labels.length)continue;const source=context.elements.find(e=>e.ref===action.targets[0]);if(source?.attributes['wandel-control-count']==='0')throw new APIError(502,'INVALID_PLAN','This feature card has no buttons. Duplicate it with text for the heading and description for the body; labels must be empty. Edit a copied badge through a separate text action using its captured ref.');}
-     try{validatePlanReferences(plan,context.elements.map(e=>e.ref));}catch(error){throw new APIError(502,'INVALID_REFERENCES',(error as Error).message+' Nothing was applied.');}
+     try{validatePlanReferences(plan,[...context.elements.map(e=>e.ref),...(plan.status==='inspect'?context.views.map(view=>'view:'+view.id):[])]);}catch(error){throw new APIError(502,'INVALID_REFERENCES',(error as Error).message+' Nothing was applied.');}
      // Reject shapes the executor cannot build here, so the repair names the exact rule.
      const issues=planContractIssues(plan);if(issues.length)throw new APIError(502,'INVALID_PLAN','Plan not supported: '+issues.join(' ').slice(0,600)+' Nothing was applied.');
      break;
@@ -95,6 +96,6 @@ export function assistantService(db:DB,entitlements:Entitlements,provider:Assist
    }
    if(!plan)throw new APIError(502,'INVALID_PLAN','I could not produce a valid layout plan. Nothing was applied.');
    return {plan};
-  });
+  },input.turnId);
  }};
 }
