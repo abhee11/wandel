@@ -26,6 +26,10 @@ export function captureCopy(source:HTMLElement,identities?:Map<Node,number>):Cop
     if(style.height==='auto'&&(node.matches('button,a,[role=button],[role=link]')||!node.textContent?.trim()&&!node.children.length)&&!(parseFloat(style['min-height']||'')>0))style['min-height']=computed.height;
     if(node.matches('h1,h2,h3,h4,p,span,strong,em,small'))style.width='auto';
     style['max-width']='100%';style['min-width']='0';style['box-sizing']='border-box';
+    // Overlays inside a card (e.g. a full-card click target) keep their absolute placement; the copy itself stays in flow,
+    // and fixed or sticky positioning is never copied.
+    if(!nodes.length||!['absolute','relative'].includes(style.position||'')){for(const key of ['top','right','bottom','left','z-index'] as const)delete style[key];style.position=nodes.length?'static':'relative';}
+    else if(style.position==='relative')for(const key of ['top','right','bottom','left'] as const)delete style[key];
     const index=nodes.length;identities?.set(node,index);
     const background=!node.textContent?.trim()&&!node.children.length?/^url\(["']?([^"')]+)["']?\)$/.exec(computed.backgroundImage):null;
     nodes.push({id:uid(),parent,...(node.matches('[disabled],[aria-disabled=true]')?{disabled:true}:{}),tag:safeTag as CopyNode['tag'],text:'',style,...(node instanceof HTMLAnchorElement&&LinkURLSchema.safeParse(node.href).success?{href:node.href}:{}),...(['button','link'].includes(node.getAttribute('role')||'')?{role:node.getAttribute('role') as 'button'|'link'}:{}),...(node instanceof HTMLImageElement&&ImageSourceSchema.safeParse(node.currentSrc||node.src).success?{src:node.currentSrc||node.src,alt:node.alt.slice(0,300)}:{}),inputType:node instanceof HTMLInputElement?(['text','email','number','tel','url','search','date','checkbox','radio','password'].includes(node.type)?node.type as CopyNode['inputType']:'text'):undefined,placeholder:node instanceof HTMLInputElement?node.placeholder.slice(0,300):undefined});

@@ -166,7 +166,8 @@ export function compileAssistant(workflow:Workflow,stateId:string,planInput:unkn
    // An existing application control as the destination: clicks on the trigger are forwarded to it, so its real modal, menu or action runs.
    if(targets.length!==1)throw new Error('Choose one trigger.');const host=locate(action.destination);
    if(host.id||!host.node.matches('button,a,summary,[role=button],[role=link],[role=tab],[role=menuitem],[aria-haspopup]'))throw new Error('Choose an existing button, link or menu of the application for this control to open.');
-   if(host.node===targets[0].node||targets[0].node.contains(host.node))throw new Error('A control cannot open itself. Choose a different application control.');
+   // A copy made earlier in this plan is tracked by its source element, so only existing controls are checked against themselves.
+   if(!outputs.has(action.targets[0])&&(host.node===targets[0].node||targets[0].node.contains(host.node)))throw new Error('A control cannot open itself. Choose a different application control.');
    add({id:uid(),kind:'mirror',target:targets[0].locator,source:host.locator});
   }else if(action.kind==='connect'){
    if(targets.length!==1)throw new Error('Choose one trigger.');const target=targets[0];let source=target.id;

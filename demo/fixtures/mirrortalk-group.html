@@ -1,5 +1,5 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Wandel · MirrorTalk group page</title><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=block"><style>
-/* Mirrors the structure and computed styles read from mirrortalk.ai/groups/:id (2026-10-31). */
+/* Plan and Setup carries the live page's invisible full-card "Open … modal" button (2026-11-02). Mirrors the structure and computed styles read from mirrortalk.ai/groups/:id (2026-10-31). */
 body{margin:0;font:16px/16px Inter,sans-serif;color:#000;background:#f7f6fb}main{padding:40px 0 80px 157px}
 header.top{display:flex;align-items:center;justify-content:space-between;width:1474px;margin-bottom:24px;font:700 22px/1 Inter,sans-serif;color:#14131b}
 .Wrapper{display:flex;flex-direction:column;gap:24px;width:1474px}
@@ -15,6 +15,7 @@ header.top{display:flex;align-items:center;justify-content:space-between;width:1
 .TitleWrapper{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;margin:0 0 16px;min-height:40px}
 .Title{margin:0 16px 0 0;font:700 18px/27px Inter,sans-serif;color:#14131b}
 .SquareButton{display:flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:12px;color:#14131b}
+.CardButton{position:absolute;inset:0;width:100%;height:100%;padding:0;border:0;border-radius:32px;background:transparent;cursor:pointer}
 .Message{margin:0;font:400 16px/24px Inter,sans-serif;color:#6e6c7f}
 </style></head><body><main id="page">
 <header class="top"><span>General ▾</span><span>ⓘ</span></header>
@@ -25,7 +26,7 @@ header.top{display:flex;align-items:center;justify-content:space-between;width:1
   <div class="Layer"></div>
  </div></div></div>
  <div class="Grid two">
-  <div class="GridItem"><article class="Card plan"><div class="TitleWrapper"><h4 class="Title">Plan and Setup</h4></div><p class="Message">Customize your Activity and make your next class great.</p></article></div>
+  <div class="GridItem"><article class="Card plan"><button class="CardButton" type="button" aria-label="Open Plan and Setup modal" onclick="window.planModal=(window.planModal||0)+1"></button><div class="TitleWrapper"><h4 class="Title">Plan and Setup</h4></div><p class="Message">Customize your Activity and make your next class great.</p></article></div>
   <div class="GridItem"><article class="Card assign"><div class="TitleWrapper"><h4 class="Title">Assign Participant Reflection</h4></div><p class="Message">Get insights and scores on your group's understanding of today's activity.</p></article></div>
  </div>
 </div></main>
