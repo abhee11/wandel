@@ -5,6 +5,7 @@ import {copyPlacement} from './copyPlacement';
 import {rolledBackPreview,keptPreview} from '../assistant/applyVerified';
 import {AssistantController} from '../assistant/controller';
 import {inScope} from '../assistant/dom';
+import {beneathCover} from './cover';
 import {stateURL,sameApplicationURL,samePage,type LiveNavigation,type LiveContext,type PausedWorkflow} from '../shared/liveNavigation';
 import {isTextEntry,shortcutKey} from '../shared/keyboard';
 import {fieldFor,eventsFor,conditionPasses} from './connections';
@@ -271,7 +272,7 @@ export class Session {
   private handleClick=(event:MouseEvent)=>{
     if(this.renderer.forwarding)return;
     if(this.suppressClick){event.preventDefault();event.stopImmediatePropagation();return;}
-    const original=(this.assistant||assistantEnabled||this.options.assistantEnabled)?(event.composedPath()[0]||event.target):event.target;const target=original instanceof HTMLElement?original:original instanceof Element?original.closest('button,a,[role=button]'):null;if(!(target instanceof HTMLElement)||!((this.assistant||assistantEnabled||this.options.assistantEnabled)?inScope(this.root,target):this.root.contains(target))||target.closest('[data-dx-ignore]'))return;
+    const original=(this.assistant||assistantEnabled||this.options.assistantEnabled)?(event.composedPath()[0]||event.target):event.target;let target=original instanceof HTMLElement?original:original instanceof Element?original.closest<HTMLElement>('button,a,[role=button]'):null;if(target instanceof HTMLElement&&this.selecting)target=beneathCover(target,event.clientX,event.clientY);if(!(target instanceof HTMLElement)||!((this.assistant||assistantEnabled||this.options.assistantEnabled)?inScope(this.root,target):this.root.contains(target))||target.closest('[data-dx-ignore]'))return;
     if(target.closest('[data-dx-interactive]'))return;
     if(this.selecting&&(event.ctrlKey||event.metaKey||this.styleClipboard)){
       event.preventDefault();event.stopImmediatePropagation();
@@ -296,6 +297,9 @@ export class Session {
       }
       const trigger=this.connectionSource(target,'click');
       if(trigger){event.preventDefault();event.stopImmediatePropagation();this.click(trigger);return;}
+      // Cancel, Close or Done inside a modal returns to the page it opened from.
+      const closer=target.closest<HTMLElement>('button,a,[role=button]'),modal=closer?.closest<HTMLElement>('[data-dx-owned^="view:"][role=dialog]'),modalId=modal?.dataset.dxOwned?.slice(5);
+      if(closer&&modalId&&/^(cancel|close|done|dismiss|not now|×)$/i.test((closer.getAttribute('aria-label')||closer.textContent||'').trim())&&this.workflow.edges.some(edge=>edge.from===this.stateId&&edge.source==='modal:'+modalId+':close')){event.preventDefault();event.stopImmediatePropagation();this.click('modal:'+modalId+':close');return;}
       const owned=this.renderer.findOwned(target);
       if(owned&&this.workflow.edges.some(edge=>edge.from===this.stateId&&edge.source===owned.id&&(edge.event||'click')==='click')){event.preventDefault();event.stopImmediatePropagation();this.click(owned.id);return;}
       // A prototype control linked to an app control runs it wherever the page is live: Interact and Play.
@@ -482,6 +486,8 @@ export class Session {
     }
     if(c.type==='interact'){
       if(!this.runningConnections)this.replayData=this.defaults();
+      // Opening Wandel on a page shows its draft: after a browser restart nothing else switches the prototype back on.
+      const inactive=!this.projectionActive;this.authoring=true;this.projectionActive=true;if(inactive)this.render(true);
       this.cancelDrag();this.interacting=true;this.picking=false;this.replay=false;this.dragging=false;this.selected=null;this.hovered=null;this.styleClipboard=null;this.outline.style.display='none';this.emit();if(this.liveSession)await this.checkpoint();return this.snapshot();
     }
     if(c.type==='closeEditor'){

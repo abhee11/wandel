@@ -1,13 +1,15 @@
 /** Keep implementation failures out of the conversation without implying success. */
 export function conversationRecovery(detail:string,applying=false){
- const limit=/\[(AI_LIMIT_REACHED|RATE_LIMITED|AI_RATE_LIMITED|AI_NOT_CONFIGURED|ASSISTANT_DISABLED)([^\]]*)\]/.exec(detail);
+ const limit=/\[(AI_LIMIT_REACHED|RATE_LIMITED|AI_RATE_LIMITED|AI_NOT_CONFIGURED|ASSISTANT_DISABLED|ASSISTANT_TIMEOUT|INCOMPLETE_PLAN)([^\]]*)\]/.exec(detail);
  // Once an edit is being applied its outcome is unconfirmed, so the general applying message below applies instead.
  if(limit&&!applying){const field=(name:string)=>new RegExp(';'+name+'=([^;\\]]+)').exec(limit[2])?.[1];const resets=field('resets'),wait=Number(field('wait'));
   if(limit[1]==='AI_LIMIT_REACHED')return {text:`You’ve used this month’s AI edits${resets&&!Number.isNaN(Date.parse(resets))?`; they reset on ${new Date(resets).toLocaleDateString(undefined,{month:'long',day:'numeric',timeZone:'UTC'})}`:''}. Nothing was changed. You can still edit the page directly with Visual edit.`,retryable:false};
   if(limit[1]==='RATE_LIMITED')return {text:`That was a lot of requests in a short time. Wait ${wait>0?`about ${wait} second${wait===1?'':'s'}`:'a minute'}, then press Retry. Nothing was changed.`,retryable:true};
+  if(limit[1]==='ASSISTANT_TIMEOUT'||limit[1]==='INCOMPLETE_PLAN')return {text:'That was a lot to design in one go, and the AI ran out of time. Nothing was changed. Try it in steps, for example the header and summary first, then the list.',retryable:true};
   if(limit[1]==='AI_RATE_LIMITED')return {text:'The AI service is busy right now. Wait a moment, then press Retry. Nothing was changed.',retryable:true};
   return {text:'AI editing isn’t available on this Wandel server right now. You can still edit the page directly with Visual edit.',retryable:false};
  }
+ if(/no credits remaining|credit_balance_exhausted/i.test(detail))return {text:'The OpenAI account behind Wandel has run out of credits, so no AI request can run. Nothing was changed. Add credits in OpenAI billing, then press Retry.',retryable:true};
  if(/429|rate limit|credits|quota|billing|spending limit/i.test(detail))return {text:'Wandel’s AI service has reached its provider usage limit (this isn’t your account’s allowance). Nothing was changed; press Retry later.',retryable:!applying};
  if(/sign.?in|account|authenticated|authorization|401|403/i.test(detail))return {text:'I need your Wandel session reconnected before I can inspect or edit this page. Your conversation and saved workflow are kept.',retryable:!applying};
  if(/rolled back: Visual review found/i.test(detail))return {text:'I restored the previous layout because the attempted change did not match your request. I haven’t completed the edit. Your request is still in this conversation, and the previous design is preserved.',retryable:true};

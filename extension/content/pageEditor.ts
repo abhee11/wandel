@@ -1,3 +1,4 @@
+import {beneathCover} from './cover';
 import {isTextEntry,shortcutKey} from '../shared/keyboard';
 import {ConnectionEditor} from './connectionEditor';
 import {eventsFor} from './connections';
@@ -271,7 +272,8 @@ export class PageEditor {
     }catch(error){this.error(error);}finally{this.inserting=false;}
   }
   private doubleClick=(event:MouseEvent)=>{
-    const target=event.target instanceof HTMLElement?event.target:event.target instanceof Element?event.target.closest<HTMLElement>('button,a,[role="button"]'):null;
+    const hit=event.target instanceof HTMLElement?event.target:event.target instanceof Element?event.target.closest<HTMLElement>('button,a,[role="button"]'):null;
+    const target=hit?beneathCover(hit,event.clientX,event.clientY):null;
     if(!target||!this.session.root.contains(target)||target.closest('[data-dx-ignore]'))return;
     const field=target.matches('[data-dx-field]')?target.closest<HTMLElement>('label'):null;
     const button=target.closest<HTMLElement>('button,a,[role="button"],[role="link"]');

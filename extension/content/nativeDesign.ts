@@ -6,7 +6,8 @@ export function visible(el:HTMLElement){
  for(let p:HTMLElement|null=el;p;p=p.parentElement){const s=getComputedStyle(p);if(p.hidden||p.getAttribute('aria-hidden')==='true'||s.display==='none'||s.visibility==='hidden')return false;}
  return !el.closest('[data-dx-ignore],script,style');
 }
-const visual=copyStyles.filter(p=>!['width','height','min-width','max-width','display','grid-template-columns','flex-direction','opacity'].includes(p));
+// Positioning belongs to a copied part's place inside its card, never to the look reused for new elements.
+const visual=copyStyles.filter(p=>!['width','height','min-width','max-width','display','grid-template-columns','flex-direction','opacity','position','top','right','bottom','left','z-index','float','clear'].includes(p));
 export function readStyle(el:HTMLElement|null):CopyNode['style']{
  if(!el)return {};
  const css=getComputedStyle(el);

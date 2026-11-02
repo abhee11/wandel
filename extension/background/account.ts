@@ -47,11 +47,11 @@ export function registerAccountBridge(){
     return {ok:true};
    })().then(reply).catch(error=>reply({error:error.message}));return true;
   }
-  // Undo history for a workflow, kept for this browser session only.
+  // Undo history for a workflow; like the draft it survives Chrome restarts (capped at 20 steps per direction by the page).
   if(message?.type==='WANDEL_HISTORY'){
    if(sender.id!==chrome.runtime.id||typeof message.workflowId!=='string'||!/^[\w-]{1,100}$/.test(message.workflowId))return;
    const key='wandel:history:'+message.workflowId;
-   const work=message.action==='read'?chrome.storage.session.get(key).then(x=>x[key]??null):message.action==='write'?chrome.storage.session.set({[key]:message.value}):Promise.reject(new Error('Invalid history action'));
+   const work=message.action==='read'?chrome.storage.local.get(key).then(async x=>x[key]??(await chrome.storage.session.get(key))[key]??null):message.action==='write'?chrome.storage.local.set({[key]:message.value}):Promise.reject(new Error('Invalid history action'));
    work.then(value=>reply({value})).catch(()=>reply({error:'Undo history is unavailable.'}));return true;
   }
   if(message?.type==='WANDEL_TEMP_STORAGE'){

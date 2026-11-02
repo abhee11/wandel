@@ -64,7 +64,8 @@ export class FloatingPanel {
   const space=this.docked&&this.panel&&!this.panel.hidden?this.dockWidth:0;
   if(!space){this.pageSpace?.remove();this.pageSpace=null;return;}
   if(!this.pageSpace){this.pageSpace=document.createElement('style');this.pageSpace.dataset.dxIgnore='true';this.pageSpace.dataset.wandelDock='true';}
-  this.pageSpace.textContent=`html{margin-right:${space}px!important}`;if(!this.pageSpace.isConnected)document.documentElement.append(this.pageSpace);
+  // Designed prototype pages are fixed to the window, so they are inset beside the docked panel too.
+  this.pageSpace.textContent=`html{margin-right:${space}px!important}[data-dx-owned^="view:"]:not([role=dialog])[style*="position: fixed"]{right:${space+16}px!important}`;if(!this.pageSpace.isConnected)document.documentElement.append(this.pageSpace);
  }
  wholePage(tabId:number){
   this.show(tabId);if(this.pageButton)this.pageButton.hidden=true;

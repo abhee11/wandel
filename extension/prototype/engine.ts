@@ -30,7 +30,7 @@ export function lineage(workflow: Workflow, stateId: string) {
 }
 export function renderLineage(w:Workflow,stateId:string){const chain=lineage(w,stateId);const boundary=chain.reduce((index,s,i)=>s.liveURL?i:index,-1);return boundary<0?chain:chain.slice(boundary);}
 export function visibleNodeIds(workflow: Workflow, stateId: string) {
-  return new Set(renderLineage(workflow, stateId).flatMap(s => [ ...(s.pageContent?prototypePageIds(s.id,s.pageContent.chart.points.length):[]), ...(s.view === 'panel' ? [`view:${s.id}`, `heading:${s.id}`] : []), ...s.operations.flatMap(o => o.kind === 'insert' ? [o.node.id,...(o.position==='below'?['wrap:'+o.id]:[]),...(o.node.kind==='field'?[o.node.id+':input']:[]),...(o.node.copy?.map(n=>n.id)||[]),...(o.node.block?.nodes.flatMap(n=>n.id?[n.id]:[])||[]),...(o.node.choices?.options.map((_,i)=>o.node.id+':choice:'+i)||[])] : o.kind==='trigger'?[o.source]:[]) ]));
+  return new Set(renderLineage(workflow, stateId).flatMap(s => [ ...(s.pageContent?prototypePageIds(s.id,s.pageContent.chart.points.length):[]), ...(s.view === 'panel' ? [`view:${s.id}`, `heading:${s.id}`, ...(s.presentation==='modal'?[`modal:${s.id}:close`]:[])] : []), ...s.operations.flatMap(o => o.kind === 'insert' ? [o.node.id,...(o.position==='below'?['wrap:'+o.id]:[]),...(o.node.kind==='field'?[o.node.id+':input']:[]),...(o.node.copy?.map(n=>n.id)||[]),...(o.node.block?.nodes.flatMap(n=>n.id?[n.id]:[])||[]),...(o.node.choices?.options.map((_,i)=>o.node.id+':choice:'+i)||[])] : o.kind==='trigger'?[o.source]:[]) ]));
 }
 export function validateWorkflow(input: unknown): Workflow {
   const w = WorkflowSchema.parse(input);

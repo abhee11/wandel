@@ -41,6 +41,8 @@ export function AssistantPanel({bridge,snapshot,onSave,onBusyChange}:{bridge:Bri
  useEffect(()=>rememberVoiceSharing(consent),[consent]);
  useEffect(()=>{onBusyChange?.(busy||listening);return()=>onBusyChange?.(false);},[busy,listening,onBusyChange]);
  const stopPreview=useRef<(()=>void)|null>(null);
+ // A request that opens another screen continues there once the chat has moved with it.
+ const reopen=useRef<{text:string;id:string}|null>(null);
  const epoch=useRef(0),abort=useRef<AbortController|null>(null),voice=useRef<PushToTalk|null>(null),voiceContext=useRef<Promise<PageContext>|null>(null),pending=useRef(''),voiceHeld=useRef(false);
  const scope=snapshot.workflow.id+':'+snapshot.stateId+':'+snapshot.workflow.route;
  const scopeRef=useRef(scope);scopeRef.current=scope;
@@ -52,7 +54,12 @@ export function AssistantPanel({bridge,snapshot,onSave,onBusyChange}:{bridge:Bri
 
  async function context(inspect?:string[],instruction?:string){const next=await bridge.send({type:'assistantContext',chat:true,...(inspect?{inspect}:{}),...(instruction?{instruction}:{})});if(!next.assistant?.context)throw new Error('Refresh this page to use the assistant.');return next.assistant.context;}
  function cancel(){clarificationRequest.current=null;const active=activeRequest.current;if(active)updateTurn(active.id,{status:'stopped',error:active.applying?'Stopped waiting. Check the page before sending the edit again.':'Reply stopped.',retryable:!active.applying});activeRequest.current=null;sending.current=false;pendingCopy.current=null;setVoiceConsentOpen(false);epoch.current++;abort.current?.abort();abort.current=null;stopPreview.current?.();stopPreview.current=null;voice.current?.cancel();voiceHeld.current=false;setBusy(false);setListening(false);setStartingVoice(false);setError('');setMessage('Canceled. You can send another message.');}
- useEffect(()=>{if(activeRequest.current?.applying&&activeRequest.current.scope.startsWith(snapshot.workflow.id+':'))return;activeRequest.current=null;sending.current=false;epoch.current++;abort.current?.abort();stopPreview.current?.();stopPreview.current=null;voice.current?.cancel();voiceHeld.current=false;setBusy(false);setListening(false);setStartingVoice(false);setClarification(null);clarificationRequest.current=null;pending.current='';setInstruction('');setError('');setMessage('Ask about the layout, or select an element for focused feedback.');},[scope]);
+ useEffect(()=>{if(activeRequest.current?.applying&&activeRequest.current.scope.startsWith(snapshot.workflow.id+':'))return;
+  // Moving screens ends the request in flight: one this chat moved on purpose resumes here, any other is marked stopped rather than left sending.
+  const moved=reopen.current;reopen.current=null;const interrupted=activeRequest.current;
+  if(interrupted&&!moved)updateTurn(interrupted.id,{status:'stopped',error:'The screen changed before this finished.',retryable:true});
+  if(moved)setTimeout(()=>void submit(moved.text,undefined,false,undefined,moved.id),0);
+  activeRequest.current=null;sending.current=false;epoch.current++;abort.current?.abort();stopPreview.current?.();stopPreview.current=null;voice.current?.cancel();voiceHeld.current=false;setBusy(false);setListening(false);setStartingVoice(false);setClarification(null);clarificationRequest.current=null;pending.current='';setInstruction('');setError('');setMessage('Ask about the layout, or select an element for focused feedback.');},[scope]);
  useEffect(()=>()=>{epoch.current++;abort.current?.abort();stopPreview.current?.();stopPreview.current=null;voice.current?.cancel();},[]);
  async function submit(text:string,prepared?:Promise<PageContext>,recordTurn=true,expectedSelection?:string|null,existingId?:string,capturedSelection?:string){
   const followUp=clarificationRequest.current;const value=text.trim();if(!value||sending.current)return;if(/^\/(?!\/)[a-zA-Z0-9/_-]*$/.test(value)){try{await bridge.send({type:'createPage',route:value});setInstruction('');}catch(error){setError(error instanceof Error?error.message:'Could not create that page.');}return;}sending.current=true;pendingCopy.current=null;const request=++epoch.current,origin=scopeRef.current,userId=existingId||uid(),selection=capturedSelection??JSON.stringify(snapshot.selected?.locator||null);activeRequest.current={id:userId,text:value,scope:origin,selection,applying:false};
@@ -68,7 +75,7 @@ export function AssistantPanel({bridge,snapshot,onSave,onBusyChange}:{bridge:Bri
    for(let expanded=0;plan.status==='inspect'&&expanded<6;expanded++){if(request!==epoch.current)return;
     // The thing the user means may be on another screen of this prototype: open it when it is on this page, otherwise say where it is.
     const screen=plan.candidates.map(ref=>ref.startsWith('view:')?c.views.find(view=>view.id===ref.slice(5)):undefined).find(Boolean);
-    if(screen&&screen.id!==c.stateId){if(!samePage(stateURL(snapshot.workflow,screen.id),stateURL(snapshot.workflow,c.stateId))){answer(`That’s on the “${screen.title}” screen. Open it from Your flow, then ask me again.`);return;}setMessage(`Opening “${screen.title}”…`);await bridge.send({type:'state',id:screen.id});c=await context(undefined,combined);pageScreenshot=await capture(c);}
+    if(screen&&screen.id!==c.stateId){if(!samePage(stateURL(snapshot.workflow,screen.id),stateURL(snapshot.workflow,c.stateId))){answer(`That’s on the “${screen.title}” screen. Open it from Your flow, then ask me again.`);return;}setMessage(`Opening “${screen.title}”…`);reopen.current={text:value,id:userId};await bridge.send({type:'state',id:screen.id});return;}
     else{setMessage('Inspecting the relevant layout…');c=await context(plan.candidates.filter(ref=>!ref.startsWith('view:')),combined);}plan=await planConversation(combined,c,controller.signal,conversation.current.filter(turn=>turn.id!==userId),image,pageScreenshot,userId);}
    if(plan.status==='inspect'){answer(plan.question||'I couldn’t find what you mean on this screen. Which card or section is it? If it’s on another screen, open that screen first.');return;}
    if(request!==epoch.current||origin!==scopeRef.current)return;

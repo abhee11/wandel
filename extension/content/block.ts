@@ -57,6 +57,12 @@ function render(node:BlockNode,accent:string):HTMLElement{
    const group=el('div','display:flex;flex-wrap:wrap;gap:12px 28px;');group.setAttribute('role','radiogroup');const chosen=node.detail&&node.options?.includes(node.detail)?node.detail:node.options![0];
    for(const option of node.options||[]){const b=el('button',`all:unset;display:inline-flex;align-items:center;gap:10px;cursor:pointer;font-weight:500;font-size:16px;line-height:1.4;font-family:inherit;color:${ink};`);b.type='button';b.setAttribute('role','radio');b.dataset.dxChoice=option;const dot=el('span','box-sizing:border-box;width:20px;height:20px;border-radius:50%;flex-shrink:0;');b.append(dot,el('span','',option));paintChoice(b,option===chosen,accent);group.append(b);}
    return group;}
+  case 'select':{
+   // A dropdown: a label above a native select drawn in the page's type and the block's accent focus.
+   const wrap=el('label',`display:flex;flex-direction:column;gap:6px;font-weight:600;font-size:14px;line-height:1.4;font-family:inherit;color:${ink};`,text||null);
+   const select=el('select',`appearance:auto;min-height:40px;padding:8px 12px;border:1px solid #d9d5ea;border-radius:10px;background:#fff;font-weight:400;font-size:16px;font-family:inherit;color:${ink};outline-color:${accent};`);
+   const chosen=node.detail&&node.options?.includes(node.detail)?node.detail:node.options![0];for(const option of node.options||[]){const o=el('option','',option);o.value=option;o.selected=option===chosen;select.append(o);}
+   wrap.append(select);return wrap;}
   case 'list':{const list=el('ol',`margin:0;padding-left:22px;display:flex;flex-direction:column;gap:6px;font-weight:400;font-size:16px;line-height:1.6;font-family:inherit;color:${ink};`);for(const item of node.items||[])list.append(el('li','',item));return list;}
   case 'quote':{const q=el('blockquote',`margin:0;display:flex;gap:12px;font-style:italic;font-weight:500;font-size:16px;line-height:1.6;font-family:inherit;color:${ink};`);q.append(el('span',`font:700 28px/1 Georgia,serif;color:${ink};`,'“'),el('span','',text));return q;}
   case 'image':{

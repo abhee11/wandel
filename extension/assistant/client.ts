@@ -8,7 +8,7 @@ async function request(path:string,body:BodyInit,contentType:string,signal:Abort
  const token=await accountToken();if(bounded.aborted)throw new Error('Request canceled.');const result=await fetch(accountConfig.apiOrigin+'/api/assistant/'+path,{method:'POST',credentials:'omit',headers:{'Content-Type':contentType,Authorization:'Bearer '+token},body,signal:bounded});
  const data=await result.json();
  // Limit codes travel with the message so the conversation can say which limit applies and when it clears.
- if(!result.ok){const e=data.error||{},tag=['AI_LIMIT_REACHED','RATE_LIMITED','AI_RATE_LIMITED','AI_NOT_CONFIGURED','ASSISTANT_DISABLED'].includes(e.code)?` [${e.code}${e.resetsAt?';resets='+e.resetsAt:''}${e.retryAfter?';wait='+e.retryAfter:''}]`:'';throw new Error((e.message||'The assistant is unavailable. Your draft is unchanged.')+tag);}
+ if(!result.ok){const e=data.error||{},tag=['AI_LIMIT_REACHED','RATE_LIMITED','AI_RATE_LIMITED','AI_NOT_CONFIGURED','ASSISTANT_DISABLED','ASSISTANT_TIMEOUT','INCOMPLETE_PLAN'].includes(e.code)?` [${e.code}${e.resetsAt?';resets='+e.resetsAt:''}${e.retryAfter?';wait='+e.retryAfter:''}]`:'';throw new Error((e.message||'The assistant is unavailable. Your draft is unchanged.')+tag);}
  return data;
  },signal);
 }

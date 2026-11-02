@@ -1,6 +1,6 @@
 import {z} from 'zod';
 /** A composed section described as data. The renderer owns all markup; text is set with textContent only. */
-export const blockTypes=['card','stack','row','grid','heading','text','eyebrow','link','button','icon','stat','tile','field','choice','list','quote','image','disclosure','divider'] as const;
+export const blockTypes=['card','stack','row','grid','heading','text','eyebrow','link','button','icon','stat','tile','field','choice','select','list','quote','image','disclosure','divider'] as const;
 export const blockContainers=['card','stack','row','grid','disclosure'] as const;
 export const blockTones=['none','pink','peach','yellow','lime','mint','sky','lilac','gray'] as const;
 const httpImage=z.string().max(2048).refine(value=>{try{const url=new URL(value);return ['https:','http:'].includes(url.protocol)&&!url.username&&!url.password;}catch{return false;}},'Use an HTTP(S) image link.');
@@ -31,7 +31,7 @@ export const BlockSchema=z.object({
   if(i===0?node.parent!==-1:node.parent<0||node.parent>=i)issue(i===0?'The first part is the root (parent -1).':'Each part needs an earlier part as its parent.');
   else if(i>0&&!(blockContainers as readonly string[]).includes(block.nodes[node.parent].type))issue(`A ${block.nodes[node.parent].type} cannot contain other parts; use card, stack, row, grid or disclosure as the parent.`);
   if(['heading','text','eyebrow','link','button','quote','tile','field','stat'].includes(node.type)&&!node.text?.trim())issue(`A ${node.type} needs text.`);
-  if(node.type==='choice'&&(node.options?.length||0)<2)issue('A choice needs at least two options.');
+  if((node.type==='choice'||node.type==='select')&&(node.options?.length||0)<2)issue(`A ${node.type} needs at least two options.`);
   if(node.type==='list'&&!node.items?.length)issue('A list needs items.');
   if(node.type==='icon'&&!node.icon)issue('An icon part needs an icon name.');
  });

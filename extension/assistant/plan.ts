@@ -17,7 +17,7 @@ export function normalizePlan(input:unknown):AssistantPlan{
   newViewTitle:a.kind==='connect'?a.newViewTitle:null,
   pageContent:a.kind==='connect'?a.pageContent:undefined,
   chart:a.kind==='create'&&a.element==='chart'?a.chart:undefined,
-  block:a.kind==='create'&&a.element==='block'?a.block:undefined,
+  block:a.kind==='create'&&a.element==='block'||a.kind==='connect'&&a.presentation==='modal'?a.block:undefined,
   destination:a.kind==='connect'?a.destination:null,
   href:a.kind==='create'&&a.element==='link'?a.href:undefined,
   layout:a.kind==='layout'?a.layout:undefined,

@@ -101,6 +101,22 @@ export class Renderer {
     for(const el of this.owned.values()) el.remove();
     this.templates.clear();this.bindings.clear();this.applied.clear();this.mirrors.clear();this.triggers.clear();this.owned.clear();this.views.clear();
   }
+  // A page may lay a full-card click target (an absolutely positioned, stacked overlay) over a card; controls added
+  // inside that card, and page elements Wandel connected, are raised above it so their own clicks reach them.
+  private raiseOverCovers(){
+    // Page elements given a click connection or a forwarded action are click targets too, whatever their tag.
+    const connected=new Set<HTMLElement>([...this.triggers.keys(),...this.mirrors.keys()]);
+    for(const node of new Set([...this.owned.values(),...connected])){
+      if(!node.isConnected||!connected.has(node)&&!node.matches('button,a,input,textarea,select,label,[role=button],[role=link],[role=checkbox],[role=radio]'))continue;
+      const r=node.getBoundingClientRect();if(!r.width||!r.height)continue;let cover=0;
+      for(let ancestor=node.parentElement,depth=0;ancestor&&depth<6&&!ancestor.matches('body,html');ancestor=ancestor.parentElement,depth++)for(const child of ancestor.children){
+        if(!(child instanceof HTMLElement)||child.contains(node)||child.closest('[data-dx-owned]'))continue;const css=getComputedStyle(child),z=parseInt(css.zIndex,10);
+        if(!['absolute','fixed'].includes(css.position)||Number.isNaN(z))continue;const c=child.getBoundingClientRect();
+        if(c.left<=r.left+1&&c.right>=r.right-1&&c.top<=r.top+1&&c.bottom>=r.bottom-1)cover=Math.max(cover,z+1);
+      }
+      if(cover){if(getComputedStyle(node).position==='static')node.style.setProperty('position','relative','important');node.style.setProperty('z-index',String(cover),'important');}
+    }
+  }
   reconcile(w:Workflow,stateId:string,data:Record<string,string>=Object.fromEntries((w.variables||[]).map(v=>[v.key,v.value]))):string[] {
     const errors:string[]=[];
     const chain=renderLineage(w,stateId);
@@ -125,11 +141,21 @@ export class Renderer {
         if(state.presentation==='screen')panel.style.cssText+='position:fixed;inset:32px 16px 16px;z-index:2147483000;overflow:auto;margin:0;padding:32px clamp(20px,5vw,80px);isolation:isolate;';
         if(state.design)applyAppearance(panel,state.design.surface);if(state.presentation==='screen'){panel.style.setProperty('background-color',state.design?.surface['background-color']&&!['transparent','rgba(0, 0, 0, 0)'].includes(state.design.surface['background-color'])?state.design.surface['background-color']:'#fff');panel.style.width='auto';panel.style.height='auto';panel.style.maxWidth='none';panel.style.margin='0';panel.style.boxSizing='border-box';}
         const badge=document.createElement('span'); badge.textContent='PROTOTYPE STATE'; badge.style.cssText='font:600 10px system-ui;letter-spacing:1.5px;color:#77829d;';
-        badge.dataset.dxIgnore='true';
+        badge.dataset.dxIgnore='true';badge.dataset.dxBadge='true';
         const heading=document.createElement('h1');heading.dataset.dxOwned=`heading:${state.id}`;heading.textContent=state.title;this.owned.set(`heading:${state.id}`,heading);heading.style.cssText='font:600 22px/1.3 system-ui,sans-serif;margin:8px 0 16px;color:#202638;';
         if(state.design)applyAppearance(heading,state.design.heading);
-        if(state.pageContent){panel.append(heading);mountPrototypePage(panel,state.id,state.pageContent,heading,(id,node)=>this.owned.set(id,node),this.onClick);}else panel.append(badge,heading);this.root.append(panel);this.views.add(state.id);
+        if(state.presentation==='modal'){
+          // A modal sits centred over the page it opened from; the outer shadow dims that page.
+          const surface=panel.style.getPropertyValue('background-color');panel.setAttribute('role','dialog');panel.setAttribute('aria-modal','true');panel.setAttribute('aria-label',state.title);
+          panel.style.cssText+=`position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:min(560px,calc(100vw - 32px));max-height:calc(100vh - 64px);overflow:auto;z-index:2147483000;margin:0;padding:28px 28px 24px;box-sizing:border-box;border-radius:${state.design?.surface['border-radius']&&parseFloat(state.design.surface['border-radius'])>0?state.design.surface['border-radius']:'16px'};box-shadow:0 0 0 100vmax rgba(17,16,30,.45),0 24px 64px rgba(17,16,30,.3);`;
+          // A dialog is a plain surface sized to its contents, whatever the card it opened from looked like.
+          for(const [key,value] of [['background-color','#fff'],['background-image','none'],['height','auto'],['min-height','0']])panel.style.setProperty(key,value,'important');void surface;
+          heading.style.margin='0 40px 12px 0';const close=document.createElement('button');close.type='button';close.dataset.dxOwned=`modal:${state.id}:close`;close.setAttribute('aria-label','Close');close.textContent='×';close.style.cssText='position:absolute;top:14px;right:14px;width:32px;height:32px;border:0;border-radius:8px;background:transparent;font:400 24px/1 system-ui;color:#55516a;cursor:pointer;';this.owned.set(`modal:${state.id}:close`,close);
+          panel.append(close,heading);
+        }else if(state.pageContent){panel.append(heading);mountPrototypePage(panel,state.id,state.pageContent,heading,(id,node)=>this.owned.set(id,node),this.onClick);}else panel.append(badge,heading);this.root.append(panel);this.views.add(state.id);
       }
+      // The placeholder label marks an empty screen only; a designed screen reads as a page.
+      const placeholder=this.owned.get(`view:${state.id}`)?.querySelector<HTMLElement>('[data-dx-badge]');if(placeholder)placeholder.hidden=state.operations.length>0;
       for(const op of state.operations) {
         const existing=this.applied.get(op.id);
         if(existing?.target.isConnected&&existing.theme)continue;
@@ -151,7 +177,7 @@ export class Renderer {
         try { this.apply(op,target,op.kind==='reorder'?nativeTargets.get(op.anchor):undefined); } catch(error) { errors.push(error instanceof Error?error.message:'Could not apply change.'); }
       }
     }
-    this.updateData(data);
+    this.updateData(data);this.raiseOverCovers();
     const hidden=[...this.applied.values()].filter(record=>record.styles?.some(s=>s.key==='display'&&s.after==='none')).map(record=>record.target);
     // Copied markup contains layout helpers, empty spans and line breaks. Their
     // zero-sized boxes are not failed controls. Validate the copied unit and its
@@ -204,7 +230,8 @@ export class Renderer {
       const icons=target.querySelectorAll('svg');if(icons.length!==1)throw new Error('The badge icon is missing or ambiguous.');const svg=icons[0],box=svg.getBoundingClientRect();if(box.width>64||box.height>64)throw new Error('Only small UI icons can be replaced.');
       const before=[...svg.childNodes],viewBox=svg.getAttribute('viewBox'),replacement=renderIcon(op.icon),after=[...replacement.childNodes];svg.setAttribute('viewBox',op.icon.viewBox);svg.replaceChildren(...after);this.applied.set(op.id,{target,icon:{svg,before,after,viewBox}});return;
     }
-    if(op.kind==='trigger'){this.triggers.set(target,op.source);this.applied.set(op.id,{target});return;}
+    // A connected page element shows the pointer a link would; the reset restores its own cursor.
+    if(op.kind==='trigger'){this.triggers.set(target,op.source);const before=target.style.getPropertyValue('cursor'),priority=target.style.getPropertyPriority('cursor');target.style.setProperty('cursor','pointer');this.applied.set(op.id,{target,styles:[{key:'cursor',before,priority,after:target.style.getPropertyValue('cursor')}]});return;}
     if(op.kind==='style'||op.kind==='remove'||op.kind==='appearance'){
       const properties:Record<string,string>={};
       if(op.kind==='remove')properties.display='none';
@@ -216,6 +243,8 @@ export class Renderer {
       if(op.kind==='style'&&(op.style.x!==undefined||op.style.y!==undefined)){properties.position=op.style.position||(getComputedStyle(target).position==='static'?'relative':getComputedStyle(target).position);properties['z-index']='1000';}
       if(op.kind==='style'&&(op.style.x!==undefined||op.style.y!==undefined))properties.translate=`${op.style.x||0}px ${op.style.y||0}px`;
       if(op.kind==='style'&&(op.style.width!==undefined||op.style.height!==undefined||op.style.x!==undefined||op.style.y!==undefined)&&getComputedStyle(target).display==='inline')properties.display='inline-block';
+      // A new background colour replaces a gradient the element paints over it; images (logos, photos) stay.
+      if(op.kind==='style'&&op.style.backgroundColor!==undefined&&/gradient\(/.test(getComputedStyle(target).backgroundImage))properties['background-image']='none';
       const styles=Object.entries(properties).map(([key,value])=>{const before=target.style.getPropertyValue(key),priority=target.style.getPropertyPriority(key);target.style.setProperty(key,value,'important');return {key,before,priority,after:target.style.getPropertyValue(key)};});
       if(op.kind==='style'&&op.arrangement)styles.push(...applyArrangement(target,op.arrangement));
       this.applied.set(op.id,{target,styles});return;

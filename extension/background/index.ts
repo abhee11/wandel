@@ -1,4 +1,5 @@
 import {openFloatingPanel,registerFloatingPanel} from './floating';
+import {accountConfig} from '../shared/accountConfig';
 registerFloatingPanel();
 import {registerSharedWorkflow} from './sharedWorkflow';
 registerSharedWorkflow();
@@ -31,3 +32,5 @@ chrome.webNavigation.onHistoryStateUpdated.addListener(notify);
 chrome.webNavigation.onReferenceFragmentUpdated.addListener(notify);
 
 export {};
+// Share pages opened before Wandel was installed get its relay, so they connect without a reload.
+chrome.runtime.onInstalled.addListener(()=>{void chrome.tabs.query({url:new URL('/flow*',accountConfig.apiOrigin).href}).then(tabs=>Promise.all(tabs.map(tab=>tab.id===undefined?null:chrome.scripting.executeScript({target:{tabId:tab.id,frameIds:[0]},files:['content.js']}).catch(()=>null)))).catch(()=>{});});

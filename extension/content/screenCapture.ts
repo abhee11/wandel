@@ -20,7 +20,7 @@ export function captureScreen(doc:Document=document,url=new URL(doc.location.hre
   if(node instanceof SVGSVGElement){const icon=captureIcon(node);if(icon){const id=uid(),rect=el.getBoundingClientRect();geometry?.set(id,{x:rect.x,y:rect.y,width:rect.width,height:rect.height});nodes.push({id,parent,tag:'span',text:'',icon,style:{display:'inline-flex',width:css.width,height:css.height,color:css.color}});}return;}
   const nodeId=uid(),rect=el.getBoundingClientRect();geometry?.set(nodeId,{x:rect.x,y:rect.y,width:rect.width,height:rect.height});
   const tag=el.tagName.toLowerCase(),style:Record<string,string>={};
-  for(const key of copyStyles){const value=css.getPropertyValue(key);if(value&&!/url\s*\(|expression|[<>\\]/i.test(value))style[key]=value.slice(0,300);}
+  for(const key of copyStyles.filter(key=>!['position','top','right','bottom','left','z-index'].includes(key))){const value=css.getPropertyValue(key);if(value&&!/url\s*\(|expression|[<>\\]/i.test(value))style[key]=value.slice(0,300);}
   // A captured screen must fit its destination, never recreate the host's fixed modal layer.
   if(parent===-1){style.width='100%';style.height='auto';style['min-width']='0';style['max-width']='100%';style.margin='0';}
   const field=tag==='input'||tag==='textarea'||tag==='select';
