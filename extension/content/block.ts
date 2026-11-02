@@ -63,6 +63,18 @@ function render(node:BlockNode,accent:string):HTMLElement{
    const select=el('select',`appearance:auto;min-height:40px;padding:8px 12px;border:1px solid #d9d5ea;border-radius:10px;background:#fff;font-weight:400;font-size:16px;font-family:inherit;color:${ink};outline-color:${accent};`);
    const chosen=node.detail&&node.options?.includes(node.detail)?node.detail:node.options![0];for(const option of node.options||[]){const o=el('option','',option);o.value=option;o.selected=option===chosen;select.append(o);}
    wrap.append(select);return wrap;}
+  case 'crumbs':{
+   // A breadcrumb in small muted type; with options, its last segment is a pill that switches through a native select laid over it.
+   const bar=el('nav',`display:flex;flex-wrap:wrap;align-items:center;gap:8px;min-width:0;font-weight:400;font-size:14px;line-height:1.4;font-family:inherit;color:${muted};${node.parent===-1?`box-sizing:border-box;width:100%;padding:12px 0;border-bottom:1px solid ${line};`:''}`);bar.setAttribute('aria-label','Breadcrumb');
+   const items=node.items||[];items.forEach((item,i)=>{
+    if(i)bar.append(el('span',`color:${muted};`,'›'));
+    if(i<items.length-1||!node.options?.length){bar.append(el('span',i===items.length-1?`color:${ink};font-weight:500;`:'',item));return;}
+    const chosen=node.detail&&node.options.includes(node.detail)?node.detail:node.options.includes(item)?item:node.options[0],pill=el('label',`position:relative;display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:8px;background:${accent}14;cursor:pointer;font-weight:600;color:${ink};`),label=el('span','',chosen);
+    const select=el('select','position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;font:inherit;');select.setAttribute('aria-label',items.slice(0,-1).join(' › ')||'Switch');
+    for(const option of node.options){const o=el('option','',option);o.value=option;o.selected=option===chosen;select.append(o);}
+    select.addEventListener('change',()=>{label.textContent=select.value;});pill.append(label,icon('chevron-down',14,ink),select);bar.append(pill);
+   });
+   return bar;}
   case 'list':{const list=el('ol',`margin:0;padding-left:22px;display:flex;flex-direction:column;gap:6px;font-weight:400;font-size:16px;line-height:1.6;font-family:inherit;color:${ink};`);for(const item of node.items||[])list.append(el('li','',item));return list;}
   case 'quote':{const q=el('blockquote',`margin:0;display:flex;gap:12px;font-style:italic;font-weight:500;font-size:16px;line-height:1.6;font-family:inherit;color:${ink};`);q.append(el('span',`font:700 28px/1 Georgia,serif;color:${ink};`,'“'),el('span','',text));return q;}
   case 'image':{
