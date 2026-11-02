@@ -1,0 +1,547 @@
+{
+  "case": "theme",
+  "fixture": "<div id=\"app\" style=\"display:flex;flex-direction:row;background:#faf9fc;color:#272435\"><aside id=\"navigation\" style=\"position:fixed;top:0;left:0;bottom:0;width:180px;height:600px;display:flex;flex-direction:column;padding:20px;gap:16px;background:#f0edfa;color:#272435\"><strong>Workspace</strong><a href=\"/home\">Home</a><a href=\"/profile\">Profile</a></aside><main id=\"content\" style=\"margin-left:220px;padding:24px\"><h1>Overview</h1><p>Your recent activity</p><div id=\"cards\" style=\"display:flex;flex-direction:row;gap:16px\"><article id=\"summary\" style=\"background:#ffffff;color:#272435;padding:20px;border-radius:24px\"><h2>Summary</h2><p>Workspace details</p><button style=\"background:rgb(134,68,255);color:white\">Open summary</button></article><article id=\"activity\" style=\"background:#ffffff;color:#272435;padding:20px;border-radius:24px\"><h2>Activity</h2><p>Recent updates</p><button style=\"background:transparent;color:rgb(134,68,255);border:1px solid rgb(134,68,255)\">Open activity</button></article></div></main></div>",
+  "stages": [
+    {
+      "instruction": "change the theme to anohter color",
+      "source": "provider",
+      "selected": null,
+      "proposed": {
+        "status": "edit",
+        "scope": "page",
+        "message": "Apply a fresh teal theme across the page, with soft mint backgrounds, white card surfaces, dark readable text, and accessible teal accents. Existing control roles and layout remain unchanged.",
+        "question": null,
+        "candidates": [],
+        "actions": [
+          {
+            "inputType": null,
+            "required": null,
+            "options": null,
+            "radioGroup": null,
+            "kind": "theme",
+            "columns": null,
+            "layout": null,
+            "theme": {
+              "secondary": "#D9F0EC",
+              "tertiary": "#EDF8F6",
+              "background": "#F4FAF9",
+              "surface": "#FFFFFF",
+              "text": "#17312D",
+              "accent": "#00695C",
+              "accentText": "#FFFFFF"
+            },
+            "href": null,
+            "targets": [
+              "e_bd2bca8e-4112-40a8-8e65-e17b63401f1a"
+            ],
+            "relativeTo": null,
+            "resultRef": null,
+            "element": null,
+            "text": null,
+            "description": null,
+            "labels": [],
+            "position": null,
+            "styleRef": null,
+            "style": null,
+            "destination": null,
+            "newViewTitle": null
+          }
+        ]
+      },
+      "grounded": {
+        "status": "edit",
+        "scope": "page",
+        "message": "Apply a fresh teal theme across the page, with soft mint backgrounds, white card surfaces, dark readable text, and accessible teal accents. Existing control roles and layout remain unchanged.",
+        "question": null,
+        "candidates": [],
+        "actions": [
+          {
+            "kind": "theme",
+            "theme": {
+              "secondary": "#D9F0EC",
+              "tertiary": "#EDF8F6",
+              "background": "#F4FAF9",
+              "surface": "#FFFFFF",
+              "text": "#17312D",
+              "accent": "#00695C",
+              "accentText": "#FFFFFF"
+            },
+            "targets": [
+              "e_bd2bca8e-4112-40a8-8e65-e17b63401f1a"
+            ],
+            "relativeTo": null,
+            "resultRef": null,
+            "element": null,
+            "text": null,
+            "description": null,
+            "labels": [],
+            "position": null,
+            "styleRef": null,
+            "style": null,
+            "destination": null,
+            "newViewTitle": null
+          }
+        ]
+      },
+      "applied": true,
+      "executionError": "",
+      "html": "<aside id=\"navigation\" style=\"position: fixed; top: 0px; left: 0px; bottom: 0px; width: 180px; height: 600px; display: flex; flex-direction: column; padding: 20px; gap: 16px; background: rgb(240, 237, 250); color: rgb(23, 49, 45) !important; background-color: rgb(217, 240, 236);\"><strong style=\"color: rgb(23, 49, 45);\">Workspace</strong><a href=\"/home\" style=\"color: rgb(23, 49, 45);\">Home</a><a href=\"/profile\" style=\"color: rgb(23, 49, 45);\">Profile</a></aside><main id=\"content\" style=\"margin-left: 220px; padding: 24px; color: rgb(23, 49, 45);\"><h1 style=\"color: rgb(23, 49, 45);\">Overview</h1><p style=\"color: rgb(23, 49, 45);\">Your recent activity</p><div id=\"cards\" style=\"display: flex; flex-direction: row; gap: 16px; color: rgb(23, 49, 45);\"><article id=\"summary\" style=\"background: rgb(255, 255, 255); color: rgb(23, 49, 45) !important; padding: 20px; border-radius: 24px; background-color: rgb(255, 255, 255);\"><h2 style=\"color: rgb(23, 49, 45);\">Summary</h2><p style=\"color: rgb(23, 49, 45);\">Workspace details</p><button style=\"background: rgb(134, 68, 255); color: rgb(255, 255, 255) !important; background-color: rgb(0, 105, 92);\">Open summary</button></article><article id=\"activity\" style=\"background: rgb(255, 255, 255); color: rgb(23, 49, 45) !important; padding: 20px; border-radius: 24px; background-color: rgb(255, 255, 255);\"><h2 style=\"color: rgb(23, 49, 45);\">Activity</h2><p style=\"color: rgb(23, 49, 45);\">Recent updates</p><button style=\"background: transparent; color: rgb(0, 105, 92) !important; border: 1px solid rgb(134, 68, 255); border-color: rgb(0, 105, 92);\">Open activity</button></article></div></main>",
+      "rootStyle": "display: flex; flex-direction: row; background: rgb(250, 249, 252); color: rgb(23, 49, 45) !important; background-color: rgb(244, 250, 249) !important;",
+      "workflow": {
+        "schemaVersion": 1,
+        "id": "b7135da9-6e27-4364-b2b0-198b49d0b75e",
+        "name": "Flow — example.test/layout — 2026-10-29 23:25:31 UTC — b7135d",
+        "origin": "https://example.test",
+        "route": "/layout",
+        "createdAt": "2026-10-29T23:25:31.169Z",
+        "updatedAt": "2026-10-29T23:25:35.992Z",
+        "entry": "282bf057-64df-4c97-9f2f-b01eedf070c2",
+        "maxStates": 30,
+        "states": [
+          {
+            "id": "282bf057-64df-4c97-9f2f-b01eedf070c2",
+            "title": "Existing application",
+            "parent": null,
+            "view": "base",
+            "operations": [
+              {
+                "id": "024e7042-9d7f-4b9b-94e9-53682f781e70",
+                "kind": "theme",
+                "target": {
+                  "ancestorTags": [
+                    "body",
+                    "html"
+                  ],
+                  "tag": "div",
+                  "role": "",
+                  "name": "Workspace Home Profile Overview Your recent activity Summary Workspace details Open summary Activity Recent updates Open activity",
+                  "text": "Workspace Home Profile Overview Your recent activity Summary Workspace details Open summary Activity Recent updates Open activity",
+                  "attrs": {
+                    "id": "app"
+                  },
+                  "parent": {
+                    "tag": "body",
+                    "id": "",
+                    "role": "",
+                    "label": ""
+                  },
+                  "previous": "",
+                  "next": ""
+                },
+                "theme": {
+                  "secondary": "#D9F0EC",
+                  "tertiary": "#EDF8F6",
+                  "background": "#F4FAF9",
+                  "surface": "#FFFFFF",
+                  "text": "#17312D",
+                  "accent": "#00695C",
+                  "accentText": "#FFFFFF"
+                }
+              }
+            ]
+          }
+        ],
+        "edges": []
+      },
+      "directions": [
+        "row",
+        "",
+        "row"
+      ]
+    },
+    {
+      "instruction": "Change the whole page theme to blue with readable text. Apply it now.",
+      "source": "provider",
+      "selected": null,
+      "proposed": {
+        "status": "edit",
+        "scope": "page",
+        "message": "Apply a blue theme across the whole page with a pale blue background, white surfaces, dark navy text, and accessible blue accents. Existing layout and control roles remain unchanged.",
+        "question": null,
+        "candidates": [],
+        "actions": [
+          {
+            "inputType": null,
+            "required": null,
+            "options": null,
+            "radioGroup": null,
+            "kind": "theme",
+            "columns": null,
+            "layout": null,
+            "theme": {
+              "secondary": "#DBEAFE",
+              "tertiary": "#EFF6FF",
+              "background": "#EFF6FF",
+              "surface": "#FFFFFF",
+              "text": "#172554",
+              "accent": "#1D4ED8",
+              "accentText": "#FFFFFF"
+            },
+            "href": null,
+            "targets": [
+              "e_bd2bca8e-4112-40a8-8e65-e17b63401f1a"
+            ],
+            "relativeTo": null,
+            "resultRef": null,
+            "element": null,
+            "text": null,
+            "description": null,
+            "labels": [],
+            "position": null,
+            "styleRef": null,
+            "style": null,
+            "destination": null,
+            "newViewTitle": null
+          }
+        ]
+      },
+      "grounded": {
+        "status": "edit",
+        "scope": "page",
+        "message": "Apply a blue theme across the whole page with a pale blue background, white surfaces, dark navy text, and accessible blue accents. Existing layout and control roles remain unchanged.",
+        "question": null,
+        "candidates": [],
+        "actions": [
+          {
+            "kind": "theme",
+            "theme": {
+              "secondary": "#DBEAFE",
+              "tertiary": "#EFF6FF",
+              "background": "#EFF6FF",
+              "surface": "#FFFFFF",
+              "text": "#172554",
+              "accent": "#1D4ED8",
+              "accentText": "#FFFFFF"
+            },
+            "targets": [
+              "e_bd2bca8e-4112-40a8-8e65-e17b63401f1a"
+            ],
+            "relativeTo": null,
+            "resultRef": null,
+            "element": null,
+            "text": null,
+            "description": null,
+            "labels": [],
+            "position": null,
+            "styleRef": null,
+            "style": null,
+            "destination": null,
+            "newViewTitle": null
+          }
+        ]
+      },
+      "applied": true,
+      "executionError": "",
+      "html": "<aside id=\"navigation\" style=\"position: fixed; top: 0px; left: 0px; bottom: 0px; width: 180px; height: 600px; display: flex; flex-direction: column; padding: 20px; gap: 16px; background: rgb(240, 237, 250); color: rgb(23, 37, 84) !important; background-color: rgb(255, 255, 255);\"><strong style=\"color: rgb(23, 37, 84);\">Workspace</strong><a href=\"/home\" style=\"color: rgb(23, 37, 84);\">Home</a><a href=\"/profile\" style=\"color: rgb(23, 37, 84);\">Profile</a></aside><main id=\"content\" style=\"margin-left: 220px; padding: 24px; color: rgb(23, 37, 84);\"><h1 style=\"color: rgb(23, 37, 84);\">Overview</h1><p style=\"color: rgb(23, 37, 84);\">Your recent activity</p><div id=\"cards\" style=\"display: flex; flex-direction: row; gap: 16px; color: rgb(23, 37, 84);\"><article id=\"summary\" style=\"background: rgb(255, 255, 255); color: rgb(23, 37, 84) !important; padding: 20px; border-radius: 24px; background-color: rgb(255, 255, 255);\"><h2 style=\"color: rgb(23, 37, 84);\">Summary</h2><p style=\"color: rgb(23, 37, 84);\">Workspace details</p><button style=\"background: rgb(134, 68, 255); color: rgb(255, 255, 255) !important; background-color: rgb(0, 105, 92);\">Open summary</button></article><article id=\"activity\" style=\"background: rgb(255, 255, 255); color: rgb(23, 37, 84) !important; padding: 20px; border-radius: 24px; background-color: rgb(255, 255, 255);\"><h2 style=\"color: rgb(23, 37, 84);\">Activity</h2><p style=\"color: rgb(23, 37, 84);\">Recent updates</p><button style=\"background: transparent; color: rgb(23, 37, 84); border: 1px solid rgb(134, 68, 255); border-color: rgb(0, 105, 92) !important;\">Open activity</button></article></div></main>",
+      "rootStyle": "display: flex; flex-direction: row; background: rgb(250, 249, 252); color: rgb(23, 37, 84) !important; background-color: rgb(239, 246, 255) !important;",
+      "workflow": {
+        "schemaVersion": 1,
+        "id": "b7135da9-6e27-4364-b2b0-198b49d0b75e",
+        "name": "Flow — example.test/layout — 2026-10-29 23:25:31 UTC — b7135d",
+        "origin": "https://example.test",
+        "route": "/layout",
+        "createdAt": "2026-10-29T23:25:31.169Z",
+        "updatedAt": "2026-10-29T23:25:39.266Z",
+        "entry": "282bf057-64df-4c97-9f2f-b01eedf070c2",
+        "maxStates": 30,
+        "states": [
+          {
+            "id": "282bf057-64df-4c97-9f2f-b01eedf070c2",
+            "title": "Existing application",
+            "parent": null,
+            "view": "base",
+            "operations": [
+              {
+                "id": "024e7042-9d7f-4b9b-94e9-53682f781e70",
+                "kind": "theme",
+                "target": {
+                  "ancestorTags": [
+                    "body",
+                    "html"
+                  ],
+                  "tag": "div",
+                  "role": "",
+                  "name": "Workspace Home Profile Overview Your recent activity Summary Workspace details Open summary Activity Recent updates Open activity",
+                  "text": "Workspace Home Profile Overview Your recent activity Summary Workspace details Open summary Activity Recent updates Open activity",
+                  "attrs": {
+                    "id": "app"
+                  },
+                  "parent": {
+                    "tag": "body",
+                    "id": "",
+                    "role": "",
+                    "label": ""
+                  },
+                  "previous": "",
+                  "next": ""
+                },
+                "theme": {
+                  "secondary": "#D9F0EC",
+                  "tertiary": "#EDF8F6",
+                  "background": "#F4FAF9",
+                  "surface": "#FFFFFF",
+                  "text": "#17312D",
+                  "accent": "#00695C",
+                  "accentText": "#FFFFFF"
+                }
+              },
+              {
+                "id": "a97f559d-d933-4a4e-9d0f-5f2368e8173a",
+                "kind": "theme",
+                "target": {
+                  "ancestorTags": [
+                    "body",
+                    "html"
+                  ],
+                  "tag": "div",
+                  "role": "",
+                  "name": "Workspace Home Profile Overview Your recent activity Summary Workspace details Open summary Activity Recent updates Open activity",
+                  "text": "Workspace Home Profile Overview Your recent activity Summary Workspace details Open summary Activity Recent updates Open activity",
+                  "attrs": {
+                    "id": "app"
+                  },
+                  "parent": {
+                    "tag": "body",
+                    "id": "",
+                    "role": "",
+                    "label": ""
+                  },
+                  "previous": "",
+                  "next": ""
+                },
+                "theme": {
+                  "secondary": "#DBEAFE",
+                  "tertiary": "#EFF6FF",
+                  "background": "#EFF6FF",
+                  "surface": "#FFFFFF",
+                  "text": "#172554",
+                  "accent": "#1D4ED8",
+                  "accentText": "#FFFFFF"
+                }
+              }
+            ]
+          }
+        ],
+        "edges": []
+      },
+      "directions": [
+        "row",
+        "",
+        "row"
+      ]
+    }
+  ],
+  "findings": {
+    "lastStatus": "edit",
+    "executionError": "",
+    "operations": 2,
+    "navStyle": "position: fixed; top: 0px; left: 0px; bottom: 0px; width: 180px; height: 600px; display: flex; flex-direction: column; padding: 20px; gap: 16px; background: rgb(240, 237, 250); color: rgb(23, 37, 84) !important; background-color: rgb(255, 255, 255) !important;",
+    "contentStyle": "margin-left: 220px; padding: 24px; color: rgb(23, 37, 84) !important;",
+    "cardsStyle": "display: flex; flex-direction: row; gap: 16px; color: rgb(23, 37, 84) !important;",
+    "rootStyle": "display: flex; flex-direction: row; background: rgb(250, 249, 252); color: rgb(23, 37, 84) !important; background-color: rgb(239, 246, 255) !important;",
+    "links": [
+      {
+        "text": "Home",
+        "href": "/home"
+      },
+      {
+        "text": "Profile",
+        "href": "/profile"
+      }
+    ],
+    "headings": [
+      "Overview",
+      "Summary",
+      "Activity"
+    ],
+    "textPreserved": true,
+    "changed": true
+  },
+  "attempts": [
+    {
+      "instruction": "change the theme to anohter color",
+      "plan": {
+        "status": "edit",
+        "scope": "page",
+        "message": "Apply a fresh teal theme across the page, with soft mint backgrounds, white card surfaces, dark readable text, and accessible teal accents. Existing control roles and layout remain unchanged.",
+        "question": null,
+        "candidates": [],
+        "actions": [
+          {
+            "inputType": null,
+            "required": null,
+            "options": null,
+            "radioGroup": null,
+            "kind": "theme",
+            "columns": null,
+            "layout": null,
+            "theme": {
+              "secondary": "#D9F0EC",
+              "tertiary": "#EDF8F6",
+              "background": "#F4FAF9",
+              "surface": "#FFFFFF",
+              "text": "#17312D",
+              "accent": "#00695C",
+              "accentText": "#FFFFFF"
+            },
+            "href": null,
+            "targets": [
+              "e_bd2bca8e-4112-40a8-8e65-e17b63401f1a"
+            ],
+            "relativeTo": null,
+            "resultRef": null,
+            "element": null,
+            "text": null,
+            "description": null,
+            "labels": [],
+            "position": null,
+            "styleRef": null,
+            "style": null,
+            "destination": null,
+            "newViewTitle": null
+          }
+        ]
+      }
+    },
+    {
+      "instruction": "Change the whole page theme to blue with readable text. Apply it now.",
+      "plan": {
+        "status": "edit",
+        "scope": "page",
+        "message": "Apply a blue theme across the whole page with a pale blue background, white surfaces, dark navy text, and accessible blue accents. Existing layout and control roles remain unchanged.",
+        "question": null,
+        "candidates": [],
+        "actions": [
+          {
+            "inputType": null,
+            "required": null,
+            "options": null,
+            "radioGroup": null,
+            "kind": "theme",
+            "columns": null,
+            "layout": null,
+            "theme": {
+              "secondary": "#DBEAFE",
+              "tertiary": "#EFF6FF",
+              "background": "#EFF6FF",
+              "surface": "#FFFFFF",
+              "text": "#172554",
+              "accent": "#1D4ED8",
+              "accentText": "#FFFFFF"
+            },
+            "href": null,
+            "targets": [
+              "e_bd2bca8e-4112-40a8-8e65-e17b63401f1a"
+            ],
+            "relativeTo": null,
+            "resultRef": null,
+            "element": null,
+            "text": null,
+            "description": null,
+            "labels": [],
+            "position": null,
+            "styleRef": null,
+            "style": null,
+            "destination": null,
+            "newViewTitle": null
+          }
+        ]
+      }
+    }
+  ],
+  "record": {
+    "draft": {
+      "schemaVersion": 1,
+      "id": "b7135da9-6e27-4364-b2b0-198b49d0b75e",
+      "name": "Flow — example.test/layout — 2026-10-29 23:25:31 UTC — b7135d",
+      "origin": "https://example.test",
+      "route": "/layout",
+      "createdAt": "2026-10-29T23:25:31.169Z",
+      "updatedAt": "2026-10-29T23:25:39.266Z",
+      "entry": "282bf057-64df-4c97-9f2f-b01eedf070c2",
+      "maxStates": 30,
+      "states": [
+        {
+          "id": "282bf057-64df-4c97-9f2f-b01eedf070c2",
+          "title": "Existing application",
+          "parent": null,
+          "view": "base",
+          "operations": [
+            {
+              "id": "024e7042-9d7f-4b9b-94e9-53682f781e70",
+              "kind": "theme",
+              "target": {
+                "ancestorTags": [
+                  "body",
+                  "html"
+                ],
+                "tag": "div",
+                "role": "",
+                "name": "Workspace Home Profile Overview Your recent activity Summary Workspace details Open summary Activity Recent updates Open activity",
+                "text": "Workspace Home Profile Overview Your recent activity Summary Workspace details Open summary Activity Recent updates Open activity",
+                "attrs": {
+                  "id": "app"
+                },
+                "parent": {
+                  "tag": "body",
+                  "id": "",
+                  "role": "",
+                  "label": ""
+                },
+                "previous": "",
+                "next": ""
+              },
+              "theme": {
+                "secondary": "#D9F0EC",
+                "tertiary": "#EDF8F6",
+                "background": "#F4FAF9",
+                "surface": "#FFFFFF",
+                "text": "#17312D",
+                "accent": "#00695C",
+                "accentText": "#FFFFFF"
+              }
+            },
+            {
+              "id": "a97f559d-d933-4a4e-9d0f-5f2368e8173a",
+              "kind": "theme",
+              "target": {
+                "ancestorTags": [
+                  "body",
+                  "html"
+                ],
+                "tag": "div",
+                "role": "",
+                "name": "Workspace Home Profile Overview Your recent activity Summary Workspace details Open summary Activity Recent updates Open activity",
+                "text": "Workspace Home Profile Overview Your recent activity Summary Workspace details Open summary Activity Recent updates Open activity",
+                "attrs": {
+                  "id": "app"
+                },
+                "parent": {
+                  "tag": "body",
+                  "id": "",
+                  "role": "",
+                  "label": ""
+                },
+                "previous": "",
+                "next": ""
+              },
+              "theme": {
+                "secondary": "#DBEAFE",
+                "tertiary": "#EFF6FF",
+                "background": "#EFF6FF",
+                "surface": "#FFFFFF",
+                "text": "#172554",
+                "accent": "#1D4ED8",
+                "accentText": "#FFFFFF"
+              }
+            }
+          ]
+        }
+      ],
+      "edges": []
+    },
+    "enabled": true,
+    "currentVersion": 0,
+    "versions": []
+  }
+}

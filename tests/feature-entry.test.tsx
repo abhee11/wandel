@@ -12,7 +12,7 @@ const send=vi.fn();
 beforeEach(()=>{vi.clearAllMocks();(globalThis as any).IS_REACT_ACT_ENVIRONMENT=true;el=document.createElement('div');document.body.append(el);root=createRoot(el);const workflow=createWorkflow(new URL('https://example.com'));s={workflow,stateId:workflow.entry,selected:null,picking:true,dragging:false,replay:false,enabled:true,dirty:false,canUndo:false,canRedo:false,canBack:false,unresolved:[],currentVersion:0,versions:[],library:[]};send.mockImplementation(async()=>s);vi.stubGlobal('chrome',{runtime:{onMessage:{addListener:vi.fn(),removeListener:vi.fn()}},storage:{local:{get:vi.fn().mockResolvedValue({})}}});vi.mocked(accountAPI).mockRejectedValue(new AccountError('AUTH_REQUIRED','Sign in'));});
 afterEach(async()=>{await act(async()=>root.unmount());el.remove();vi.unstubAllGlobals();});
 const button=(text:string)=>[...el.querySelectorAll('button')].find(b=>b.textContent===text)!;
-async function mount(){await act(async()=>root.render(<App bridge={{send,subscribe:listener=>{notify=listener;listener(s);return()=>{};}}}/>));}
+async function mount(){await act(async()=>root.render(<App bridge={{send,subscribe:listener=>{notify=listener;listener(s);return()=>{};}}}/>));if(button('Imagine a feature'))await act(async()=>button('Imagine a feature').click());}
 it('exposes feature creation immediately and explains guest limits before sending a request',async()=>{
  await mount();expect(el.textContent).toContain('What should this app do next?');const prompt=el.querySelector('textarea')!;expect(prompt.closest('details')).toBeNull();expect(el.textContent).toContain('Multi-step features require a Wandel sign-in');
  await act(async()=>button('Onboarding').click());const draft=prompt.value;expect(draft).toContain('profile');await act(async()=>button('Sign in to create').click());expect(signIn).toHaveBeenCalledOnce();expect(previewPlan).not.toHaveBeenCalled();expect(prompt.value).toBe(draft);
@@ -94,7 +94,35 @@ it('keeps playback and sharing visible in the footer without saving or creating 
 
 it('exposes voice in regular Wandel and retains the multi-step prompt when switching back',async()=>{
  await mount();await act(async()=>button('Onboarding').click());const draft=el.querySelector('textarea')!.value;
- await act(async()=>button('Voice assistant').click());expect(el.querySelector('[aria-label="Conversational assistant"]')).not.toBeNull();expect(button('Hold to speak')).toBeTruthy();expect(el.textContent).not.toContain('ASSISTANT BETA');
- await act(async()=>button('Hold to speak').dispatchEvent(new KeyboardEvent('keydown',{key:' ',bubbles:true})));expect(el.textContent).toContain('Enable voice/context sharing first');expect(send).not.toHaveBeenCalledWith({type:'assistantContext'});
+ await act(async()=>button('Chat & voice').click());expect(el.querySelector('[aria-label="Conversational assistant"]')).not.toBeNull();expect(button('🎙 Start speaking')).toBeTruthy();expect(el.textContent).not.toContain('ASSISTANT BETA');
+ await act(async()=>button('🎙 Start speaking').click());expect(el.textContent).toContain('Allow voice instructions?');expect(send).not.toHaveBeenCalledWith({type:'assistantContext'});
  await act(async()=>button('Imagine a feature').click());expect(el.querySelector('[aria-label="Conversational assistant"]')).toBeNull();expect(el.querySelector('textarea')!.value).toBe(draft);expect(button('Approval flow')).toBeTruthy();
+});
+
+it('exposes prompt export and GitHub from a loaded saved workflow in interact mode',async()=>{
+ s={...s,workflow:{...s.workflow,name:'Saved feedback flow'},mode:'interact',currentVersion:1,versions:[{number:1,name:'Saved feedback flow',savedAt:new Date().toISOString()}]};
+ await mount();expect(button('Build & GitHub')).toBeTruthy();await act(async()=>button('Saved versions 1').click());await act(async()=>button('Build & GitHub').click());
+ expect(button('Copy implementation prompt')).toBeTruthy();expect(button('Choose GitHub repository')).toBeTruthy();await act(async()=>button('Review prompt').click());
+ expect(send).toHaveBeenCalledWith({type:'snapshot'});expect(el.querySelector<HTMLTextAreaElement>('[aria-label="Implementation prompt text"]')!.value).toContain('Saved feedback flow');
+});
+
+it.each(['Copy this and give it heading of Recently Deleted','Duplicate the selected and name is Deleted card'])('copies the selected card locally for %s',async(value)=>{
+ await mount();s={...s,selected:{tag:'div',label:'Select Group Create your first group or select below General',owned:false,locator:{tag:'div',role:'',name:'',text:'Select Group',attrs:{id:'card'},parent:{tag:'main',id:'',role:'',label:''},previous:'',next:''}}};await act(async()=>notify(s));const prompt=el.querySelector('textarea')!;
+ await act(async()=>{Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value')!.set!.call(prompt,value);prompt.dispatchEvent(new Event('input',{bubbles:true}));});
+ expect(generationPrompt(value,'feature')).toBe(value);expect(el.textContent).toContain('Native copy · no AI credit');expect(el.textContent).toContain('A matching copy will be added on this page');await act(async()=>button('Duplicate selection').click());
+ expect(send).toHaveBeenCalledWith({type:'copyPrompt',prompt:value,context:{workflowId:s.workflow.id,stateId:s.stateId,selection:JSON.stringify(s.selected!.locator)}});expect(signIn).not.toHaveBeenCalled();expect(previewPlan).not.toHaveBeenCalled();expect(send).not.toHaveBeenCalledWith(expect.objectContaining({type:'selectDestination'}));expect(prompt.value).toBe('');
+});
+
+it('shows workflow recovery instead of fresh editing when navigation cannot resume the flow',async()=>{s={...s,navigationError:'Wandel could not resume your workflow. Return to a connected screen.'};await mount();expect(el.textContent).toContain('Resume your workflow');expect(button('Retry workflow')).toBeTruthy();expect(button('Create feature')).toBeUndefined();expect(button('Onboarding')).toBeUndefined();await act(async()=>button('Retry workflow').click());expect(send).toHaveBeenCalledWith({type:'resumeWorkflow'});});
+
+it('opens with continuing chat as the default and keeps feature generation available',async()=>{
+ await act(async()=>root.render(<App bridge={{send,subscribe:listener=>{notify=listener;listener(s);return()=>{};}}}/>));
+ expect(el.querySelector('[aria-label="Conversation"]')).not.toBeNull();expect(button('Send')).toBeTruthy();expect(button('Chat & voice').getAttribute('aria-pressed')).toBe('true');
+ await act(async()=>button('Imagine a feature').click());expect(button('Onboarding')).toBeTruthy();
+});
+
+it('ignores host-style key events without a key in the panel shortcut listeners',async()=>{
+ await mount();const errors:unknown[]=[];const capture=(event:ErrorEvent)=>{errors.push(event.error);event.preventDefault();};window.addEventListener('error',capture);
+ try{send.mockClear();for(const ctrlKey of [false,true])for(const key of [undefined,null,42,'']){const event=new Event('keydown',{bubbles:true,cancelable:true});Object.defineProperties(event,{key:{value:key},ctrlKey:{value:ctrlKey}});await act(async()=>{window.dispatchEvent(event);});expect(event.defaultPrevented).toBe(false);}expect(errors).toEqual([]);expect(send).not.toHaveBeenCalled();
+ }finally{window.removeEventListener('error',capture);}
 });

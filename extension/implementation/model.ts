@@ -1,0 +1,4 @@
+export type RepositoryChoice={id:number;installationId:number;name:string;defaultBranch:string};
+export type GitHubConnection={configured:boolean;connected:boolean;login?:string;installURL?:string;generationEnabled:boolean};
+export type ProposedFile={path:string;content:string;reason:string;diff?:string};
+export type ImplementationJob={id:string;workflowId:string;workflowUpdatedAt:string;repository:string;baseBranch:string;baseSha:string|null;branch:string;status:'queued'|'reading'|'generating'|'review'|'creating'|'checks'|'failed'|'interrupted';message:string;summary:string;gaps:string[];files:ProposedFile[];checks:{state:'not_run'|'pending'|'passed'|'failed'|'unavailable';items:{name:string;state:string;url?:string}[]};prURL:string|null;prNumber:number|null;commitSha:string|null;createdAt:string;updatedAt:string};

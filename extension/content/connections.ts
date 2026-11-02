@@ -6,7 +6,9 @@ export function fieldFor(el:Element|null):FormControl|null{
 }
 export function eventsFor(el:HTMLElement):ConnectionEvent[]{
   if(el.matches('button,a,[role="button"],[role="link"]'))return ['click'];
-  const field=fieldFor(el);return field?field.matches('select,input[type=checkbox],input[type=radio]')?['change']:['enter','change']:[];
+  const field=fieldFor(el);if(field)return field.matches('select,input[type=checkbox],input[type=radio]')?['change']:['enter','change'];
+  // Any other element, such as a card or section, can open a screen when clicked.
+  return el.matches('html,body')?[]:['click'];
 }
 export function conditionPasses(condition:ConnectionCondition,field:FormControl|null){
   if(!field||field.matches('input[type=hidden],input[type=file]'))return false;

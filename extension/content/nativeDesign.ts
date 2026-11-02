@@ -24,7 +24,22 @@ export function captureDesign(target:HTMLElement):NativeDesign{
   for(let p=scope.parentElement;p;p=p.parentElement){const bg=getComputedStyle(p).backgroundColor;if(bg&&bg!=='rgba(0, 0, 0, 0)'&&bg!=='transparent'){surface['background-color']=bg;break;}}
  }
  const inherited={'font-family':surface['font-family']||'inherit',color:surface.color||'inherit'};
- return {surface,heading:{...inherited,...readStyle(find('h2,h3,h1,[role="heading"]'))},text:{...inherited,...readStyle(find('p'))},button:readStyle(target.matches('button,[role="button"]')?target:[...scope.querySelectorAll<HTMLElement>('button:not([aria-pressed]),[role="button"]')].find(el=>visible(el)&&! /^(close|cancel|delete|remove)$/i.test(el.getAttribute('aria-label')||el.textContent?.trim()||''))||null),field:readStyle(find('input:not([type="hidden"]):not([type="password"]),textarea,select')),table:readStyle(find('table,[role="table"]')),tableHeader:readStyle(find('th,[role="columnheader"]')),card:{...inherited,'background-color':surface['background-color']||'transparent',...readStyle(find('article,[data-card],.card'))}};
+ const fallbackButton:CopyNode['style']={display:'inline-flex','align-items':'center','justify-content':'center',padding:'10px 16px',margin:'8px 0',border:'1px solid #5856c4','border-radius':'8px','background-color':'#625fd4',color:'#fff','font-family':'system-ui, sans-serif','font-size':'14px','font-weight':'600','line-height':'1.4'};
+ return {surface,heading:{...inherited,...readStyle(find('h2,h3,h1,[role="heading"]'))},text:{...inherited,...readStyle(find('p'))},button:{...fallbackButton,...readStyle(target.matches('button,[role="button"]')?target:[...scope.querySelectorAll<HTMLElement>('button:not([aria-pressed]),[role="button"]')].find(el=>visible(el)&&! /^(close|cancel|delete|remove)$/i.test(el.getAttribute('aria-label')||el.textContent?.trim()||''))||null)},field:readStyle(find('input:not([type="hidden"]):not([type="password"]),textarea,select')),table:readStyle(find('table,[role="table"]')),tableHeader:readStyle(find('th,[role="columnheader"]')),card:{...inherited,'background-color':surface['background-color']||'transparent',...readStyle(find('article,[data-card],.card'))}};
+}
+/** Preserve a visible control even when the reference is a text-only/reset button. */
+export function buttonAppearance(reference:CopyNode['style']={}):CopyNode['style']{
+ const style:CopyNode['style']={display:'inline-flex','align-items':'center','justify-content':'center',gap:'8px',padding:'12px 20px',margin:'0',border:'1px solid #625fd4','border-radius':'12px','background-color':'#625fd4',color:'#ffffff','font-family':'system-ui, sans-serif','font-size':'14px','font-weight':'600','line-height':'1.4',...reference};
+ const transparent=(color:string|undefined)=>!color||color==='transparent'||/rgba\([^)]*,\s*0(?:\.0+)?\)$/.test(color);
+ const noBorder=style['border-style']==='none'||style['border-width']!==undefined&&parseFloat(style['border-width'])===0||/^0(?:px)?\b|\bnone\b/.test(style.border||'');
+ if(transparent(style['background-color'])&&noBorder&&(!style['box-shadow']||style['box-shadow']==='none')){
+  for(const key of ['border','border-width','border-style','border-color'] as const)delete style[key];
+  style.border='1px solid '+(style.color&&!transparent(style.color)?style.color:'#625fd4');
+ }
+ if(!(parseFloat(style['border-radius']||'')>0))style['border-radius']='12px';
+ if(!(style.padding?.split(' ').some(value=>parseFloat(value)>=8)))style.padding='12px 20px';
+ style.display='inline-flex';style['align-items']='center';style['justify-content']='center';
+ return style;
 }
 export function applyAppearance(el:HTMLElement,style:CopyNode['style']){
  for(const [k,v] of Object.entries(style))el.style.setProperty(k,v);

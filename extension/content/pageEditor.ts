@@ -1,4 +1,4 @@
-import {isTextEntry} from '../shared/keyboard';
+import {isTextEntry,shortcutKey} from '../shared/keyboard';
 import {ConnectionEditor} from './connectionEditor';
 import {eventsFor} from './connections';
 import {freeBuild} from '../shared/build';
@@ -19,10 +19,26 @@ export class PageEditor {
   private toast=document.createElement('div');
   private toastTimer:ReturnType<typeof setTimeout>|undefined;
   private selectionKey='';
-  private assistantToolsKey='';
   private placement:'auto'|'after'|'before'|'inside'|'below'='auto';
   private inserting=false;
   private current:Snapshot;
+  // Edits whose targets are missing are announced on the page itself, not only in the side panel.
+  private issueHost=document.createElement('div');
+  private issueKey='';private issueDismissed='';
+  private showIssues(s:Snapshot){
+    const list=s.mode&&s.mode!=='closed'&&s.mode!=='replay'?s.unresolved:[];const key=JSON.stringify(list);
+    if(!list.length||key===this.issueDismissed){this.issueHost.remove();this.issueKey='';return;}
+    if(key===this.issueKey&&this.issueHost.isConnected)return;this.issueKey=key;
+    if(!this.issueHost.shadowRoot){this.issueHost.dataset.dxIgnore='true';this.issueHost.attachShadow({mode:'open'});}
+    const root=this.issueHost.shadowRoot!,style=document.createElement('style');
+    style.textContent=':host{all:initial!important;position:fixed!important;left:16px!important;top:16px!important;z-index:2147483646!important}details{max-width:360px;font:13px/1.45 system-ui;color:#5c2b00;background:#fff7ed;border:1px solid #f5c48a;border-radius:12px;box-shadow:0 8px 28px #211a3b26}summary{cursor:pointer;padding:9px 12px;font-weight:600;list-style:none}summary::-webkit-details-marker{display:none}div{padding:0 12px 10px}ul{margin:0 0 8px;padding-left:18px;max-height:160px;overflow:auto}p{margin:0 0 8px;color:#7a4a1a}button{font:12px system-ui;border:1px solid #f0b56f;background:#fff;border-radius:7px;padding:4px 9px;cursor:pointer;color:#5c2b00}';
+    const details=document.createElement('details'),summary=document.createElement('summary'),body=document.createElement('div'),items=document.createElement('ul'),hint=document.createElement('p'),dismiss=document.createElement('button');
+    summary.textContent=`⚠ ${list.length} ${list.length===1?'edit isn’t':'edits aren’t'} showing on this page`;
+    for(const issue of list){const item=document.createElement('li');item.textContent=issue.replace(/: target missing or ambiguous$/,' — its element wasn’t found');items.append(item);}
+    hint.textContent='The page changed since these edits were made (content reloaded, a dialog closed, or text changed). Open the same state of the page, or select the element and make the change again. Undo removes the last one.';
+    dismiss.textContent='Hide';dismiss.onclick=()=>{this.issueDismissed=key;this.issueHost.remove();};
+    body.append(items,hint,dismiss);details.append(summary,body);root.replaceChildren(style,details);if(!this.issueHost.isConnected)document.documentElement.append(this.issueHost);
+  }
   private unsubscribe:()=>void;
   connectionAnchor(ratio:number){this.connectionEditor.anchor(ratio);}
   connectionAction(change:import('../shared/model').ConnectionAction){return this.connectionEditor.action(change);}
@@ -67,7 +83,7 @@ export class PageEditor {
   private plainText(el:HTMLElement){return !!editableText(el)&&!el.matches('button,a,[role=button],[role=link]')&&!el.querySelector('input,textarea,select');}
   private hex(color:string){if(/^#[a-f0-9]{6}$/i.test(color))return color;const parts=color.match(/[\d.]+/g);return parts&&parts.length>=3?'#'+parts.slice(0,3).map(n=>Math.round(Number(n)).toString(16).padStart(2,'0')).join(''):'#ffffff';}
   private update(s:Snapshot){
-    this.current=s;if(s.panelMinimized){this.finishInline(false);this.bar.replaceChildren();this.handles.replaceChildren();this.bar.hidden=false;this.handles.hidden=true;this.host.style.display='block';this.bar.style.cssText='position:fixed;right:16px;bottom:16px;left:auto;top:auto;border-radius:28px;padding:6px;';this.button('W  Wandel ↗','Open Wandel panel',()=>{void this.run({type:'restorePanel'});});this.button('×','Close Wandel and keep draft',()=>{void this.run({type:'closeEditor'});});return;}this.handles.hidden=false;this.bar.style.removeProperty('right');this.bar.style.removeProperty('bottom');this.bar.style.removeProperty('padding');this.bar.style.removeProperty('border-radius');if(this.connectionActive){this.bar.hidden=true;this.handles.hidden=true;return;}const active=this.session.isAuthoring();this.bar.hidden=!active;this.host.style.display=s.panelMinimized||s.mode==='interact'||active||s.replay?'block':'none';
+    this.current=s;this.showIssues(s);if(s.panelMinimized){this.finishInline(false);this.bar.replaceChildren();this.handles.replaceChildren();this.bar.hidden=false;this.handles.hidden=true;this.host.style.display='block';this.bar.style.cssText='position:fixed;right:16px;bottom:16px;left:auto;top:auto;border-radius:28px;padding:6px;';this.button('W  Wandel ↗','Open Wandel panel',()=>{void this.run({type:'restorePanel'});});this.button('×','Close Wandel and keep draft',()=>{void this.run({type:'closeEditor'});});return;}this.handles.hidden=false;this.bar.style.removeProperty('right');this.bar.style.removeProperty('bottom');this.bar.style.removeProperty('padding');this.bar.style.removeProperty('border-radius');if(this.connectionActive){this.bar.hidden=true;this.handles.hidden=true;return;}const active=this.session.isAuthoring();this.bar.hidden=!active;this.host.style.display=s.panelMinimized||s.mode==='interact'||active||s.replay?'block':'none';
     if(this.editing){if(!active||s.stateId!==this.editing.stateId||!this.editing.target.isConnected)this.finishInline(false);else{this.bar.hidden=true;return;}}
     const key=(s.mode||'')+JSON.stringify(s.styleSource||null)+s.workflow.id+s.stateId+JSON.stringify(s.selected?.locator||null);
     if(key===this.selectionKey&&this.shadow.activeElement instanceof HTMLInputElement){for(const name of ['Undo','Redo']){const button=this.bar.querySelector<HTMLButtonElement>(`button[aria-label="${name}"]`);if(button)button.disabled=s.replay||!(name==='Undo'?s.canUndo:s.canRedo);}this.position();return;}
@@ -77,25 +93,20 @@ export class PageEditor {
       const status=document.createElement('span');status.textContent='Interact · page clicks work';status.style.padding='0 6px';this.bar.append(status);
       if(s.canBack)this.button('← Back','Previous workflow step',()=>{void this.run({type:'back'});});
       this.button('−','Minimize Wandel panel',()=>{void this.run({type:'minimizePanel'});});
-      this.button('Edit (E)','Resume selecting (V)',()=>{void this.run({type:'edit'});});
+      this.button('Edit','Edit the page · page keys stay with the app while interacting',()=>{void this.run({type:'edit'});});
       this.button('×','Close Wandel and keep draft',()=>{void this.run({type:'closeEditor'});});this.bar.hidden=false;this.position();return;
     }
     if(!active&&!s.replay)return;
-    const assistantKey=JSON.stringify(s.selected?.locator||null)+(s.assistant?.transactions.at(-1)?.id||'');
-    if(active&&s.assistant&&this.assistantToolsKey!==assistantKey){
-      const target=this.session.findSelected();this.bar.hidden=false;
-      if(target&&editableText(target))this.button('Text','Edit text in place',()=>this.startInline(target));
-      this.button('Visual tools','Open visual editing tools',()=>{this.assistantToolsKey=assistantKey;this.update(s);});
-      this.button('Interact','Interact with page',()=>{void this.run({type:'interact'});});this.handles.hidden=true;this.position();return;
-    }
+    // A selection opens the full toolbar directly; it already offers Chat here and Interact.
     if(active&&s.styleSource){const hint=document.createElement('span');hint.textContent='Style copied → Click a destination';hint.style.cssText='font-size:10px;color:#625c9a;';this.bar.append(hint);this.button('Cancel','Cancel style transfer',()=>{void this.run({type:'cancelStyle'});});this.position();return;}
-    if(active){this.button('−','Minimize Wandel panel',()=>{void this.run({type:'minimizePanel'});});this.button('Interact (I)','Interact with page (V)',()=>{void this.run({type:'interact'});});}
+    if(active){this.button('−','Minimize Wandel panel',()=>{void this.run({type:'minimizePanel'});});this.button('Interact (I)','Use the page normally (I) · Alt+double-click edits text',()=>{void this.run({type:'interact'});});}
 
     const crumbs=document.createElement('div');crumbs.className='crumbs';crumbs.setAttribute('aria-label','Flow steps');this.bar.append(crumbs);
     for(const [index,state] of s.workflow.states.entries()){const b=this.button(`${index?'› ':''}${state.title}`,`Go to ${state.title}`,()=>{void this.run({type:'state',id:state.id});},crumbs);b.disabled=s.replay;b.setAttribute('aria-current',String(state.id===s.stateId));}
     this.bar.hidden=false;
     const el=active?this.session.findSelected():null;
     if(el){
+      this.button('Chat here','Chat about this selection',()=>this.session.chatHere());
       if(eventsFor(el).length)this.button('Connect →','Connect to a view',()=>this.connectionEditor.open());
       let clickMenu:HTMLElement|undefined;
       if(editableText(el)||el.matches('input,textarea'))this.button('Text','Edit text in place',()=>this.startInline(el));
@@ -172,7 +183,9 @@ export class PageEditor {
       this.button('Duplicate','Duplicate item (Cmd/Ctrl+D)',()=>{void this.duplicate();});
       this.button('Delete','Remove element (Delete / Backspace)',()=>{void this.boundRun({type:'remove'});});
       const resize=this.button('','Drag to resize',()=>{},this.handles);resize.className='handle resize-handle';resize.onpointerdown=e=>this.session.beginGesture(el,'resize',e);
-      if(!this.plainText(el))for(const [position,label] of [['before','above'],['after','beside'],['below','below']] as const){const plus=this.button('+',`Add ${label} selection`,()=>{this.placement=position;(add.parentElement as HTMLDetailsElement).open=true;this.position();},this.handles);plus.className='handle insert-handle';plus.dataset.position=position;}
+      if(!this.plainText(el))for(const [position,label] of [['before','above'],['after','beside'],['below','below']] as const){const plus=this.button('+',`Add ${label} selection`,()=>{this.placement=position;
+        // Show the position this handle chose in the Add menu.
+        const chosen=`Insert ${({before:'before',after:'beside',below:'below'})[position]}`;for(const option of add.querySelectorAll<HTMLButtonElement>('.places button'))option.setAttribute('aria-pressed',String(option.getAttribute('aria-label')===chosen));(add.parentElement as HTMLDetailsElement).open=true;this.position();},this.handles);plus.className='handle insert-handle';plus.dataset.position=position;}
       const divider=document.createElement('span');divider.className='divider';this.bar.append(divider);
     }
     if(!el&&!s.replay&&s.library.length){const draft=s.library[0];if(draft.id!==s.workflow.id)this.button('Resume local draft','Resume local draft',()=>{void this.run({type:'load',id:draft.id});});}
@@ -205,7 +218,7 @@ export class PageEditor {
   }
   private position=()=>{
     if(this.current.panelMinimized)return;
-    const el=this.session.findSelected(),r=el?.getBoundingClientRect(),width=this.bar.offsetWidth||290;
+    const el=this.session.findSelected(),r=this.session.isAuthoring()?el?.getBoundingClientRect():undefined,width=this.bar.offsetWidth||290;
     const left=r?Math.min(Math.max(12,r.left),Math.max(12,innerWidth-width-12)):12;
     const height=this.bar.offsetHeight||90;
     const top=this.current.styleSource||(el&&this.plainText(el))?Math.max(12,innerHeight-height-12):r?(r.top-height-26>=12?r.top-height-26:Math.min(Math.max(12,r.bottom+26),Math.max(12,innerHeight-height-12))):Math.max(12,innerHeight-height-12);
@@ -215,25 +228,24 @@ export class PageEditor {
     for(const menu of this.bar.querySelectorAll<HTMLElement>('.menu')){menu.style.top=top>innerHeight/2?'auto':'34px';menu.style.bottom=top>innerHeight/2?'38px':'auto';menu.style.maxWidth=`${Math.max(180,innerWidth-24)}px`;menu.style.transform='';if((menu.parentElement as HTMLDetailsElement).open){const bounds=menu.getBoundingClientRect();const shift=bounds.right>innerWidth-12?innerWidth-12-bounds.right:bounds.left<12?12-bounds.left:0;menu.style.transform=`translateX(${shift}px)`;}}
   };
   private quickKey=(event:KeyboardEvent)=>{
+    const key=shortcutKey(event);if(!key)return;
     if(event.isComposing||event.repeat||(event.altKey&&!(event.metaKey||event.ctrlKey))||this.editing)return;
     const path=event.composedPath(),origin=path[0];
     const selected=this.session.isAuthoring()?this.session.findSelected():null;
     const selectedControl=origin instanceof Element&&!!selected?.contains(origin)&&!path.includes(this.host);
     if(isTextEntry(origin)&&!selectedControl)return;
     if(event.key==='Escape'&&this.bar.querySelector('details[open]')){event.preventDefault();event.stopImmediatePropagation();this.bar.querySelector<HTMLDetailsElement>('details[open]')!.open=false;return;}
-    if(!event.metaKey&&!event.ctrlKey&&!event.altKey&&this.session.mode()!=='closed'&&['e','i'].includes(event.key.toLowerCase())){
-      event.preventDefault();event.stopImmediatePropagation();void this.switchMode(event.key.toLowerCase()==='e'?'edit':'interact');return;
-    }
-    if(!event.metaKey&&!event.ctrlKey&&event.key.toLowerCase()==='v'&&this.session.mode()!=='closed'&&!this.current.replay){event.preventDefault();event.stopImmediatePropagation();void this.switchMode(this.session.isAuthoring()?'interact':'edit');return;}
+    // Interact and Play leave the page its own keys; letter shortcuts apply only while editing.
     if(!this.session.isAuthoring())return;
+    if(!event.metaKey&&!event.ctrlKey&&!event.altKey&&['i','v'].includes(key)){event.preventDefault();event.stopImmediatePropagation();void this.switchMode('interact');return;}
     // macOS labels Backspace as Delete; forward Delete is supported too.
     if((event.key==='Backspace'||event.key==='Delete')&&!event.metaKey&&!event.ctrlKey&&!event.altKey&&this.current.selected&&this.session.findSelected()){
       event.preventDefault();event.stopImmediatePropagation();void this.boundRun({type:'remove'});return;
     }
-    if((event.metaKey||event.ctrlKey)&&!event.shiftKey&&event.key.toLowerCase()==='d'){event.preventDefault();event.stopImmediatePropagation();void this.duplicate();return;}
-    if((event.metaKey||event.ctrlKey)&&event.altKey&&['c','v'].includes(event.key.toLowerCase())){event.preventDefault();event.stopImmediatePropagation();void this.boundRun({type:event.key.toLowerCase()==='c'?'copyStyle':'pasteStyle'});return;}
+    if((event.metaKey||event.ctrlKey)&&!event.shiftKey&&key==='d'){event.preventDefault();event.stopImmediatePropagation();void this.duplicate();return;}
+    if((event.metaKey||event.ctrlKey)&&event.altKey&&['c','v'].includes(key)){event.preventDefault();event.stopImmediatePropagation();void this.boundRun({type:key==='c'?'copyStyle':'pasteStyle'});return;}
     if(event.metaKey||event.ctrlKey)return;
-    const kind=({b:'button',t:'text',f:'field',p:'panel'} as const)[event.key.toLowerCase() as 'b'|'t'|'f'|'p'];
+    const kind=({b:'button',t:'text',f:'field',p:'panel'} as const)[key as 'b'|'t'|'f'|'p'];
     if(!kind)return;event.preventDefault();event.stopImmediatePropagation();void this.quickInsert(kind);
   };
   private async switchMode(type:'edit'|'interact'){try{if(this.current.panelMinimized)await this.session.dispatch({type:'restorePanel'});await this.session.dispatch({type});}catch(error){this.error(error);}}
@@ -269,7 +281,8 @@ export class PageEditor {
     const pointed=editableText(label)||textAtPoint(label,event.clientX,event.clientY);
     if(!pointed&&!label.matches('textarea,input:not([type=checkbox]):not([type=radio]):not([type=hidden]):not([type=file])'))return;
     if(!this.session.isAuthoring()){
-      if(this.session.mode()!=='interact'||!this.current.enabled)return;
+      // Double-click belongs to the app in Interact; Alt+double-click edits its text.
+      if(this.session.mode()!=='interact'||!this.current.enabled||!event.altKey)return;
       if(label.matches('input,textarea')&&!this.session.renderer.findOwned(label))return;
       event.preventDefault();event.stopImmediatePropagation();
       const snapshot=this.session.snapshot(),selection=describe(label,this.session.renderer.idFor(label));
@@ -292,5 +305,5 @@ export class PageEditor {
     const edit=this.editing;if(!edit)return;this.editing=null;edit.input.onblur=null;const value=edit.input.value;edit.input.remove();
     if(commit&&value.trim()&&value!==edit.original){void this.session.dispatchAt(edit.selection,edit.workflowId,edit.stateId,{type:'text',text:value}).catch(this.error).finally(()=>this.update(this.session.snapshot()));}else this.update(this.current);
   }
-  destroy(){clearTimeout(this.toastTimer);this.connectionEditor.destroy();this.finishInline(false);this.unsubscribe();window.removeEventListener('focusin',this.editorFocus,true);window.removeEventListener('focusout',this.editorFocus,true);window.removeEventListener('keydown',this.quickKey,true);window.removeEventListener('dblclick',this.doubleClick,true);window.removeEventListener('scroll',this.position,true);window.removeEventListener('resize',this.position);this.host.remove();}
+  destroy(){clearTimeout(this.toastTimer);this.issueHost.remove();this.connectionEditor.destroy();this.finishInline(false);this.unsubscribe();window.removeEventListener('focusin',this.editorFocus,true);window.removeEventListener('focusout',this.editorFocus,true);window.removeEventListener('keydown',this.quickKey,true);window.removeEventListener('dblclick',this.doubleClick,true);window.removeEventListener('scroll',this.position,true);window.removeEventListener('resize',this.position);this.host.remove();}
 }

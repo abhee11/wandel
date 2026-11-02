@@ -16,6 +16,10 @@ await Promise.all([
   build({entryPoints:[free?'extension/sidepanel/free.tsx':'extension/sidepanel/index.tsx'],outfile:out+'/sidepanel.js',bundle:true,format:'esm',target:'chrome116',minify:true,define:defines})
 ]);
 await build({entryPoints:[free?'extension/recording/free.tsx':'extension/recording/index.tsx'],outfile:out+'/recorder.js',bundle:true,format:'esm',target:'chrome116',minify:true,define:defines});
+if(!free){
+ await build({entryPoints:['extension/assistant/microphone.ts'],outfile:out+'/microphone.js',bundle:true,format:'esm',target:'chrome116'});
+ await writeFile(out+'/microphone.html','<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Wandel microphone setup</title><link rel="stylesheet" href="sidepanel.css"></head><body><main class="dx-app dx-main"><h1>Enable your microphone</h1><p>Wandel needs microphone access for spoken instructions. Setup briefly opens the microphone, then releases it. Nothing is recorded or sent.</p><button id="allow" class="dx-primary">Allow microphone</button><p id="status" role="status"></p><button id="return" class="dx-primary" hidden>Return to Wandel</button><button id="settings" class="dx-secondary">Open Chrome permission settings</button><p>Your application stays connected while this setup window is open.</p></main><script type="module" src="microphone.js"></script></body></html>');
+}
 await cp('public/brand',out+'/brand',{recursive:true});
 const {readFile}=await import('node:fs/promises');
 const manifest=JSON.parse(await readFile('extension/manifest.json','utf8'));

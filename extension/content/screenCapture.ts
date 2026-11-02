@@ -1,11 +1,13 @@
+import {captureIcon} from './copyIcon';
 import {copyTags,copyStyles,uid,VisitedScreenSchema,type CopyNode,type VisitedScreen} from '../shared/model';
 /** Local visual capture: no executable markup, entered values, handlers or external image loads. */
-export function captureScreen(doc:Document=document,url=new URL(doc.location.href)):VisitedScreen{
+export type CaptureRect={x:number;y:number;width:number;height:number};
+export function captureScreen(doc:Document=document,url=new URL(doc.location.href),rootOverride?:HTMLElement,geometry?:Map<string,CaptureRect>):VisitedScreen{
  if(!['https:','http:'].includes(url.protocol)||url.username||url.password)throw new Error('Choose a regular application page.');
  for(const key of url.searchParams.keys())if(/token|secret|password|auth|code|session|key/i.test(key))throw new Error('Finish signing in before capturing this screen.');
  const win=doc.defaultView!;
  const dialogs=[...doc.querySelectorAll<HTMLElement>('[role=dialog],dialog[open]')].filter(n=>n.getBoundingClientRect().width>0);
- const root=dialogs.at(-1)||doc.querySelector<HTMLElement>('main,[role=main]')||doc.body;
+ const root=rootOverride||dialogs.at(-1)||doc.querySelector<HTMLElement>('main,[role=main]')||doc.body;
  const nodes:CopyNode[]=[];let truncated=false;
  const canvas=doc.createElement('canvas');canvas.width=360;canvas.height=220;const ctx=canvas.getContext('2d');const bounds=root.getBoundingClientRect();const ratio=360/Math.max(bounds.width,360);
  if(ctx){ctx.fillStyle='#faf9fd';ctx.fillRect(0,0,360,220);}
@@ -13,14 +15,16 @@ export function captureScreen(doc:Document=document,url=new URL(doc.location.hre
   if(nodes.length>=800){truncated=true;return;}
   if(node.nodeType===Node.TEXT_NODE){const text=(node.textContent||'').slice(0,500);if(text.trim())nodes.push({id:uid(),parent,tag:'#text',text,style:{}});return;}
   if(node.nodeType!==Node.ELEMENT_NODE)return;const el=node as HTMLElement;
-  if(el.matches('script,style,noscript,iframe,object,embed,canvas,svg,[data-dx-ignore],[data-dx-editor],[hidden]'))return;
+  if(el.matches('script,style,noscript,iframe,object,embed,canvas,[data-dx-ignore],[data-dx-editor],[hidden]'))return;
   const css=win.getComputedStyle(el);if(css.display==='none'||css.visibility==='hidden')return;
+  if(node instanceof SVGSVGElement){const icon=captureIcon(node);if(icon){const id=uid(),rect=el.getBoundingClientRect();geometry?.set(id,{x:rect.x,y:rect.y,width:rect.width,height:rect.height});nodes.push({id,parent,tag:'span',text:'',icon,style:{display:'inline-flex',width:css.width,height:css.height,color:css.color}});}return;}
+  const nodeId=uid(),rect=el.getBoundingClientRect();geometry?.set(nodeId,{x:rect.x,y:rect.y,width:rect.width,height:rect.height});
   const tag=el.tagName.toLowerCase(),style:Record<string,string>={};
   for(const key of copyStyles){const value=css.getPropertyValue(key);if(value&&!/url\s*\(|expression|[<>\\]/i.test(value))style[key]=value.slice(0,300);}
   // A captured screen must fit its destination, never recreate the host's fixed modal layer.
   if(parent===-1){style.width='100%';style.height='auto';style['min-width']='0';style['max-width']='100%';style.margin='0';}
   const field=tag==='input'||tag==='textarea'||tag==='select';
-  const index=nodes.length;nodes.push({id:uid(),parent,tag:(copyTags as readonly string[]).includes(tag)?tag as CopyNode['tag']:'div',text:'',style,...(tag==='input'?{inputType:['text','email','number','tel','url','search','date','checkbox','radio','password'].includes((el as HTMLInputElement).type)?(el as HTMLInputElement).type as CopyNode['inputType']:'text',placeholder:(el as HTMLInputElement).placeholder.slice(0,300)}:{}),...(['button','link'].includes(el.getAttribute('role')||'')?{role:el.getAttribute('role') as 'button'|'link'}:{})});
+  const index=nodes.length;nodes.push({id:nodeId,parent,tag:(copyTags as readonly string[]).includes(tag)?tag as CopyNode['tag']:'div',text:'',style,...(tag==='input'?{inputType:['text','email','number','tel','url','search','date','checkbox','radio','password'].includes((el as HTMLInputElement).type)?(el as HTMLInputElement).type as CopyNode['inputType']:'text',placeholder:(el as HTMLInputElement).placeholder.slice(0,300)}:{}),...(['button','link'].includes(el.getAttribute('role')||'')?{role:el.getAttribute('role') as 'button'|'link'}:{})});
   if(ctx){const rect=el.getBoundingClientRect(),x=(rect.left-bounds.left)*ratio,y=(rect.top-bounds.top)*ratio,w=rect.width*ratio,h=rect.height*ratio;
    if(y<220&&y+h>0){if(css.backgroundColor!=='rgba(0, 0, 0, 0)'&&css.backgroundColor!=='transparent'){ctx.fillStyle=css.backgroundColor;ctx.fillRect(x,y,w,h);}const text=el.isContentEditable?'':field?((el as HTMLInputElement).placeholder||''):([...el.childNodes].filter(n=>n.nodeType===Node.TEXT_NODE).map(n=>n.textContent).join(' ').trim());if(text){ctx.fillStyle=css.color;ctx.font=`${Math.max(6,Math.min(22,parseFloat(css.fontSize)*ratio))}px system-ui`;ctx.fillText(text.slice(0,100),x,y+Math.min(h,16),Math.max(w,10));}}
   }

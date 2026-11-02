@@ -56,8 +56,8 @@ export function registerScreenCatalog(){
   if(sender.id!==chrome.runtime.id||sender.frameId!==0||sender.tab?.id===undefined||!['use','cancel'].includes(m.action))return;
   catalog.finishBrowser(sender.tab.id,m.action==='use').then(()=>reply({ok:true})).catch(e=>reply({error:e.message}));return true;
  }
- if(m?.type!=='WANDEL_SCREENS'||sender.id!==chrome.runtime.id||sender.tab||!sender.url?.startsWith(chrome.runtime.getURL('sidepanel.html')))return;
-  const owner=new URL(sender.url).searchParams.get('tabId');if(!owner||String(m.source)!==owner||!Number.isSafeInteger(m.source))return;
+ if(m?.type!=='WANDEL_SCREENS'||sender.id!==chrome.runtime.id||!sender.url?.startsWith(chrome.runtime.getURL('sidepanel.html')))return;
+  const surface=new URL(sender.url);const owner=surface.searchParams.get('tabId');if(surface.searchParams.get('embedded')==='1'&&String(sender.tab?.id)!==owner)return;if(sender.frameId&&surface.searchParams.get('embedded')!=='1')return;if(!owner||String(m.source)!==owner||!Number.isSafeInteger(m.source))return;
   const call=m.action==='start'?catalog.start(m.source):m.action==='status'?catalog.status(m.source):m.action==='browse'?catalog.browse(m.source,m.url):m.action==='refresh'?catalog.refresh(m.source):m.action==='return'?catalog.returnToSource(m.source):m.action==='end'?catalog.end(m.source):Promise.reject(new Error('Unknown screen action.'));
   call.then(status=>reply({status})).catch(e=>reply({error:e.message}));return true;
  });

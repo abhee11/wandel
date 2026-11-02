@@ -1,5 +1,6 @@
 import { RecordSchema, clone, type SavedRecord, type Workflow } from '../shared/model';
 import { validateWorkflow } from '../prototype/engine';
+type RuntimeSend=(message:unknown)=>Promise<any>;
 export interface StorageAdapter { read(key: string): Promise<unknown>; write(key: string, value: unknown): Promise<void>; remove(key: string): Promise<void>; keys(): Promise<string[]> }
 export class ChromeStorage implements StorageAdapter {
   async read(key:string) { return (await chrome.storage.local.get(key))[key]; }
@@ -18,7 +19,7 @@ export class Repository {
   async get(id:string) {
     const value = await this.adapter.read(`dx:workflow:${id}`);
     if (!value) return null;
-    const result = RecordSchema.parse(value); validateWorkflow(result.draft); result.versions.forEach(v=>validateWorkflow(v.workflow)); return result;
+    const result = RecordSchema.parse(value); result.draft=validateWorkflow(result.draft); result.versions.forEach(v=>{v.workflow=validateWorkflow(v.workflow);}); return result;
   }
   async list(origin:string,route:string) {
     const records:SavedRecord[]=[];
@@ -44,12 +45,15 @@ export class Repository {
     record.currentVersion=number;record.draft=clone(version.workflow); record.draft.updatedAt=new Date().toISOString(); await this.put(record); return record;
   }
   async active(origin:string,route:string):Promise<string|null> { const id=await this.adapter.read(`dx:active:${origin}${route}`); return typeof id==='string'?id:null; }
+  /** Pages stop reopening this workflow; its stored record is untouched. */
+  async clearActive(w:Workflow) {for(const url of new Set([w.origin+w.route,...w.states.flatMap(s=>s.liveURL?[s.liveURL]:[])]))if(await this.adapter.read(`dx:active:${url}`)===w.id)await this.adapter.remove(`dx:active:${url}`); }
   async setActive(w:Workflow) {for(const url of new Set([w.origin+w.route,...w.states.flatMap(s=>s.liveURL?[s.liveURL]:[])]))await this.adapter.write(`dx:active:${url}`,w.id); }
 }
 
 /** Browser-session storage via the background worker; never enables token access for content scripts. */
 export class TemporaryChromeStorage implements StorageAdapter {
- private async call(action:string,key?:string,value?:unknown){const response=await chrome.runtime.sendMessage({type:'WANDEL_TEMP_STORAGE',action,key,value});if(response?.error)throw new Error(response.error);return response?.value;}
+ constructor(private send:RuntimeSend=message=>chrome.runtime.sendMessage(message)){}
+ private async call(action:string,key?:string,value?:unknown){const response=await this.send({type:'WANDEL_TEMP_STORAGE',action,key,value});if(response?.error)throw new Error(response.error);return response?.value;}
  read(key:string){return this.call('read',key);}
  async write(key:string,value:unknown){await this.call('write',key,value);}
  async remove(key:string){await this.call('remove',key);}
@@ -57,7 +61,8 @@ export class TemporaryChromeStorage implements StorageAdapter {
 }
 
 export class PersistentChromeStorage implements StorageAdapter {
- private async call(action:string,key?:string,value?:unknown){const response=await chrome.runtime.sendMessage({type:'WANDEL_LOCAL_STORAGE',action,key,value});if(!response||response.error)throw new Error(response?.error||'Local storage is unavailable. Your draft is still open.');return response.value;}
+ constructor(private send:RuntimeSend=message=>chrome.runtime.sendMessage(message)){}
+ private async call(action:string,key?:string,value?:unknown){const response=await this.send({type:'WANDEL_LOCAL_STORAGE',action,key,value});if(!response||response.error)throw new Error(response?.error||'Local storage is unavailable. Your draft is still open.');return response.value;}
  read(key:string){return this.call('read',key);}
  async write(key:string,value:unknown){await this.call('write',key,value);}
  async remove(key:string){await this.call('remove',key);}

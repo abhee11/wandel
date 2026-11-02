@@ -2,10 +2,11 @@ import {createClerkClient} from '@clerk/chrome-extension/client';
 import {accountConfig} from '../shared/accountConfig';
 export function registerAccountBridge(){
  const trustedSurface=(sender:chrome.runtime.MessageSender)=>{
-  if(sender.id!==chrome.runtime.id||!sender.url||sender.frameId&&sender.frameId!==0)return false;
+  if(sender.id!==chrome.runtime.id||!sender.url)return false;
   try{const url=new URL(sender.url),base=new URL(chrome.runtime.getURL(''));
    if(url.protocol!==base.protocol||url.host!==base.host)return false;
-   return url.pathname==='/sidepanel.html'&&!sender.tab||url.pathname==='/recorder.html'&&sender.tab?.id!==undefined;
+   if(sender.frameId&&!(url.pathname==='/sidepanel.html'&&url.searchParams.get('embedded')==='1'&&String(sender.tab?.id)===url.searchParams.get('tabId')))return false;
+   return url.pathname==='/sidepanel.html'&&(!sender.tab||url.searchParams.get('embedded')==='1'&&String(sender.tab.id)===url.searchParams.get('tabId')||url.searchParams.get('floating')==='1'&&/^\d+$/.test(url.searchParams.get('tabId')||''))||url.pathname==='/recorder.html'&&sender.tab?.id!==undefined;
   }catch{return false;}
  };
  const notify=()=>{void chrome.runtime.sendMessage({type:'WANDEL_ACCOUNT_CHANGED'}).catch(()=>{});};
@@ -46,12 +47,20 @@ export function registerAccountBridge(){
     return {ok:true};
    })().then(reply).catch(error=>reply({error:error.message}));return true;
   }
+  // Undo history for a workflow, kept for this browser session only.
+  if(message?.type==='WANDEL_HISTORY'){
+   if(sender.id!==chrome.runtime.id||typeof message.workflowId!=='string'||!/^[\w-]{1,100}$/.test(message.workflowId))return;
+   const key='wandel:history:'+message.workflowId;
+   const work=message.action==='read'?chrome.storage.session.get(key).then(x=>x[key]??null):message.action==='write'?chrome.storage.session.set({[key]:message.value}):Promise.reject(new Error('Invalid history action'));
+   work.then(value=>reply({value})).catch(()=>reply({error:'Undo history is unavailable.'}));return true;
+  }
   if(message?.type==='WANDEL_TEMP_STORAGE'){
    if(sender.id!==chrome.runtime.id)return;
    const key=String(message.key||'');if(key&&!key.startsWith('dx:'))return;
-   const storage=chrome.storage.session;
-   const work=message.action==='read'?storage.get(key).then(x=>x[key]):message.action==='keys'?storage.get(null).then(x=>Object.keys(x).filter(k=>k.startsWith('dx:'))):message.action==='write'?storage.set({[key]:message.value}):message.action==='remove'?storage.remove(key):Promise.reject(new Error('Invalid storage action'));
-   work.then(value=>reply({value})).catch(()=>reply({error:'Temporary storage unavailable.'}));return true;
+   // Drafts persist across Chrome restarts and extension reloads; drafts from the earlier session-only store are still read.
+   const local=chrome.storage.local,session=chrome.storage.session;
+   const work=message.action==='read'?local.get(key).then(async x=>x[key]??(await session.get(key))[key]):message.action==='keys'?Promise.all([local.get(null),session.get(null)]).then(([a,b])=>[...new Set([...Object.keys(a),...Object.keys(b)])].filter(k=>k.startsWith('dx:'))):message.action==='write'?local.set({[key]:message.value}).then(()=>session.remove(key)):message.action==='remove'?Promise.all([local.remove(key),session.remove(key)]):Promise.reject(new Error('Invalid storage action'));
+   work.then(value=>reply({value})).catch(()=>reply({error:'Draft storage is unavailable. Save to your account or export the flow.'}));return true;
   }
   // Only exact packaged UI pages can request tokens; host-page content scripts cannot.
   if(message?.type!=='WANDEL_ACCOUNT_TOKEN'||!trustedSurface(sender))return;

@@ -1,0 +1,632 @@
+{
+  "case": "new-header",
+  "fixture": "<div id=\"app\" style=\"display:flex;flex-direction:row;background:#faf9fc;color:#272435\"><aside id=\"navigation\" style=\"position:fixed;top:0;left:0;bottom:0;width:180px;height:600px;display:flex;flex-direction:column;padding:20px;gap:16px;background:#f0edfa;color:#272435\"><strong>Workspace</strong><a href=\"/home\">Home</a><a href=\"/profile\">Profile</a></aside><main id=\"content\" style=\"margin-left:220px;padding:24px\"><h1>Overview</h1><p>Your recent activity</p><div id=\"cards\" style=\"display:flex;flex-direction:row;gap:16px\"><article id=\"summary\" style=\"background:#ffffff;color:#272435;padding:20px;border-radius:24px\"><h2>Summary</h2><p>Workspace details</p><button style=\"background:rgb(134,68,255);color:white\">Open summary</button></article><article id=\"activity\" style=\"background:#ffffff;color:#272435;padding:20px;border-radius:24px\"><h2>Activity</h2><p>Recent updates</p><button style=\"background:transparent;color:rgb(134,68,255);border:1px solid rgb(134,68,255)\">Open activity</button></article></div></main></div>",
+  "stages": [
+    {
+      "instruction": "Could we add a header with contact us and someother links",
+      "source": "provider",
+      "selected": null,
+      "proposed": {
+        "status": "clarify",
+        "scope": "page",
+        "message": "I can add a new horizontal header above the existing content while preserving the sidebar. I’ll need the link labels and destinations so each item is functional.",
+        "question": "Besides “Contact us,” which links and destinations should the header include (for example: Contact us → /contact, About → /about, Help → /help)?",
+        "candidates": [],
+        "actions": []
+      },
+      "grounded": {
+        "status": "clarify",
+        "scope": "page",
+        "message": "I can add a new horizontal header above the existing content while preserving the sidebar. I’ll need the link labels and destinations so each item is functional.",
+        "question": "Besides “Contact us,” which links and destinations should the header include (for example: Contact us → /contact, About → /about, Help → /help)?",
+        "candidates": [],
+        "actions": []
+      },
+      "applied": false,
+      "executionError": "",
+      "html": "<aside id=\"navigation\" style=\"position:fixed;top:0;left:0;bottom:0;width:180px;height:600px;display:flex;flex-direction:column;padding:20px;gap:16px;background:#f0edfa;color:#272435\"><strong>Workspace</strong><a href=\"/home\">Home</a><a href=\"/profile\">Profile</a></aside><main id=\"content\" style=\"margin-left:220px;padding:24px\"><h1>Overview</h1><p>Your recent activity</p><div id=\"cards\" style=\"display:flex;flex-direction:row;gap:16px\"><article id=\"summary\" style=\"background:#ffffff;color:#272435;padding:20px;border-radius:24px\"><h2>Summary</h2><p>Workspace details</p><button style=\"background:rgb(134,68,255);color:white\">Open summary</button></article><article id=\"activity\" style=\"background:#ffffff;color:#272435;padding:20px;border-radius:24px\"><h2>Activity</h2><p>Recent updates</p><button style=\"background:transparent;color:rgb(134,68,255);border:1px solid rgb(134,68,255)\">Open activity</button></article></div></main>",
+      "rootStyle": "display: flex; flex-direction: row; background: rgb(250, 249, 252); color: rgb(39, 36, 53);",
+      "workflow": {
+        "schemaVersion": 1,
+        "id": "9f4cbfa9-10bd-43ba-b688-16d490ff1646",
+        "name": "Flow — example.test/layout — 2026-10-29 23:25:42 UTC — 9f4cbf",
+        "origin": "https://example.test",
+        "route": "/layout",
+        "createdAt": "2026-10-29T23:25:42.290Z",
+        "updatedAt": "2026-10-29T23:25:42.290Z",
+        "entry": "21e81530-1521-4ecd-add2-7d66ca47e72a",
+        "maxStates": 30,
+        "states": [
+          {
+            "id": "21e81530-1521-4ecd-add2-7d66ca47e72a",
+            "title": "Existing application",
+            "parent": null,
+            "view": "base",
+            "operations": []
+          }
+        ],
+        "edges": []
+      },
+      "directions": [
+        "row",
+        "",
+        "row"
+      ]
+    },
+    {
+      "instruction": "Add a new header at the top with Contact us linking to /contact and About linking to /about. Keep the existing navigation.",
+      "source": "provider",
+      "selected": null,
+      "proposed": {
+        "status": "edit",
+        "scope": "page",
+        "message": "Adds a new horizontal header at the top containing “Contact us” and “About,” while preserving the existing sidebar navigation and page content.",
+        "question": null,
+        "candidates": [],
+        "actions": [
+          {
+            "inputType": null,
+            "required": false,
+            "options": null,
+            "radioGroup": null,
+            "kind": "create",
+            "columns": null,
+            "layout": "horizontal",
+            "theme": null,
+            "href": null,
+            "targets": [
+              "e_cb32f26a-3d27-4b8e-a1b4-7bd2ddd6b1ca"
+            ],
+            "relativeTo": null,
+            "resultRef": "new:header",
+            "element": "header",
+            "text": "Primary navigation",
+            "description": null,
+            "labels": [],
+            "position": "inside",
+            "styleRef": null,
+            "style": null,
+            "destination": null,
+            "newViewTitle": null
+          },
+          {
+            "inputType": null,
+            "required": false,
+            "options": null,
+            "radioGroup": null,
+            "kind": "create",
+            "columns": null,
+            "layout": null,
+            "theme": null,
+            "href": "/contact",
+            "targets": [
+              "new:header"
+            ],
+            "relativeTo": null,
+            "resultRef": null,
+            "element": "link",
+            "text": "Contact us",
+            "description": null,
+            "labels": [],
+            "position": "inside",
+            "styleRef": null,
+            "style": null,
+            "destination": null,
+            "newViewTitle": null
+          },
+          {
+            "inputType": null,
+            "required": false,
+            "options": null,
+            "radioGroup": null,
+            "kind": "create",
+            "columns": null,
+            "layout": null,
+            "theme": null,
+            "href": "/about",
+            "targets": [
+              "new:header"
+            ],
+            "relativeTo": null,
+            "resultRef": null,
+            "element": "link",
+            "text": "About",
+            "description": null,
+            "labels": [],
+            "position": "inside",
+            "styleRef": null,
+            "style": null,
+            "destination": null,
+            "newViewTitle": null
+          }
+        ]
+      },
+      "grounded": {
+        "status": "edit",
+        "scope": "page",
+        "message": "Adds a new horizontal header at the top containing “Contact us” and “About,” while preserving the existing sidebar navigation and page content.",
+        "question": null,
+        "candidates": [],
+        "actions": [
+          {
+            "kind": "create",
+            "targets": [
+              "e_cb32f26a-3d27-4b8e-a1b4-7bd2ddd6b1ca"
+            ],
+            "relativeTo": null,
+            "resultRef": "new:header",
+            "element": "header",
+            "text": "Primary navigation",
+            "description": null,
+            "labels": [],
+            "position": "inside",
+            "styleRef": null,
+            "style": null,
+            "destination": null,
+            "newViewTitle": null
+          },
+          {
+            "kind": "create",
+            "href": "/contact",
+            "targets": [
+              "new:header"
+            ],
+            "relativeTo": null,
+            "resultRef": null,
+            "element": "link",
+            "text": "Contact us",
+            "description": null,
+            "labels": [],
+            "position": "inside",
+            "styleRef": null,
+            "style": null,
+            "destination": null,
+            "newViewTitle": null
+          },
+          {
+            "kind": "create",
+            "href": "/about",
+            "targets": [
+              "new:header"
+            ],
+            "relativeTo": null,
+            "resultRef": null,
+            "element": "link",
+            "text": "About",
+            "description": null,
+            "labels": [],
+            "position": "inside",
+            "styleRef": null,
+            "style": null,
+            "destination": null,
+            "newViewTitle": null
+          }
+        ]
+      },
+      "applied": true,
+      "executionError": "",
+      "html": "<aside id=\"navigation\" style=\"position:fixed;top:0;left:0;bottom:0;width:180px;height:600px;display:flex;flex-direction:column;padding:20px;gap:16px;background:#f0edfa;color:#272435\"><strong>Workspace</strong><a href=\"/home\">Home</a><a href=\"/profile\">Profile</a></aside><main id=\"content\" style=\"margin-left:220px;padding:24px\"><header data-dx-owned=\"20c3dfc8-974b-45c9-b881-5d2dcd0a71bd\" data-dx-label=\"Primary navigation\" style=\"display: flex; flex-wrap: wrap; align-items: center; gap: 20px; box-sizing: border-box; width: 100%; padding: 16px 0px; color: rgb(39, 36, 53); border: 0px; box-shadow: none; background-color: rgba(0, 0, 0, 0); font-family: inherit; flex-direction: row; margin: 0px; max-width: 100%; min-width: 0; overflow-wrap: anywhere;\" aria-label=\"Primary navigation\"><a data-dx-owned=\"6778a222-6fb4-4279-b331-b2fbb02f893b\" data-dx-label=\"Contact us\" style=\"display: inline-flex; color: canvastext; font-style: normal; font-variant: normal; font-weight: normal; font-size: 14px; line-height: 1.6; font-family: inherit; margin: 0px; border: 0px; box-shadow: none; background-color: transparent; padding: 4px 0px; text-decoration-line: underline; box-sizing: border-box; max-width: 100%; min-width: 0; overflow-wrap: anywhere;\" href=\"/contact\">Contact us</a><a data-dx-owned=\"338c89d5-9e0c-461a-883e-d836337f30d0\" data-dx-label=\"About\" style=\"display: inline-flex; color: canvastext; font-style: normal; font-variant: normal; font-weight: normal; font-size: 14px; line-height: 1.6; font-family: inherit; margin: 0px; border: 0px; box-shadow: none; background-color: transparent; padding: 4px 0px; text-decoration-line: underline; box-sizing: border-box; max-width: 100%; min-width: 0; overflow-wrap: anywhere;\" href=\"/about\">About</a></header><h1>Overview</h1><p>Your recent activity</p><div id=\"cards\" style=\"display:flex;flex-direction:row;gap:16px\"><article id=\"summary\" style=\"background:#ffffff;color:#272435;padding:20px;border-radius:24px\"><h2>Summary</h2><p>Workspace details</p><button style=\"background:rgb(134,68,255);color:white\">Open summary</button></article><article id=\"activity\" style=\"background:#ffffff;color:#272435;padding:20px;border-radius:24px\"><h2>Activity</h2><p>Recent updates</p><button style=\"background:transparent;color:rgb(134,68,255);border:1px solid rgb(134,68,255)\">Open activity</button></article></div></main>",
+      "rootStyle": "display: flex; flex-direction: row; background: rgb(250, 249, 252); color: rgb(39, 36, 53);",
+      "workflow": {
+        "schemaVersion": 1,
+        "id": "9f4cbfa9-10bd-43ba-b688-16d490ff1646",
+        "name": "Flow — example.test/layout — 2026-10-29 23:25:42 UTC — 9f4cbf",
+        "origin": "https://example.test",
+        "route": "/layout",
+        "createdAt": "2026-10-29T23:25:42.290Z",
+        "updatedAt": "2026-10-29T23:25:49.510Z",
+        "entry": "21e81530-1521-4ecd-add2-7d66ca47e72a",
+        "maxStates": 30,
+        "states": [
+          {
+            "id": "21e81530-1521-4ecd-add2-7d66ca47e72a",
+            "title": "Existing application",
+            "parent": null,
+            "view": "base",
+            "operations": [
+              {
+                "id": "eed1865b-895d-4458-91a0-2a09f64007c7",
+                "kind": "insert",
+                "target": {
+                  "ancestorTags": [
+                    "main",
+                    "div",
+                    "body",
+                    "html"
+                  ],
+                  "tag": "h1",
+                  "role": "heading",
+                  "name": "Overview",
+                  "text": "Overview",
+                  "attrs": {},
+                  "parent": {
+                    "tag": "main",
+                    "id": "content",
+                    "role": "main",
+                    "label": ""
+                  },
+                  "previous": "",
+                  "next": "Your recent activity"
+                },
+                "position": "before",
+                "node": {
+                  "id": "20c3dfc8-974b-45c9-b881-5d2dcd0a71bd",
+                  "semanticTag": "header",
+                  "kind": "panel",
+                  "text": "Primary navigation",
+                  "appearance": {
+                    "font-family": "inherit",
+                    "color": "rgb(39, 36, 53)",
+                    "background-color": "rgba(0, 0, 0, 0)",
+                    "display": "flex",
+                    "flex-direction": "row",
+                    "flex-wrap": "wrap",
+                    "align-items": "center",
+                    "gap": "20px",
+                    "padding": "16px 0",
+                    "margin": "0"
+                  }
+                }
+              },
+              {
+                "id": "db795f1b-c141-4948-ae34-a5f45af4c2c5",
+                "kind": "insert",
+                "target": {
+                  "owned": "20c3dfc8-974b-45c9-b881-5d2dcd0a71bd",
+                  "tag": "",
+                  "role": "",
+                  "name": "",
+                  "text": "",
+                  "attrs": {},
+                  "parent": {
+                    "tag": "",
+                    "id": "",
+                    "role": "",
+                    "label": ""
+                  },
+                  "previous": "",
+                  "next": ""
+                },
+                "position": "inside",
+                "node": {
+                  "id": "6778a222-6fb4-4279-b331-b2fbb02f893b",
+                  "semanticTag": "a",
+                  "href": "/contact",
+                  "kind": "text",
+                  "text": "Contact us",
+                  "appearance": {
+                    "font-family": "inherit",
+                    "color": "canvastext",
+                    "display": "inline-flex",
+                    "padding": "4px 0",
+                    "margin": "0",
+                    "text-decoration-line": "underline"
+                  }
+                }
+              },
+              {
+                "id": "2eb6729b-e5d5-4f7f-b6d7-7e7a3378e7b1",
+                "kind": "insert",
+                "target": {
+                  "owned": "20c3dfc8-974b-45c9-b881-5d2dcd0a71bd",
+                  "tag": "",
+                  "role": "",
+                  "name": "",
+                  "text": "",
+                  "attrs": {},
+                  "parent": {
+                    "tag": "",
+                    "id": "",
+                    "role": "",
+                    "label": ""
+                  },
+                  "previous": "",
+                  "next": ""
+                },
+                "position": "inside",
+                "node": {
+                  "id": "338c89d5-9e0c-461a-883e-d836337f30d0",
+                  "semanticTag": "a",
+                  "href": "/about",
+                  "kind": "text",
+                  "text": "About",
+                  "appearance": {
+                    "font-family": "inherit",
+                    "color": "canvastext",
+                    "display": "inline-flex",
+                    "padding": "4px 0",
+                    "margin": "0",
+                    "text-decoration-line": "underline"
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "edges": []
+      },
+      "directions": [
+        "row",
+        "",
+        "row"
+      ]
+    }
+  ],
+  "findings": {
+    "lastStatus": "edit",
+    "executionError": "",
+    "operations": 3,
+    "navStyle": "position: fixed; top: 0px; left: 0px; bottom: 0px; width: 180px; height: 600px; display: flex; flex-direction: column; padding: 20px; gap: 16px; background: rgb(240, 237, 250); color: rgb(39, 36, 53);",
+    "contentStyle": "margin-left: 220px; padding: 24px;",
+    "cardsStyle": "display: flex; flex-direction: row; gap: 16px;",
+    "rootStyle": "display: flex; flex-direction: row; background: rgb(250, 249, 252); color: rgb(39, 36, 53);",
+    "links": [
+      {
+        "text": "Home",
+        "href": "/home"
+      },
+      {
+        "text": "Profile",
+        "href": "/profile"
+      },
+      {
+        "text": "Contact us",
+        "href": "/contact"
+      },
+      {
+        "text": "About",
+        "href": "/about"
+      }
+    ],
+    "headings": [
+      "Overview",
+      "Summary",
+      "Activity"
+    ],
+    "textPreserved": true,
+    "changed": true
+  },
+  "attempts": [
+    {
+      "instruction": "Could we add a header with contact us and someother links",
+      "plan": {
+        "status": "clarify",
+        "scope": "page",
+        "message": "I can add a new horizontal header above the existing content while preserving the sidebar. I’ll need the link labels and destinations so each item is functional.",
+        "question": "Besides “Contact us,” which links and destinations should the header include (for example: Contact us → /contact, About → /about, Help → /help)?",
+        "candidates": [],
+        "actions": []
+      }
+    },
+    {
+      "instruction": "Add a new header at the top with Contact us linking to /contact and About linking to /about. Keep the existing navigation.",
+      "plan": {
+        "status": "edit",
+        "scope": "page",
+        "message": "Adds a new horizontal header at the top containing “Contact us” and “About,” while preserving the existing sidebar navigation and page content.",
+        "question": null,
+        "candidates": [],
+        "actions": [
+          {
+            "inputType": null,
+            "required": false,
+            "options": null,
+            "radioGroup": null,
+            "kind": "create",
+            "columns": null,
+            "layout": "horizontal",
+            "theme": null,
+            "href": null,
+            "targets": [
+              "e_cb32f26a-3d27-4b8e-a1b4-7bd2ddd6b1ca"
+            ],
+            "relativeTo": null,
+            "resultRef": "new:header",
+            "element": "header",
+            "text": "Primary navigation",
+            "description": null,
+            "labels": [],
+            "position": "inside",
+            "styleRef": null,
+            "style": null,
+            "destination": null,
+            "newViewTitle": null
+          },
+          {
+            "inputType": null,
+            "required": false,
+            "options": null,
+            "radioGroup": null,
+            "kind": "create",
+            "columns": null,
+            "layout": null,
+            "theme": null,
+            "href": "/contact",
+            "targets": [
+              "new:header"
+            ],
+            "relativeTo": null,
+            "resultRef": null,
+            "element": "link",
+            "text": "Contact us",
+            "description": null,
+            "labels": [],
+            "position": "inside",
+            "styleRef": null,
+            "style": null,
+            "destination": null,
+            "newViewTitle": null
+          },
+          {
+            "inputType": null,
+            "required": false,
+            "options": null,
+            "radioGroup": null,
+            "kind": "create",
+            "columns": null,
+            "layout": null,
+            "theme": null,
+            "href": "/about",
+            "targets": [
+              "new:header"
+            ],
+            "relativeTo": null,
+            "resultRef": null,
+            "element": "link",
+            "text": "About",
+            "description": null,
+            "labels": [],
+            "position": "inside",
+            "styleRef": null,
+            "style": null,
+            "destination": null,
+            "newViewTitle": null
+          }
+        ]
+      }
+    }
+  ],
+  "record": {
+    "draft": {
+      "schemaVersion": 1,
+      "id": "9f4cbfa9-10bd-43ba-b688-16d490ff1646",
+      "name": "Flow — example.test/layout — 2026-10-29 23:25:42 UTC — 9f4cbf",
+      "origin": "https://example.test",
+      "route": "/layout",
+      "createdAt": "2026-10-29T23:25:42.290Z",
+      "updatedAt": "2026-10-29T23:25:49.510Z",
+      "entry": "21e81530-1521-4ecd-add2-7d66ca47e72a",
+      "maxStates": 30,
+      "states": [
+        {
+          "id": "21e81530-1521-4ecd-add2-7d66ca47e72a",
+          "title": "Existing application",
+          "parent": null,
+          "view": "base",
+          "operations": [
+            {
+              "id": "eed1865b-895d-4458-91a0-2a09f64007c7",
+              "kind": "insert",
+              "target": {
+                "ancestorTags": [
+                  "main",
+                  "div",
+                  "body",
+                  "html"
+                ],
+                "tag": "h1",
+                "role": "heading",
+                "name": "Overview",
+                "text": "Overview",
+                "attrs": {},
+                "parent": {
+                  "tag": "main",
+                  "id": "content",
+                  "role": "main",
+                  "label": ""
+                },
+                "previous": "",
+                "next": "Your recent activity"
+              },
+              "position": "before",
+              "node": {
+                "id": "20c3dfc8-974b-45c9-b881-5d2dcd0a71bd",
+                "semanticTag": "header",
+                "kind": "panel",
+                "text": "Primary navigation",
+                "appearance": {
+                  "font-family": "inherit",
+                  "color": "rgb(39, 36, 53)",
+                  "background-color": "rgba(0, 0, 0, 0)",
+                  "display": "flex",
+                  "flex-direction": "row",
+                  "flex-wrap": "wrap",
+                  "align-items": "center",
+                  "gap": "20px",
+                  "padding": "16px 0",
+                  "margin": "0"
+                }
+              }
+            },
+            {
+              "id": "db795f1b-c141-4948-ae34-a5f45af4c2c5",
+              "kind": "insert",
+              "target": {
+                "owned": "20c3dfc8-974b-45c9-b881-5d2dcd0a71bd",
+                "tag": "",
+                "role": "",
+                "name": "",
+                "text": "",
+                "attrs": {},
+                "parent": {
+                  "tag": "",
+                  "id": "",
+                  "role": "",
+                  "label": ""
+                },
+                "previous": "",
+                "next": ""
+              },
+              "position": "inside",
+              "node": {
+                "id": "6778a222-6fb4-4279-b331-b2fbb02f893b",
+                "semanticTag": "a",
+                "href": "/contact",
+                "kind": "text",
+                "text": "Contact us",
+                "appearance": {
+                  "font-family": "inherit",
+                  "color": "canvastext",
+                  "display": "inline-flex",
+                  "padding": "4px 0",
+                  "margin": "0",
+                  "text-decoration-line": "underline"
+                }
+              }
+            },
+            {
+              "id": "2eb6729b-e5d5-4f7f-b6d7-7e7a3378e7b1",
+              "kind": "insert",
+              "target": {
+                "owned": "20c3dfc8-974b-45c9-b881-5d2dcd0a71bd",
+                "tag": "",
+                "role": "",
+                "name": "",
+                "text": "",
+                "attrs": {},
+                "parent": {
+                  "tag": "",
+                  "id": "",
+                  "role": "",
+                  "label": ""
+                },
+                "previous": "",
+                "next": ""
+              },
+              "position": "inside",
+              "node": {
+                "id": "338c89d5-9e0c-461a-883e-d836337f30d0",
+                "semanticTag": "a",
+                "href": "/about",
+                "kind": "text",
+                "text": "About",
+                "appearance": {
+                  "font-family": "inherit",
+                  "color": "canvastext",
+                  "display": "inline-flex",
+                  "padding": "4px 0",
+                  "margin": "0",
+                  "text-decoration-line": "underline"
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "edges": []
+    },
+    "enabled": true,
+    "currentVersion": 0,
+    "versions": []
+  }
+}

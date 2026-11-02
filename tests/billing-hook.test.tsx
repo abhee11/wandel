@@ -1,0 +1,7 @@
+// @vitest-environment jsdom
+import {act} from 'react';import {createRoot} from 'react-dom/client';import {it,expect,vi,afterEach} from 'vitest';
+import {billingCapabilities} from '../extension/shared/billing';import {BillingSettings} from '../extension/sidepanel/useBilling';import {accountAPI,startUpgrade} from '../extension/sidepanel/accountClient';
+vi.mock('../extension/sidepanel/accountClient',()=>({accountAPI:vi.fn(),startUpgrade:vi.fn()}));
+afterEach(()=>{vi.clearAllMocks();document.body.innerHTML='';});
+it('only advertises checkout for an explicitly configured Stripe test provider',()=>{expect(billingCapabilities('stripe-test').checkoutReady).toBe(true);for(const mode of [undefined,'unavailable','mock','stripe-live'])expect(billingCapabilities(mode).checkoutReady).toBe(false);});
+it.each([false,true])('never initiates payment on mount and reports readiness %s',async ready=>{(globalThis as any).IS_REACT_ACT_ENVIRONMENT=true;vi.mocked(accountAPI).mockResolvedValue({billing:billingCapabilities(ready?'stripe-test':'unavailable')});const element=document.createElement('div');document.body.append(element);const root=createRoot(element);try{await act(async()=>root.render(<BillingSettings plan="FREE"/>));expect(startUpgrade).not.toHaveBeenCalled();if(ready){expect(element.textContent).toContain('No live payments');await act(async()=>element.querySelector('button')!.click());expect(startUpgrade).toHaveBeenCalledOnce();}else expect(element.querySelector('button')).toBeNull();}finally{await act(async()=>root.unmount());}});

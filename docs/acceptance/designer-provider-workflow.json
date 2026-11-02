@@ -1,0 +1,266 @@
+{
+  "record": {
+    "draft": {
+      "schemaVersion": 1,
+      "id": "21d87017-ca00-46c3-81e4-505dcac9e930",
+      "name": "Flow — example.test/settings — 2026-10-29 01:42:51 UTC — 21d870",
+      "origin": "https://example.test",
+      "route": "/settings",
+      "createdAt": "2026-10-29T01:42:51.927Z",
+      "updatedAt": "2026-10-29T01:43:11.814Z",
+      "entry": "5d38eed9-1014-4e0b-9fae-bfac52288945",
+      "maxStates": 30,
+      "states": [
+        {
+          "id": "5d38eed9-1014-4e0b-9fae-bfac52288945",
+          "title": "Existing application",
+          "parent": null,
+          "view": "base",
+          "operations": [
+            {
+              "id": "379cc663-8780-464a-9db9-f2782b3d831b",
+              "kind": "style",
+              "target": {
+                "ancestorTags": [
+                  "body",
+                  "html"
+                ],
+                "tag": "main",
+                "role": "main",
+                "name": "Summary Details about your workspace Open Activity Recent updates",
+                "text": "Summary Details about your workspace Open Activity Recent updates",
+                "attrs": {
+                  "id": "canvas"
+                },
+                "parent": {
+                  "tag": "body",
+                  "id": "",
+                  "role": "",
+                  "label": ""
+                },
+                "previous": "",
+                "next": ""
+              },
+              "style": {
+                "display": "flex",
+                "flexDirection": "column",
+                "alignItems": "center",
+                "gap": 24
+              }
+            },
+            {
+              "id": "85fe824b-04cd-4c83-8c6d-b78aa9f1930e",
+              "kind": "insert",
+              "target": {
+                "ancestorTags": [
+                  "main",
+                  "body",
+                  "html"
+                ],
+                "tag": "article",
+                "role": "",
+                "name": "Summary Details about your workspace Open",
+                "text": "Summary Details about your workspace Open",
+                "attrs": {
+                  "id": "summary"
+                },
+                "parent": {
+                  "tag": "main",
+                  "id": "canvas",
+                  "role": "main",
+                  "label": ""
+                },
+                "previous": "",
+                "next": "Activity Recent updates"
+              },
+              "position": "before",
+              "node": {
+                "id": "f05c2bea-b482-41a3-810b-ed80b6f91b34",
+                "kind": "panel",
+                "text": "Feedback",
+                "copy": [
+                  {
+                    "id": "010a91e0-40b5-44cc-a23b-83a7800a0cd3",
+                    "parent": -1,
+                    "tag": "article",
+                    "text": "",
+                    "style": {
+                      "display": "block",
+                      "padding": "20px",
+                      "color": "rgb(39, 36, 53)",
+                      "background-color": "rgb(240, 237, 250)",
+                      "border-radius": "24px"
+                    }
+                  },
+                  {
+                    "id": "ce693440-8f80-4261-abde-ee42cace95c7",
+                    "parent": 0,
+                    "tag": "h2",
+                    "text": "",
+                    "style": {
+                      "display": "block",
+                      "color": "rgb(39, 36, 53)",
+                      "background-color": "rgba(0, 0, 0, 0)",
+                      "font-size": "1.5em",
+                      "font-weight": "bold",
+                      "width": "auto",
+                      "min-width": "0px",
+                      "max-width": "100%"
+                    }
+                  },
+                  {
+                    "id": "de02ecd2-a13b-4521-bda4-7d1a0d24ba96",
+                    "parent": 1,
+                    "tag": "#text",
+                    "text": "Feedback",
+                    "style": {}
+                  },
+                  {
+                    "id": "24739516-e1fa-49a6-ab55-96e6dbcbf6df",
+                    "parent": 0,
+                    "tag": "p",
+                    "text": "",
+                    "style": {
+                      "display": "block",
+                      "color": "rgb(39, 36, 53)",
+                      "background-color": "rgba(0, 0, 0, 0)"
+                    }
+                  },
+                  {
+                    "id": "44132d0d-d487-4615-bfe7-978711ee9b93",
+                    "parent": 3,
+                    "tag": "#text",
+                    "text": "Details about your workspace",
+                    "style": {}
+                  },
+                  {
+                    "id": "389ec0e1-ccc6-47d2-94cb-a7a2b21ad9cc",
+                    "parent": 0,
+                    "tag": "button",
+                    "text": "",
+                    "style": {
+                      "display": "inline-block",
+                      "box-sizing": "border-box",
+                      "padding": "2px 6px 3px 6px",
+                      "border-color": "buttonface",
+                      "border-width": "2px",
+                      "border-style": "outset",
+                      "align-items": "flex-start",
+                      "color": "buttontext",
+                      "background-color": "buttonface",
+                      "border": "2px outset buttonface",
+                      "line-height": "normal",
+                      "text-align": "center",
+                      "letter-spacing": "normal"
+                    }
+                  },
+                  {
+                    "id": "5830ba74-7e1c-49f7-a311-4ed8fc6a9d9f",
+                    "parent": 5,
+                    "tag": "#text",
+                    "text": "Open",
+                    "style": {}
+                  }
+                ]
+              }
+            },
+            {
+              "id": "c1c188b4-6271-4994-88cb-03601904944e",
+              "kind": "style",
+              "target": {
+                "owned": "f05c2bea-b482-41a3-810b-ed80b6f91b34",
+                "tag": "",
+                "role": "",
+                "name": "",
+                "text": "",
+                "attrs": {},
+                "parent": {
+                  "tag": "",
+                  "id": "",
+                  "role": "",
+                  "label": ""
+                },
+                "previous": "",
+                "next": ""
+              },
+              "style": {
+                "color": "#F7F4FF",
+                "backgroundColor": "#211C35"
+              }
+            },
+            {
+              "id": "2ae67575-f96c-475d-9c4a-ddea6053242e",
+              "kind": "style",
+              "target": {
+                "owned": "ce693440-8f80-4261-abde-ee42cace95c7",
+                "tag": "",
+                "role": "",
+                "name": "",
+                "text": "",
+                "attrs": {},
+                "parent": {
+                  "tag": "",
+                  "id": "",
+                  "role": "",
+                  "label": ""
+                },
+                "previous": "",
+                "next": ""
+              },
+              "style": {
+                "color": "#F7F4FF"
+              }
+            },
+            {
+              "id": "2c451629-6ef6-4c55-aed6-a97ea5797ad8",
+              "kind": "style",
+              "target": {
+                "owned": "24739516-e1fa-49a6-ab55-96e6dbcbf6df",
+                "tag": "",
+                "role": "",
+                "name": "",
+                "text": "",
+                "attrs": {},
+                "parent": {
+                  "tag": "",
+                  "id": "",
+                  "role": "",
+                  "label": ""
+                },
+                "previous": "",
+                "next": ""
+              },
+              "style": {
+                "color": "#F7F4FF"
+              }
+            }
+          ]
+        }
+      ],
+      "edges": []
+    },
+    "enabled": true,
+    "currentVersion": 0,
+    "versions": []
+  },
+  "turns": [
+    {
+      "role": "user",
+      "text": "Stack these two cards vertically with a 24px gap and center them horizontally. Keep their contents.",
+      "status": "sent"
+    },
+    {
+      "role": "assistant",
+      "text": "The two cards will stack vertically with a 24px gap and be centered horizontally. Their contents and internal styling remain unchanged."
+    },
+    {
+      "role": "user",
+      "text": "Duplicate the Summary card with heading Feedback, give the copy a dark background with readable light text, and put the copy before the original.",
+      "status": "sent"
+    },
+    {
+      "role": "assistant",
+      "text": "The Summary card will be duplicated before the original, renamed “Feedback,” and given a deep dark background with high-contrast light heading and body text. Its existing description and button remain unchanged."
+    }
+  ]
+}

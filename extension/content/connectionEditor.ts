@@ -73,8 +73,8 @@ export class ConnectionEditor{
   const nodes=new Map<string,HTMLElement>();
   for(const op of state.operations){
    if(op.kind==='insert'){
-    const node=op.node.copy?copyDOM(op.node.copy.map(node=>({...node,...(node.src&&!node.src.startsWith('data:')?{src:undefined}:{})}))):document.createElement(op.node.kind==='button'?'button':op.node.kind==='field'?'label':op.node.kind==='panel'?'section':'p');
-    if(!op.node.copy)node.textContent=op.node.text;if(op.node.appearance)applyAppearance(node,op.node.appearance);
+    const node=op.node.copy?copyDOM(op.node.copy.map(node=>({...node,...(node.src&&!node.src.startsWith('data:')?{src:undefined}:{})}))):document.createElement(op.node.semanticTag||(op.node.kind==='button'?'button':op.node.kind==='field'?'label':op.node.kind==='panel'?'section':'p'));
+    if(!op.node.copy&&op.node.semanticTag!=='header')node.textContent=op.node.text;if(op.node.appearance)applyAppearance(node,op.node.appearance);
     if(op.node.kind==='field'&&!op.node.copy)configureField(node,op.node);
     // Previews cannot issue network requests or navigate through copied content.
     for(const img of node.querySelectorAll('img'))if(!img.src.startsWith('data:'))img.removeAttribute('src');if(node instanceof HTMLImageElement&&!node.src.startsWith('data:'))node.removeAttribute('src');

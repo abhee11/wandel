@@ -39,8 +39,8 @@ it('handles a lost port and reconnects on explicit retry without replaying a mut
 
 it('releases a stalled page command without automatically replaying it',async()=>{
  const mock=setup(),bridge=new ChromeBridge(1);bridge.subscribe(()=>{});await flush();
- vi.useFakeTimers();
- try{mock.sendMessage.mockImplementationOnce(()=>new Promise(()=>{}));const result=bridge.send({type:'replay'});const assertion=expect(result).rejects.toThrow('page did not respond');await vi.advanceTimersByTimeAsync(10000);await assertion;expect(mock.sendMessage).toHaveBeenCalledTimes(3);}finally{vi.useRealTimers();}
+ mock.sendMessage.mockClear();vi.useFakeTimers();
+ try{mock.sendMessage.mockImplementationOnce(()=>new Promise(()=>{}));const result=bridge.send({type:'replay'});const assertion=expect(result).rejects.toThrow('page did not respond');await vi.advanceTimersByTimeAsync(10000);await assertion;expect(mock.sendMessage).toHaveBeenCalledTimes(1);}finally{vi.useRealTimers();}
 });
 
 it('rejects a settings command before mutation when the page still runs the older script',async()=>{
@@ -71,4 +71,13 @@ it('does not reconnect or pause the source when returning from destination brows
 });
 it('resumes a minimized panel without sending Edit and resetting its interaction state',async()=>{
  const mock=setup();mock.sendMessage.mockResolvedValue({snapshot:{panelMinimized:true}} as any);const bridge=new ChromeBridge(1);bridge.subscribe(()=>{});await flush();expect(mock.sendMessage).toHaveBeenLastCalledWith(1,{type:'DX_COMMAND',command:{type:'snapshot'}},{frameId:0});expect(mock.sendMessage.mock.calls.some(call=>(call as any)[1]?.command?.type==='edit')).toBe(false);
+});
+
+it('rejects native copy prompts on a stale page instead of falsely reporting a completed duplicate',async()=>{
+ const mock=setup(),bridge=new ChromeBridge(1);bridge.subscribe(()=>{});await flush();mock.sendMessage.mockClear();await expect(bridge.send({type:'copyPrompt',prompt:'Copy this with heading Recently Deleted'})).rejects.toThrow('older Wandel script');expect(mock.sendMessage).toHaveBeenCalledTimes(1);
+});
+
+it('delivers recovery state without sending Edit into a blocked navigation session',async()=>{const mock=setup(),bridge=new ChromeBridge(1);bridge.subscribe(()=>{});await flush();mock.sendMessage.mockClear();mock.sendMessage.mockResolvedValue({snapshot:{navigationError:'Resume the existing flow'}} as any);mock.switchTab(2);await flush();mock.switchTab(1);await flush();expect(mock.sendMessage).not.toHaveBeenCalledWith(1,{type:'DX_COMMAND',command:{type:'edit'}},{frameId:0});});
+it('requires a matching designer runtime before planning or applying conversational layout changes',async()=>{
+ const mock=setup(),bridge=new ChromeBridge(1);bridge.subscribe(()=>{});await flush();mock.sendMessage.mockClear();await expect(bridge.send({type:'assistantContext'})).rejects.toThrow('older Wandel script');expect(mock.sendMessage).toHaveBeenCalledTimes(1);
 });

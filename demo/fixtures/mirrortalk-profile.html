@@ -1,0 +1,20 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Wandel · MirrorTalk profile integration cards</title><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=block"><style>
+/* Mirrors the computed styles captured from MirrorTalk /profile (saved workflow capture). */
+body{margin:0;font:16px/16px Inter,sans-serif;color:#000;background:#f4f3f8}#app{margin-right:420px}main{padding:48px}
+#controls{margin-bottom:24px}#controls button{margin-right:8px}
+ul.integrations{display:grid;grid-template-columns:repeat(3,432px);gap:24px;list-style:none;margin:0;padding:0}
+ul.integrations>li{display:flex;flex-direction:column;justify-content:space-between;box-sizing:border-box;height:224px;padding:24px;border-radius:32px;background:#fff}
+.title-row{display:flex;align-items:center;margin:0 0 24px;min-width:0}
+.title-row h3{margin:0 8px 0 0;font-size:24px;font-weight:700;line-height:32px;color:rgb(20,19,27);white-space:nowrap}
+/* MirrorTalk draws the Reflectivity wordmark as a CSS background on an empty 158×28 div (placeholder artwork). */
+.logo{width:158px;height:28px;background:center/contain no-repeat}
+.integrations p{margin:0 0 32px;line-height:24px;color:rgb(68,67,81)}
+.integrations button{display:flex;align-items:center;justify-content:center;box-sizing:border-box;height:48px;max-width:126px;padding:0 32px;border:1px solid rgb(20,19,27);border-radius:27px;background:transparent;font:500 16px/22px Inter,sans-serif;color:rgb(20,19,27)}
+#panel{position:fixed;top:0;right:0;width:400px;height:100vh;border-left:1px solid #ddd;background:#fff;overflow:auto}
+</style></head><body><div id="app"><main id="page"><div id="controls"><button id="undo">Undo</button><button id="redo">Redo</button></div><div class="profile">
+<ul class="integrations">
+<li><div><div class="title-row"><h3 id="m2-heading"></h3><div class="logo"></div></div><p>Send M2 recordings to Reflectivity.</p></div><button>Connect</button></li>
+<li><div><div class="title-row"><h3>Google Drive</h3></div><p>Back up session recordings automatically.</p></div><button>Connect</button></li>
+<li><div><div class="title-row"><h3>Slack</h3></div><p>Share session summaries with your team.</p></div><button>Connect</button></li>
+</ul></div></main></div><aside id="panel"></aside>
+<script type="module" src="./mirrortalkProfile.tsx"></script></body></html>

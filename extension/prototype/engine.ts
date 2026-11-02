@@ -1,9 +1,16 @@
+import {prototypePageIds} from '../shared/prototypePage';
 import { WorkflowSchema, VisitedScreenSchema, clone, uid, type Workflow, type Operation } from '../shared/model';
-export function defaultWorkflowName(url:URL,createdAt:string,id:string){
+function legacyWorkflowName(url:URL,createdAt:string,id:string){
   const context=(url.host+(url.pathname==='/'?'':url.pathname)).slice(0,120);
   return `Flow — ${context} — ${createdAt.slice(0,19).replace('T',' ')} UTC — ${id.slice(0,6)}`;
 }
-export function hasDefaultWorkflowName(w:Workflow){return w.name==='Untitled workflow'||w.name===defaultWorkflowName(new URL(w.origin+w.route),w.createdAt,w.id);}
+export function defaultWorkflowName(url:URL,_createdAt:string,_id:string){
+  const segments=url.pathname.split('/').filter(Boolean).map(segment=>{try{return decodeURIComponent(segment);}catch{return segment;}});
+  const context=[...segments].reverse().find(segment=>!/^\d+$/.test(segment)&&! /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(segment))||url.hostname.replace(/^www\./,'').split('.')[0];
+  const title=context.replace(/([a-z])([A-Z])/g,'$1 $2').replace(/[-_]+/g,' ').replace(/\s+/g,' ').trim().replace(/\b[a-z]/g,letter=>letter.toUpperCase());
+  return (title||'New Workflow').slice(0,120);
+}
+export function hasDefaultWorkflowName(w:Workflow){const url=new URL(w.origin+w.route);return w.name==='Untitled workflow'||w.name===defaultWorkflowName(url,w.createdAt,w.id)||w.name===legacyWorkflowName(url,w.createdAt,w.id);}
 export function createWorkflow(url: URL, name?:string): Workflow {
   const entry = uid(), now = new Date().toISOString(), id=uid();
   return { schemaVersion: 1, id, name:name?.trim()||defaultWorkflowName(url,now,id), origin: url.origin, route: url.pathname + url.search + url.hash, createdAt: now, updatedAt: now, entry, maxStates: 30, states: [{ id: entry, title: 'Existing application', parent: null, view: 'base', operations: [] }], edges: [] };
@@ -23,10 +30,11 @@ export function lineage(workflow: Workflow, stateId: string) {
 }
 export function renderLineage(w:Workflow,stateId:string){const chain=lineage(w,stateId);const boundary=chain.reduce((index,s,i)=>s.liveURL?i:index,-1);return boundary<0?chain:chain.slice(boundary);}
 export function visibleNodeIds(workflow: Workflow, stateId: string) {
-  return new Set(renderLineage(workflow, stateId).flatMap(s => [ ...(s.view === 'panel' ? [`view:${s.id}`, `heading:${s.id}`] : []), ...s.operations.flatMap(o => o.kind === 'insert' ? [o.node.id,...(o.node.kind==='field'?[o.node.id+':input']:[]),...(o.node.copy?.map(n=>n.id)||[]),...(o.node.choices?.options.map((_,i)=>o.node.id+':choice:'+i)||[])] : o.kind==='trigger'?[o.source]:[]) ]));
+  return new Set(renderLineage(workflow, stateId).flatMap(s => [ ...(s.pageContent?prototypePageIds(s.id,s.pageContent.chart.points.length):[]), ...(s.view === 'panel' ? [`view:${s.id}`, `heading:${s.id}`] : []), ...s.operations.flatMap(o => o.kind === 'insert' ? [o.node.id,...(o.position==='below'?['wrap:'+o.id]:[]),...(o.node.kind==='field'?[o.node.id+':input']:[]),...(o.node.copy?.map(n=>n.id)||[]),...(o.node.block?.nodes.flatMap(n=>n.id?[n.id]:[])||[]),...(o.node.choices?.options.map((_,i)=>o.node.id+':choice:'+i)||[])] : o.kind==='trigger'?[o.source]:[]) ]));
 }
 export function validateWorkflow(input: unknown): Workflow {
   const w = WorkflowSchema.parse(input);
+  if(w.name==='Untitled workflow'||w.name===legacyWorkflowName(new URL(w.origin+w.route),w.createdAt,w.id))w.name=defaultWorkflowName(new URL(w.origin+w.route),w.createdAt,w.id);
   if (w.states.length > w.maxStates) throw new Error('Maximum number of states exceeded.');
   const ids = new Set(w.states.map(s => s.id));
   if (ids.size !== w.states.length || !ids.has(w.entry)) throw new Error('Invalid state IDs.');
@@ -42,7 +50,7 @@ export function validateWorkflow(input: unknown): Workflow {
     for (const o of s.operations) {
       if (ops.has(o.id)) throw new Error('Duplicate operation.'); ops.add(o.id);
       if(o.kind==='trigger'){if(nodes.has(o.source)||/^(view|heading|wrap):/.test(o.source))throw new Error('Duplicate/reserved trigger ID.');nodes.add(o.source);}
-      if (o.kind === 'insert') { if(o.node.binding&&(!dataKeys.has(o.node.binding)||o.node.kind!=='field'||o.node.copy))throw new Error('Invalid field binding.'); if (nodes.has(o.node.id) || /^(view|heading|wrap):/.test(o.node.id)) throw new Error('Duplicate/reserved node ID.'); nodes.add(o.node.id);for(const [index]of o.node.choices?.options.entries()||[]){const source=o.node.id+':choice:'+index;if(nodes.has(source))throw new Error('Duplicate option ID.');nodes.add(source);} for(const n of o.node.copy||[]){if(nodes.has(n.id)||/^(view|heading|wrap):/.test(n.id))throw new Error('Duplicate/reserved copy ID.');nodes.add(n.id);} }
+      if (o.kind === 'insert') { if(o.node.href&&o.node.semanticTag!=='a')throw new Error('Only links may have a navigation destination.'); if(o.node.binding&&(!dataKeys.has(o.node.binding)||o.node.kind!=='field'||o.node.copy))throw new Error('Invalid field binding.'); if (nodes.has(o.node.id) || /^(view|heading|wrap):/.test(o.node.id)) throw new Error('Duplicate/reserved node ID.'); nodes.add(o.node.id);for(const [index]of o.node.choices?.options.entries()||[]){const source=o.node.id+':choice:'+index;if(nodes.has(source))throw new Error('Duplicate option ID.');nodes.add(source);} for(const n of o.node.copy||[]){if(nodes.has(n.id)||/^(view|heading|wrap):/.test(n.id))throw new Error('Duplicate/reserved copy ID.');nodes.add(n.id);}for(const n of o.node.block?.nodes||[]){if(!n.id)continue;if(nodes.has(n.id)||/^(view|heading|wrap):/.test(n.id))throw new Error('Duplicate/reserved block part ID.');nodes.add(n.id);} }
     }
   }
   const triggers = new Set<string>(),edgeIds=new Set<string>();

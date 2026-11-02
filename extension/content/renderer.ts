@@ -1,9 +1,15 @@
+import {mountPrototypePage,mountChartSection} from './prototypePage';
+import {mountBlock,blockInteract} from './block';
+import {applyArrangement} from './arrangement';
+import {placeBelow,restoreInsertionStyles,type InsertionStyle} from './insertionPlacement';
+import {applyTheme,restoreTheme,type ThemeStyle} from './theme';
 import {configureField} from './fields';
 import {mountControl} from './nativeControls';
-import {applyAppearance,inspectLayout} from './nativeDesign';
+import {applyAppearance,inspectLayout,buttonAppearance} from './nativeDesign';
 import {mountChoices} from './nativeChoices';
 import {mountSettings} from './settingsFeature';
 import {copyDOM} from './copyDOM';
+import {renderIcon} from './copyIcon';
 import type { Workflow, Operation, Locator } from '../shared/model';
 import { renderLineage, lineage } from '../prototype/engine';
 import { editableText } from './text';
@@ -12,7 +18,7 @@ const buttonStyle='display:inline-flex;align-items:center;justify-content:center
 const panelStyle='display:block;box-sizing:border-box;min-width:0;border:1px solid #d5dcf5;border-radius:12px;padding:20px;margin:12px 0;background:#fff;color:#202638;font:14px/1.5 system-ui,sans-serif;box-shadow:0 3px 14px #283d7610;';
 export class Renderer {
   owned=new Map<string,HTMLElement>();
-  applied=new Map<string,{node?:HTMLElement;target:HTMLElement;before?:string;after?:string;textNode?:Text;attribute?:string;attributes?:{key:string;before:string|null;after:string|null}[];styles?:{key:string;before:string;priority:string;after:string}[]}>();
+  applied=new Map<string,{node?:HTMLElement;target:HTMLElement;insertionStyles?:InsertionStyle[];icon?:{svg:SVGSVGElement;before:Node[];after:Node[];viewBox:string|null};placement?:{parent:Node;next:Node|null};orders?:{node:HTMLElement;before:string;priority:string;after:string}[];theme?:ThemeStyle[];before?:string;after?:string;textNode?:Text;attribute?:string;attributes?:{key:string;before:string|null;after:string|null}[];styles?:{node?:HTMLElement;key:string;before:string;priority:string;after:string}[]}>();
   private widgetCleanup=new Map<string,()=>void>();
   private views=new Set<string>();
   private templates=new Map<Text,string>();
@@ -56,13 +62,13 @@ export class Renderer {
   constructor(public root:HTMLElement,private onClick:(id:string)=>void,private onChoice?:(id:string)=>void) {}
   idFor(el:Element) { for(const [id,node] of this.owned) if(node===el) return id; return undefined; }
   findOwned(el:Element) { let node:Element|null=el; while(node && node!==this.root.parentElement) { const id=this.idFor(node); if(id) return {id,node}; node=node.parentElement; } return null; }
-  private make(id:string,kind:'button'|'panel'|'text'|'field',text:string) {
-    const el=document.createElement(kind==='button'?'button':kind==='panel'?'section':kind==='field'?'label':'p');
+  private make(id:string,kind:'button'|'panel'|'text'|'field',text:string,semanticTag?:'header'|'nav'|'a') {
+    const el=document.createElement(semanticTag|| (kind==='button'?'button':kind==='panel'?'section':kind==='field'?'label':'p'));
     el.dataset.dxOwned=id; el.dataset.dxLabel=text;
     el.style.cssText=kind==='button'?buttonStyle:kind==='panel'?panelStyle:'display:block;color:#27314c;font:14px/1.6 system-ui,sans-serif;margin:10px 4px;';
     if(el instanceof HTMLButtonElement) el.type='button';
     // textContent is deliberate: model output can never become executable markup.
-    el.textContent=text;
+    if(semanticTag==='header'||semanticTag==='nav'){el.setAttribute('aria-label',text);el.style.cssText='display:flex;flex-wrap:wrap;align-items:center;gap:20px;box-sizing:border-box;width:100%;padding:16px 0;color:inherit;';}else el.textContent=text;
     if(kind==='field') {
       el.style.cssText='display:flex;flex-direction:column;gap:6px;margin:10px 0;color:inherit;font:inherit;';
       const input=document.createElement('input');input.type='text';input.autocomplete='off';
@@ -81,9 +87,14 @@ export class Renderer {
   reset() {
     for(const cleanup of this.widgetCleanup.values())cleanup();this.widgetCleanup.clear();
     for(const record of [...this.applied.values()].reverse()) {
-      if(record.styles)for(const item of record.styles){if(record.target.style.getPropertyValue(item.key)===item.after){if(item.before)record.target.style.setProperty(item.key,item.before,item.priority);else record.target.style.removeProperty(item.key);}}
+      if(record.insertionStyles)restoreInsertionStyles(record.insertionStyles);
+      const icon=record.icon;if(icon&&icon.after.every((node,index)=>icon.svg.childNodes[index]===node)&&icon.svg.childNodes.length===icon.after.length){icon.svg.replaceChildren(...icon.before);if(icon.viewBox===null)icon.svg.removeAttribute('viewBox');else icon.svg.setAttribute('viewBox',icon.viewBox);}
+      for(const item of record.orders||[])if(item.node.style.getPropertyValue('order')===item.after){if(item.before)item.node.style.setProperty('order',item.before,item.priority);else item.node.style.removeProperty('order');}
+      if(record.theme)restoreTheme(record.theme);
+      if(record.styles)for(const item of [...record.styles].reverse()){const node=item.node||record.target;if(node.style.getPropertyValue(item.key)===item.after){if(item.before)node.style.setProperty(item.key,item.before,item.priority);else node.style.removeProperty(item.key);}}
       for(const item of record.attributes||[])if(record.target.getAttribute(item.key)===item.after){if(item.before===null)record.target.removeAttribute(item.key);else record.target.setAttribute(item.key,item.before);}
       if(record.attribute&&record.target.getAttribute(record.attribute)===record.after){if(record.before===undefined)record.target.removeAttribute(record.attribute);else record.target.setAttribute(record.attribute,record.before);}
+      if(record.placement&&record.target.isConnected&&record.placement.parent.isConnected){const {parent,next}=record.placement;parent.insertBefore(record.target,next?.parentNode===parent?next:null);}
       if(record.node) record.node.remove();
       else if(record.before!==undefined && record.textNode?.data===record.after) {record.textNode!.data=record.before;if(this.idFor(record.target))record.target.dataset.dxLabel=record.before;this.syncFieldLabel(record.target,record.before);}
     }
@@ -93,6 +104,17 @@ export class Renderer {
   reconcile(w:Workflow,stateId:string,data:Record<string,string>=Object.fromEntries((w.variables||[]).map(v=>[v.key,v.value]))):string[] {
     const errors:string[]=[];
     const chain=renderLineage(w,stateId);
+    // Bind native elements against one DOM snapshot. Earlier operations in the
+    // batch can change ancestor structure or descendant labels; those changes
+    // must not make a later operation lose its already identified element.
+    const nativeTargets=new Map<Locator,HTMLElement>();
+    for(const state of chain)for(const op of state.operations){
+      if(this.applied.get(op.id)?.target.isConnected)continue;
+      for(const locator of [op.target,...(op.kind==='reorder'?[op.anchor]:[])]){
+        if(locator.owned||nativeTargets.has(locator))continue;
+        const node=resolve(locator,this.root,this.owned);if(node)nativeTargets.set(locator,node);
+      }
+    }
     const finalText=new Map<Text,string>();
     for(const state of chain)for(const op of state.operations){const record=this.applied.get(op.id);if(op.kind==='text'&&record?.after!==undefined)record.textNode&&finalText.set(record.textNode,record.after);}
     const changedText=new Set([...finalText].filter(([target,text])=>target.isConnected&&target.data!==text).map(([target])=>target));
@@ -101,16 +123,17 @@ export class Renderer {
         const panel=this.make(`view:${state.id}`,'panel','');
         panel.dataset.dxLabel=state.title;
         if(state.presentation==='screen')panel.style.cssText+='position:fixed;inset:32px 16px 16px;z-index:2147483000;overflow:auto;margin:0;padding:32px clamp(20px,5vw,80px);isolation:isolate;';
-        if(state.design)applyAppearance(panel,state.design.surface);
+        if(state.design)applyAppearance(panel,state.design.surface);if(state.presentation==='screen'){panel.style.setProperty('background-color',state.design?.surface['background-color']&&!['transparent','rgba(0, 0, 0, 0)'].includes(state.design.surface['background-color'])?state.design.surface['background-color']:'#fff');panel.style.width='auto';panel.style.height='auto';panel.style.maxWidth='none';panel.style.margin='0';panel.style.boxSizing='border-box';}
         const badge=document.createElement('span'); badge.textContent='PROTOTYPE STATE'; badge.style.cssText='font:600 10px system-ui;letter-spacing:1.5px;color:#77829d;';
         badge.dataset.dxIgnore='true';
-        const heading=this.make(`heading:${state.id}`,'text',state.title);heading.style.cssText='font:600 22px/1.3 system-ui,sans-serif;margin:8px 0 16px;color:#202638;';
+        const heading=document.createElement('h1');heading.dataset.dxOwned=`heading:${state.id}`;heading.textContent=state.title;this.owned.set(`heading:${state.id}`,heading);heading.style.cssText='font:600 22px/1.3 system-ui,sans-serif;margin:8px 0 16px;color:#202638;';
         if(state.design)applyAppearance(heading,state.design.heading);
-        panel.append(badge,heading);this.root.append(panel);this.views.add(state.id);
+        if(state.pageContent){panel.append(heading);mountPrototypePage(panel,state.id,state.pageContent,heading,(id,node)=>this.owned.set(id,node),this.onClick);}else panel.append(badge,heading);this.root.append(panel);this.views.add(state.id);
       }
       for(const op of state.operations) {
         const existing=this.applied.get(op.id);
-        if(existing?.target.isConnected&&existing.attribute)continue;
+        if(existing?.target.isConnected&&existing.theme)continue;
+        if(existing?.target.isConnected&&(existing.attribute||existing.placement||existing.orders||existing.icon))continue;
         if(existing?.target.isConnected&&(existing.styles||op.kind==='mirror'||op.kind==='trigger'))continue;
         if(existing?.node?.isConnected && existing.target.isConnected) continue;
         if(existing && !existing.node && existing.target.isConnected && existing.textNode?.isConnected && op.kind==='text') {
@@ -120,24 +143,67 @@ export class Renderer {
           }
           continue;
         }
-        if(existing?.node) { existing.node.remove(); if(op.kind==='insert') this.owned.delete(op.node.id); }
+        if(existing?.insertionStyles)restoreInsertionStyles(existing.insertionStyles);
+        if(existing?.node) { existing.node.remove(); if(op.kind==='insert'){this.owned.delete(op.node.id);this.owned.delete('wrap:'+op.id);} }
         this.applied.delete(op.id);
-        const target=resolve(op.target,this.root,this.owned);
+        const bound=nativeTargets.get(op.target),target=bound?.isConnected?bound:resolve(op.target,this.root,this.owned);
         if(!target) { errors.push(`${op.kind==='insert'?op.node.text:op.kind==='text'?op.text:op.kind}: target missing or ambiguous`);continue; }
-        try { this.apply(op,target); } catch(error) { errors.push(error instanceof Error?error.message:'Could not apply change.'); }
+        try { this.apply(op,target,op.kind==='reorder'?nativeTargets.get(op.anchor):undefined); } catch(error) { errors.push(error instanceof Error?error.message:'Could not apply change.'); }
       }
     }
     this.updateData(data);
     const hidden=[...this.applied.values()].filter(record=>record.styles?.some(s=>s.key==='display'&&s.after==='none')).map(record=>record.target);
-    return [...errors,...inspectLayout([...this.owned.values()].filter(node=>!hidden.some(parent=>parent.contains(node))))];
+    // Copied markup contains layout helpers, empty spans and line breaks. Their
+    // zero-sized boxes are not failed controls. Validate the copied unit and its
+    // actual controls while retaining every part as an individually editable node.
+    const copyParts=new Set(chain.flatMap(state=>state.operations.flatMap(op=>op.kind==='insert'&&op.node.copy?op.node.copy.slice(1).map(part=>part.id):[])));
+    // Parts inside a collapsed block disclosure are hidden by design until expanded.
+    const inspected=[...this.owned].filter(([id,node])=>!hidden.some(parent=>parent.contains(node))&&!node.closest('[data-dx-disclosure="closed"] > [data-dx-body]')&&(!copyParts.has(id)||node.matches('button,a,input,textarea,select,[role=button],[role=link],[role=checkbox],[role=radio]'))).map(([,node])=>node);
+    return [...errors,...inspectLayout(inspected)];
   }
   validateInputs(source:string){
-    const button=this.owned.get(source);const view=button?.closest<HTMLElement>('[data-dx-owned^="view:"]')||this.root;
-    const inputs=[...view.querySelectorAll<HTMLInputElement|HTMLTextAreaElement|HTMLSelectElement>('[data-dx-field]')];
+    const button=this.owned.get(source)||[...this.triggers].find(([,id])=>id===source)?.[0];const view=button?.closest<HTMLElement>('form,article,section,[role=dialog],[data-dx-owned^="view:"]')||this.root;
+    const inputs=[...view.querySelectorAll<HTMLInputElement|HTMLTextAreaElement|HTMLSelectElement>('[data-dx-field]')].filter(input=>!input.closest('form')||input.closest('form')===button?.closest('form'));
     for(const input of inputs){if(!input.checkValidity()){input.setAttribute('aria-invalid','true');input.reportValidity();return false;}input.removeAttribute('aria-invalid');}return true;
   }
-  private apply(op:Operation,target:HTMLElement) {
+  private apply(op:Operation,target:HTMLElement,boundAnchor?:HTMLElement) {
+    if(op.kind==='theme'){this.applied.set(op.id,{target,theme:applyTheme(target,op.theme)});return;}
+    if(op.kind==='reorder'){
+      const anchor=boundAnchor?.isConnected?boundAnchor:resolve(op.anchor,this.root,this.owned);if(!anchor||anchor===target||target.contains(anchor))throw new Error('Choose a distinct destination outside the moved element.');
+      if(op.position==='inside'&&anchor.matches('button,a,input,textarea,select,img,br,hr'))throw new Error('Choose a container as the destination.');
+      // Keep framework-owned charts mounted when rearranging sibling layout
+      // items. Detaching them can invalidate their responsive chart geometry.
+      const parent=target.parentElement;
+      if(op.position!=='inside'&&parent===anchor.parentElement&&parent&&['flex','inline-flex','grid','inline-grid'].includes(getComputedStyle(parent).display)){
+        const items=[...parent.children].filter((node):node is HTMLElement=>node instanceof HTMLElement).sort((a,b)=>(parseInt(getComputedStyle(a).order)||0)-(parseInt(getComputedStyle(b).order)||0));
+        items.splice(items.indexOf(target),1);items.splice(items.indexOf(anchor)+(op.position==='after'?1:0),0,target);
+        const orders=items.map((node,index)=>{const before=node.style.getPropertyValue('order'),priority=node.style.getPropertyPriority('order'),after=String(index);node.style.setProperty('order',after,'important');return {node,before,priority,after};});
+        this.applied.set(op.id,{target,orders});return;
+      }
+      const placement={parent:target.parentNode!,next:target.nextSibling};
+      if(op.position==='inside')anchor.append(target);else if(op.position==='before')anchor.before(target);else anchor.after(target);
+      this.applied.set(op.id,{target,placement});return;
+    }
     if(op.kind==='mirror'){this.mirrors.set(target,op.source);this.applied.set(op.id,{target});return;}
+    if(op.kind==='iconOnly'){
+      if(!target.matches('a,button,[role=link],[role=button]')||!target.querySelector('svg'))throw new Error('Icon-only presentation needs a link or button with an icon.');
+      const before=target.getAttribute('aria-label')??undefined,priorIconOnly=target.getAttribute('data-dx-icon-only');target.setAttribute('aria-label',op.text);target.setAttribute('data-dx-icon-only','true');
+      const runs:{text:Text;wrapper:HTMLSpanElement}[]=[],walk=document.createTreeWalker(target,NodeFilter.SHOW_TEXT);let current:Node|null;
+      while((current=walk.nextNode()))if(current instanceof Text&&current.data.trim()&&!current.parentElement?.closest('svg'))runs.push({text:current,wrapper:document.createElement('span')});
+      for(const {text,wrapper} of runs){wrapper.dataset.dxIgnore='true';wrapper.style.cssText='position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip-path:inset(50%)!important;white-space:nowrap!important;border:0!important';text.replaceWith(wrapper);wrapper.append(text);}
+      this.widgetCleanup.set(op.id,()=>{for(const {text,wrapper} of runs)if(wrapper.parentNode)wrapper.replaceWith(text);});
+      this.applied.set(op.id,{target,before,after:op.text,attribute:'aria-label',attributes:[{key:'data-dx-icon-only',before:priorIconOnly,after:'true'}]});return;
+    }
+    if(op.kind==='tooltip'){
+      const before=target.getAttribute('title')??undefined;target.setAttribute('title',op.text);this.applied.set(op.id,{target,before,after:op.text,attribute:'title'});return;
+    }
+    if(op.kind==='icon'){
+      if(!target.querySelector('svg')&&target.matches('a,button,[role=link],[role=button]')){
+        const svg=renderIcon(op.icon);svg.dataset.dxIgnore='true';svg.style.cssText='display:inline-block;width:1em;height:1em;flex-shrink:0;vertical-align:-0.125em;margin-inline-end:0.4em;pointer-events:none';target.prepend(svg);this.applied.set(op.id,{target,node:svg as unknown as HTMLElement});return;
+      }
+      const icons=target.querySelectorAll('svg');if(icons.length!==1)throw new Error('The badge icon is missing or ambiguous.');const svg=icons[0],box=svg.getBoundingClientRect();if(box.width>64||box.height>64)throw new Error('Only small UI icons can be replaced.');
+      const before=[...svg.childNodes],viewBox=svg.getAttribute('viewBox'),replacement=renderIcon(op.icon),after=[...replacement.childNodes];svg.setAttribute('viewBox',op.icon.viewBox);svg.replaceChildren(...after);this.applied.set(op.id,{target,icon:{svg,before,after,viewBox}});return;
+    }
     if(op.kind==='trigger'){this.triggers.set(target,op.source);this.applied.set(op.id,{target});return;}
     if(op.kind==='style'||op.kind==='remove'||op.kind==='appearance'){
       const properties:Record<string,string>={};
@@ -145,12 +211,13 @@ export class Renderer {
       else for(const [key,value] of Object.entries(op.style)){
         if(op.kind==='appearance'){properties[key]=String(value);continue;}
         if(key==='x'||key==='y')continue;
-        properties[key.replace(/[A-Z]/g,m=>'-'+m.toLowerCase())]=typeof value==='number'?`${value}px`:value;
+        properties[key.replace(/[A-Z]/g,m=>'-'+m.toLowerCase())]=typeof value==='number'&&!['fontWeight','lineHeight','opacity','order','flexGrow','flexShrink'].includes(key)?`${value}px`:String(value);
       }
-      if(op.kind==='style'&&(op.style.x!==undefined||op.style.y!==undefined)){properties.position=getComputedStyle(target).position==='static'?'relative':getComputedStyle(target).position;properties['z-index']='1000';}
+      if(op.kind==='style'&&(op.style.x!==undefined||op.style.y!==undefined)){properties.position=op.style.position||(getComputedStyle(target).position==='static'?'relative':getComputedStyle(target).position);properties['z-index']='1000';}
       if(op.kind==='style'&&(op.style.x!==undefined||op.style.y!==undefined))properties.translate=`${op.style.x||0}px ${op.style.y||0}px`;
       if(op.kind==='style'&&(op.style.width!==undefined||op.style.height!==undefined||op.style.x!==undefined||op.style.y!==undefined)&&getComputedStyle(target).display==='inline')properties.display='inline-block';
       const styles=Object.entries(properties).map(([key,value])=>{const before=target.style.getPropertyValue(key),priority=target.style.getPropertyPriority(key);target.style.setProperty(key,value,'important');return {key,before,priority,after:target.style.getPropertyValue(key)};});
+      if(op.kind==='style'&&op.arrangement)styles.push(...applyArrangement(target,op.arrangement));
       this.applied.set(op.id,{target,styles});return;
     }
     if(op.kind==='image'){
@@ -171,26 +238,33 @@ export class Renderer {
     let node:HTMLElement;
     if(op.node.copy){
       node=copyDOM(op.node.copy,this.owned);this.owned.delete(op.node.copy[0].id);node.dataset.dxOwned=op.node.id;this.owned.set(op.node.id,node);
-    }else node=this.make(op.node.id,op.node.kind,op.node.text);
-    if(op.node.appearance){node.style.border='0';node.style.boxShadow='none';node.style.backgroundColor='transparent';node.style.color='inherit';node.style.font='inherit';applyAppearance(node,op.node.appearance);}
+    }else node=this.make(op.node.id,op.node.kind,op.node.text,op.node.semanticTag);
+    if(op.node.href){if(!(node instanceof HTMLAnchorElement))throw new Error('Only a link can have a navigation destination.');node.setAttribute('href',op.node.href);}
+    if(op.node.appearance){if(op.node.kind==='button'){for(const [key,value]of Object.entries(buttonAppearance(op.node.appearance)))node.style.setProperty(key,value,'important');node.style.setProperty('cursor','pointer','important');node.style.setProperty('min-height','40px','important');}else{node.style.border='0';node.style.boxShadow='none';node.style.backgroundColor='transparent';node.style.color='inherit';node.style.font='inherit';applyAppearance(node,op.node.appearance);}}
     if(op.node.kind==='field'&&!op.node.copy){const field=configureField(node,op.node);field.dataset.dxOwned=op.node.id+':input';this.owned.set(op.node.id+':input',field);if(op.node.binding)this.bindings.set(field,op.node.binding);}
     if(op.node.control)mountControl(node,op.node);
+    if(op.node.chart)mountChartSection(node,op.node.chart);
+    if(op.node.block)mountBlock(node,op.node.block,(id,part)=>this.owned.set(id,part));
+    if(op.node.grid)node.style.setProperty('grid-column',`${op.node.grid.start} / span ${op.node.grid.span}`,'important');
     if(op.node.isolated){
       const canvas=document.createElement('div');canvas.dataset.dxCanvas='true';canvas.style.cssText='position:fixed!important;inset:52px 16px 16px!important;z-index:2147483000!important;overflow:auto!important;isolation:isolate!important;background:#f4f3f8!important;border:1px solid #d6d3e3!important;border-radius:16px!important;box-shadow:0 15px 80px #18122e44!important;padding:24px!important;';
       canvas.append(node);this.root.append(canvas);this.applied.set(op.id,{node:canvas,target});return;
     }
-    let insertion:HTMLElement=node;
-    if(op.position==='below') { const wrap=document.createElement('div');wrap.dataset.dxOwned=`wrap:${op.id}`;wrap.style.cssText='display:block;flex-basis:100%;grid-column:1 / -1;width:100%;';wrap.append(node);insertion=wrap; }
+    let insertion:HTMLElement=node,insertionStyles:InsertionStyle[]|undefined;
+    if(op.position==='below'){const placed=placeBelow(target,node,op.id);insertion=placed.wrap;insertionStyles=placed.styles;this.owned.set('wrap:'+op.id,placed.wrap);}
     if(op.position==='inside') target.append(insertion);
     else if(op.position==='before') target.before(insertion);
     else target.after(insertion);
     if(op.node.choices)mountChoices(node,op.node.choices,op.node.text,(id,button)=>this.owned.set(id,button),this.onChoice);
     if(op.node.widget){this.widgetCleanup.get(op.id)?.();this.widgetCleanup.set(op.id,mountSettings(node,target,op.node.widget));}
-    this.applied.set(op.id,{node:insertion,target});
+    this.applied.set(op.id,{node:insertion,target,insertionStyles});
   }
   captureClick=(event:MouseEvent)=>{
+    // Tiles, choices and disclosures inside composed blocks keep local prototype state.
+    if(blockInteract(event.target)){event.preventDefault();event.stopImmediatePropagation();return;}
     const target=event.target instanceof Element?this.findOwned(event.target):null;
     if(!target) return;
+    const link=event.target instanceof Element?event.target.closest('a[href]'):null;if(link&&this.idFor(link))return;
     if((event.target instanceof HTMLInputElement||event.target instanceof HTMLTextAreaElement||event.target instanceof HTMLSelectElement) && target.node.tagName==='LABEL'){event.stopImmediatePropagation();return;}
     event.preventDefault();event.stopImmediatePropagation();this.onClick(target.id);
   };

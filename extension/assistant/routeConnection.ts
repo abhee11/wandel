@@ -1,0 +1,14 @@
+import type {PageContext} from './schema';
+import type {Snapshot,VisitedScreen,Selection,ConnectionEvent,ConnectionCondition} from '../shared/model';
+export function connectionRoute(instruction:string){return /\b(?:connect|link|navigate|open)\b/i.test(instruction)?instruction.match(/(?:^|\s)(\/[a-z0-9/_-]*)(?=[\s?.!,]|$)/i)?.[1]||null:null;}
+const inside=(c:PageContext,ref:string,parentRef:string)=>{let element=c.elements.find(e=>e.ref===ref);const seen=new Set<string>();while(element?.parent&&!seen.has(element.parent)){if(element.parent===parentRef)return true;seen.add(element.parent);element=c.elements.find(e=>e.ref===element!.parent);}return false;};
+export function connectionControls(c:PageContext,instruction=''){
+ const eligible=(e:PageContext['elements'][number])=>e.interactive&&(['button','a'].includes(e.tag)||['button','link'].includes(e.role)||['checkbox','radio'].includes(e.attributes.type));
+ if(instruction){const language=' '+instruction.replace(/\/[a-z0-9/_-]*/ig,'').replace(/\b(?:connect|link|navigate|open)\b/i,'').toLowerCase().replace(/[^a-z0-9]+/g,' ')+' ';const named=c.elements.filter(e=>eligible(e)&&e.name?.trim()&&language.includes(' '+e.name.toLowerCase().replace(/[^a-z0-9]+/g,' ').trim()+' '));if(named.length){const length=Math.max(...named.map(e=>e.name.length)),matches=named.filter(e=>e.name.length===length);if(matches.length===1)return matches;const cards=c.elements.filter(e=>e.attributes['wandel-card']==='true'&&e.attributes['wandel-heading']&&instruction.toLowerCase().includes(e.attributes['wandel-heading'].toLowerCase()));const scope=cards.length===1?cards[0].ref:/\b(?:this|that|it|copied|new)\b/i.test(instruction)?c.selected||c.lastCard:null;if(scope){const scoped=matches.filter(e=>inside(c,e.ref,scope));if(scoped.length)return scoped;}return matches;}}
+ const selected=c.elements.find(e=>e.ref===(c.selected||c.lastCard));if(!selected)return [];
+ if(eligible(selected))return [selected];
+ return c.elements.filter(e=>eligible(e)&&inside(c,e.ref,selected.ref));
+}
+export function routeTrigger(source:Selection):{event:ConnectionEvent;conditions:ConnectionCondition[]}{const type=source.locator.attrs.type;if(type==='checkbox'||type==='radio')return {event:'change',conditions:[{target:source.locator,test:'checked'}]};return {event:'click',conditions:[]};}
+export function matchingScreens(screens:VisitedScreen[],route:string,origin:string){return screens.filter(screen=>{try{const url=new URL(screen.url);return url.origin===origin&&url.pathname===route;}catch{return false;}});}
+export function matchingStates(snapshot:Snapshot,route:string){return snapshot.workflow.states.filter(state=>{const value=state.liveURL||state.screen?.url;if(!value)return false;try{const url=new URL(value);return url.origin===snapshot.workflow.origin&&url.pathname===route;}catch{return false;}});}

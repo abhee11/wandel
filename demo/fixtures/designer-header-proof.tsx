@@ -1,0 +1,14 @@
+import {createRoot} from 'react-dom/client';
+import {App} from '../../extension/sidepanel/App';
+import {Session} from '../../extension/content/session';
+import {Repository,BrowserStorage} from '../../extension/storage/store';
+import {RecordSchema} from '../../extension/shared/model';
+import type {Bridge} from '../../extension/sidepanel/bridge';
+import '../../extension/sidepanel/style.css';
+const evidence=await fetch('/docs/acceptance/designer-header-workflow.json').then(r=>r.json());
+const record=RecordSchema.parse(evidence.record),session=new Session(document.getElementById('app')!,new Repository(new BrowserStorage()),new URL(record.draft.origin+record.draft.route),{assistantEnabled:true,directSelection:true});
+await session.init();await session.dispatch({type:'loadRecord',record});await session.dispatch({type:'edit'});
+sessionStorage.setItem('wandel:conversation:'+record.draft.id,JSON.stringify(evidence.turns));
+const bridge:Bridge={send:command=>session.dispatch(command),subscribe:listener=>session.subscribe(listener)};
+createRoot(document.getElementById('wandel-panel')!).render(<App bridge={bridge} demo/>);
+window.addEventListener('pagehide',()=>session.destroy(),{once:true});

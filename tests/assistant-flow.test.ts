@@ -61,3 +61,62 @@ it('asks for an ambiguous style and rejects an unrelated model target',async()=>
  const style=groundPlan('Add a button matching existing buttons',c,response('edit','Add',[action('create',[c.selected!],{element:'button',text:'Review',position:'after',styleRef:reference.ref})]));expect(style.status).toBe('clarify');expect(style.candidates.length).toBeGreaterThan(1);
  const wrong=groundPlan('Make this smaller',c,response('edit','Change',[action('text',[unrelated.ref],{text:'Wrong'})]));expect(wrong.status).toBe('clarify');expect(session.workflow.states[0].operations).toHaveLength(0);
 });
+
+it('understands the spoken card request, preserves the existing card design, and connects its new button',async()=>{
+ document.body.innerHTML='<main><section id="profile"><h1>Amith V</h1><article id="card" style="border-radius:28px;background:rgb(245,240,255);padding:24px"><h2>M2 + Reflectivity</h2><p>Send recordings to Reflectivity.</p><button style="border-radius:30px;background:rgb(134,68,255)">Connect</button></article></section></main>';
+ const hostAction=vi.fn();document.querySelector('#card button')!.addEventListener('click',hostAction);await setup();click('#profile');
+ const transcript='Can you hear me? Can you add another card like we have M2 plus reflectivity? Can you make it into a feedback card and for the button use create?';
+ const context=(await session.dispatch({type:'assistantContext'})).assistant!.context!,plan=interpret(transcript,context)!;expect(plan?.actions[0].kind).toBe('duplicate');expect(groundPlan(transcript,context,plan).status).toBe('edit');
+ await session.dispatch({type:'assistantApply',plan,token:context.token});
+ const cards=document.querySelectorAll('article');expect(cards).toHaveLength(2);const copy=cards[1];expect(copy.querySelector('h2')!.textContent).toBe('Feedback');expect(copy.querySelector('button')!.textContent).toBe('Create');expect(getComputedStyle(copy).borderRadius).toBe('28px');expect(document.querySelector('#card h2')!.textContent).toBe('M2 + Reflectivity');
+ (copy.querySelector('button') as HTMLElement).click();await run('When I click Create, open Feedback editor. Create a blank view.');
+ await session.dispatch({type:'replay'});const create=[...document.querySelectorAll('button')].find(b=>b.textContent==='Create')!;create.click();expect(session.workflow.states.find(s=>s.id===session.stateId)?.title).toBe('Feedback editor');expect(hostAction).not.toHaveBeenCalled();
+});
+
+function divOnlyCard(){
+ document.body.innerHTML='<main><div id="selected-card" style="background:white;border-radius:32px;padding:28px"><div style="background:rgb(240,237,250);border-radius:26px;padding:32px"><div style="display:flex;gap:14px;font-size:22px;font-weight:700"><svg width="36" height="36" viewBox="0 0 24 24"><circle cx="9" cy="7" r="4"/></svg><span>Select Group</span></div><div style="margin:46px 0;color:rgb(170,165,183)">Create your first group or select below</div><div>General</div></div></div></main>';
+}
+it('copies the explicitly selected div-only card with the exact reported wording, then repeats, undoes and restores the saved copy',async()=>{
+ divOnlyCard();await setup();click('#selected-card');
+ const prompt='can you add another card like the one selected ?';
+ const context=(await session.dispatch({type:'assistantContext'})).assistant!.context!,plan=interpret(prompt,context)!;
+ expect(plan.status).toBe('edit');expect(plan.actions[0].targets).toEqual([context.selected]);expect(groundPlan(prompt,context,plan).status).toBe('edit');
+ for(const wording of ['Add another similar card','Can you add another card like this?'])expect(interpret(wording,context)!.actions[0].targets).toEqual([context.selected]);
+ await session.dispatch({type:'assistantApply',plan,token:context.token});
+ let copies=[...session.root.children];expect(copies).toHaveLength(2);
+ const copy=copies[1] as HTMLElement;expect(copy.textContent).toBe(copies[0].textContent);expect(copy.style.borderRadius).toBe('32px');expect(copy.style.padding).toBe('28px');expect(copy.querySelector('svg')).not.toBeNull();expect((copy.firstElementChild as HTMLElement).style.backgroundColor).toBe('rgb(240, 237, 250)');expect(session.findSelected()).toBe(copy);expect(session.workflow.states).toHaveLength(1);
+ await run(prompt);expect(session.root.children).toHaveLength(3);await session.dispatch({type:'undo'});expect(session.root.children).toHaveLength(2);
+ await session.dispatch({type:'saveTemporary'});const record=(await session.repository.get(session.workflow.id))!;
+ session.destroy();divOnlyCard();await setup();await session.dispatch({type:'loadRecord',record});expect(session.root.children).toHaveLength(2);expect(session.root.children[1].textContent).toContain('General');
+});
+it('executes provider duplicate actions against the exact selected wrapper, including no-control cards and optional heading changes',async()=>{
+ divOnlyCard();await setup();click('#selected-card');const context=(await session.dispatch({type:'assistantContext'})).assistant!.context!;
+ await session.dispatch({type:'assistantApply',token:context.token,plan:response('edit','Copied',[action('duplicate',[context.selected!],{text:'Recently Deleted'})])});
+ expect(session.root.children).toHaveLength(2);const copy=session.root.children[1] as HTMLElement;expect(copy.style.borderRadius).toBe('32px');expect(copy.textContent).toContain('Recently Deleted');expect(copy.textContent).not.toContain('Select Group');expect(copy.textContent).toContain('General');expect(document.querySelector('#selected-card span')!.textContent).toBe('Select Group');
+ await session.dispatch({type:'undo'});expect(session.root.children).toHaveLength(1);
+});
+it('keeps the selected outer wrapper when heuristic card parts are nested inside it',async()=>{
+ document.body.innerHTML='<main><div id="outer" style="padding:40px;border-radius:32px"><article><h2>Summary</h2><p>Keep this body</p><button>Details</button></article></div></main>';await setup();click('#outer');
+ await run('Can you add another card like the one selected?');const copy=session.root.children[1] as HTMLElement;expect(copy.tagName).toBe('DIV');expect(copy.style.padding).toBe('40px');expect(copy.querySelector('article h2')!.textContent).toBe('Summary');
+});
+it('still rejects a private subtree and does not partially apply optional missing-button changes',async()=>{
+ divOnlyCard();await setup();click('#selected-card');let context=(await session.dispatch({type:'assistantContext'})).assistant!.context!;
+ await expect(session.dispatch({type:'assistantApply',token:context.token,plan:response('edit','Copy',[action('duplicate',[context.selected!],{labels:['Create']})])})).rejects.toThrow('label per button');expect(session.root.children).toHaveLength(1);expect(session.workflow.states[0].operations).toHaveLength(0);
+ document.querySelector('#selected-card')!.insertAdjacentHTML('beforeend','<div data-private>Private content</div>');context=(await session.dispatch({type:'assistantContext'})).assistant!.context!;
+ await expect(session.dispatch({type:'assistantApply',token:context.token,plan:response('edit','Copy',[action('duplicate',[context.selected!])])})).rejects.toThrow('private');expect(session.root.children).toHaveLength(1);
+});
+
+it('copies a browser-layout card with hidden app helpers and zero-width decorative markup without rejecting the preview',async()=>{
+ divOnlyCard();document.getElementById('selected-card')!.insertAdjacentHTML('beforeend','<span></span><br><div style="display:none"><button>Hidden menu</button></div><input type="hidden" value="internal-only"><button style="visibility:hidden">Inactive action</button>');
+ const rect=(width:number,height:number)=>({x:0,y:0,left:0,top:0,right:width,bottom:height,width,height,toJSON(){}});
+ vi.spyOn(HTMLElement.prototype,'getBoundingClientRect').mockImplementation(function(this:HTMLElement){if(getComputedStyle(this).display==='none'||this.closest('[style*="display:none"]'))return rect(0,0);if(this.matches('br,span:empty'))return rect(0,18);return rect(600,120);});
+ await setup();click('#selected-card');await run('can you add another card like the one selected ?');
+ expect(session.root.children).toHaveLength(2);const copy=session.root.children[1] as HTMLElement;expect(copy.textContent).toContain('Select Group');expect(copy.textContent).not.toContain('Hidden menu');expect(copy.textContent).not.toContain('Inactive action');expect(copy.querySelector('input')).toBeNull();expect(copy.querySelector('br')).not.toBeNull();expect(session.snapshot().unresolved).toEqual([]);
+ await session.dispatch({type:'undo'});expect(session.root.children).toHaveLength(1);
+});
+it('continues to reject a copied actionable control that has no usable box',async()=>{
+ document.body.innerHTML='<main><div id="selected-card"><h2>Summary</h2><button>Open</button></div></main>';
+ const rect=(width:number,height:number)=>({x:0,y:0,left:0,top:0,right:width,bottom:height,width,height,toJSON(){}});
+ vi.spyOn(HTMLElement.prototype,'getBoundingClientRect').mockImplementation(function(this:HTMLElement){return this.matches('[data-dx-owned] button')?rect(0,18):rect(600,120);});
+ await setup();click('#selected-card');await expect(run('Add another card like this')).rejects.toThrow('hidden control');expect(session.root.children).toHaveLength(1);expect(session.workflow.states[0].operations).toHaveLength(0);
+});

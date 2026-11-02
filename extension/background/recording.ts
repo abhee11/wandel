@@ -1,9 +1,9 @@
 /** Launch in the worker: minimizing the panel can destroy its document mid-request. */
 export function registerRecordingLauncher(){
  chrome.runtime.onMessage.addListener((message,sender,reply)=>{
-  if(message?.type!=='WANDEL_RECORD_WALKTHROUGH'||sender.id!==chrome.runtime.id||sender.tab||!sender.url)return;
+  if(message?.type!=='WANDEL_RECORD_WALKTHROUGH'||sender.id!==chrome.runtime.id||!sender.url)return;
   let tabId:number;
-  try{const url=new URL(sender.url),base=new URL(chrome.runtime.getURL(''));if(url.protocol!==base.protocol||url.host!==base.host||url.pathname!=='/sidepanel.html')return;tabId=Number(url.searchParams.get('tabId'));if(!Number.isInteger(tabId)||tabId<=0)return;}catch{return;}
+  try{const url=new URL(sender.url),base=new URL(chrome.runtime.getURL(''));if(url.protocol!==base.protocol||url.host!==base.host||url.pathname!=='/sidepanel.html')return;tabId=Number(url.searchParams.get('tabId'));if(url.searchParams.get('embedded')==='1'&&sender.tab?.id!==tabId)return;if(sender.frameId&&url.searchParams.get('embedded')!=='1')return;if(!Number.isInteger(tabId)||tabId<=0)return;}catch{return;}
   (async()=>{
    const send=async(command:unknown)=>{const response=await chrome.tabs.sendMessage(tabId,{type:'DX_COMMAND',command},{frameId:0});if(response?.error)throw new Error(response.error);if(!response?.snapshot)throw new Error('Reconnect Wandel to the app before recording.');return response;};
    const initial=await send({type:'snapshot'});

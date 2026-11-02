@@ -22,10 +22,18 @@ export function nameOf(el:Element) {
   return safeText(el);
 }
 function ancestorTags(el:Element){const tags:string[]=[];for(let node=el.parentElement;node&&tags.length<32;node=node.parentElement)tags.push(node.tagName.toLowerCase());return tags;}
+export function structuralIdentity(el:Element):Locator['structure'] {
+  const path:number[]=[];
+  for(let node=el;node.parentElement&&path.length<32;node=node.parentElement){
+    const parent=node.parentElement;path.unshift([...parent.children].indexOf(node));
+    if(parent.id&&[...parent.ownerDocument.querySelectorAll('[id]')].filter(n=>n.id===parent.id).length===1)return {anchorId:parent.id,path};
+  }
+  return undefined;
+}
 export function describe(el:Element,ownedId?:string):Selection {
   const parent=el.parentElement;
   const attrs:Locator['attrs']={};
-  for(const key of ['id','data-testid','data-test','data-qa','data-block-id','alt','src','name','type','placeholder'] as const) { const v=el.getAttribute(key); if(v && v.length<=2048) attrs[key]=v; }
+  for(const key of ['id','data-testid','data-test','data-qa','data-block-id','alt','src','name','type','placeholder','aria-label'] as const) { const v=el.getAttribute(key); if(v && v.length<=2048) attrs[key]=v; }
   const fieldLabel=el.matches('input,textarea,select')?el.closest('label')?.textContent:undefined;
   const text=ownedId?normalize(el.getAttribute('data-dx-label')||fieldLabel||el.getAttribute('aria-label')||el.getAttribute('placeholder')||el.textContent):safeText(el);
   const locator:Locator={ancestorTags:ancestorTags(el),owned:ownedId,tag:el.tagName.toLowerCase(),role:roleOf(el),name:ownedId?text:nameOf(el),text,attrs,parent:{tag:parent?.tagName.toLowerCase()||'',id:parent?.id||'',role:parent?roleOf(parent):'',label:parent?.getAttribute('aria-label')||''},previous:safeText(el.previousElementSibling,100),next:safeText(el.nextElementSibling,100)};
@@ -39,6 +47,24 @@ export function resolve(l:Locator,root:ParentNode,owned:Map<string,HTMLElement>)
   if(l.owned) { const node=owned.get(l.owned); return node?.isConnected?node:null; }
   if(!/^[a-z][a-z0-9-]*$/.test(l.tag)) return null;
   const candidates=[...(root instanceof HTMLElement&&root.matches(l.tag)?[root]:[]),...deepElements(root,l.tag)].filter(el=>!el.closest('[data-dx-ignore],[data-dx-owned]') && !el.matches('script,style,noscript,option,[contenteditable="true"],[data-dx-ignore]') && !el.hidden && el.getAttribute('aria-hidden')!=='true');
+  // Stable element identity outranks matching descendant text. A selected card's
+  // contents can change without turning the selection into its inner wrapper.
+  const identity=Object.entries(l.attrs).filter(([key])=>['id','data-testid','data-test','data-qa','data-block-id'].includes(key));
+  if(identity.length){const exact=candidates.filter(el=>identity.every(([key,value])=>el.getAttribute(key)===value));if(exact.length===1)return exact[0];}
+  // Layout containers retain their identity while responsive charts redraw
+  // descendant text. Require both the captured class and ancestry, and refuse
+  // ambiguous copies; aggregate text is not a stable container identifier.
+  if(l.attrs.class){const exact=candidates.filter(el=>el.children.length&&!el.matches('button,a,input,textarea,select,[role=button],[role=link]')&&el.getAttribute('class')===l.attrs.class&&roleOf(el)===l.role&&JSON.stringify(ancestorTags(el))===JSON.stringify(l.ancestorTags));if(exact.length===1)return exact[0];}
+  // Icon-only layout wrappers often have no text or accessible name. Anchor
+  // their structural address to a unique application ID, with a fingerprint
+  // check; never accept a bare positional path into changed content.
+  if(l.structure){
+    const anchors=deepElements(root,'[id]').filter(el=>el.id===l.structure!.anchorId);
+    if(root instanceof HTMLElement&&root.id===l.structure.anchorId)anchors.unshift(root);
+    if(anchors.length===1){let node:Element|undefined=anchors[0];for(const index of l.structure.path)node=node?.children[index];
+      if(node&&candidates.includes(node as HTMLElement)&&nameOf(node)===l.name&&safeText(node)===l.text&&roleOf(node)===l.role&&JSON.stringify(ancestorTags(node))===JSON.stringify(l.ancestorTags))return node as HTMLElement;
+    }
+  }
   const ranked=candidates.map(el=>{
     const name=nameOf(el),text=safeText(el),role=roleOf(el);
     const semantic=(!l.name||l.name===name)&&(!l.role||l.role===role);

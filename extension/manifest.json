@@ -9,7 +9,8 @@
     "storage",
     "webNavigation",
     "activeTab",
-    "scripting"
+    "scripting",
+    "unlimitedStorage"
   ],
   "host_permissions": [
     "http://*/*",
@@ -49,5 +50,19 @@
     "32": "brand/icon-32.png",
     "48": "brand/icon-48.png",
     "128": "brand/icon-128.png"
-  }
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "sidepanel.html",
+        "sidepanel.js",
+        "sidepanel.css",
+        "brand/*"
+      ],
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ]
+    }
+  ]
 }

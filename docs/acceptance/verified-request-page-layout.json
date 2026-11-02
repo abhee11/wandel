@@ -1,0 +1,1326 @@
+{
+  "case": "page-layout",
+  "fixture": "<div id=\"app\" style=\"display:flex;flex-direction:row;background:#faf9fc;color:#272435\"><aside id=\"navigation\" style=\"position:fixed;top:0;left:0;bottom:0;width:180px;height:600px;display:flex;flex-direction:column;padding:20px;gap:16px;background:#f0edfa;color:#272435\"><strong>Workspace</strong><a href=\"/home\">Home</a><a href=\"/profile\">Profile</a></aside><main id=\"content\" style=\"margin-left:220px;padding:24px\"><h1>Overview</h1><p>Your recent activity</p><div id=\"cards\" style=\"display:flex;flex-direction:row;gap:16px\"><article id=\"summary\" style=\"background:#ffffff;color:#272435;padding:20px;border-radius:24px\"><h2>Summary</h2><p>Workspace details</p><button style=\"background:rgb(134,68,255);color:white\">Open summary</button></article><article id=\"activity\" style=\"background:#ffffff;color:#272435;padding:20px;border-radius:24px\"><h2>Activity</h2><p>Recent updates</p><button style=\"background:transparent;color:rgb(134,68,255);border:1px solid rgb(134,68,255)\">Open activity</button></article></div></main></div>",
+  "stages": [
+    {
+      "instruction": "Could you arrange the page vertically",
+      "source": "provider",
+      "selected": null,
+      "proposed": {
+        "status": "edit",
+        "scope": "page",
+        "message": "The page will be arranged vertically: the existing navigation will sit above the main content, with its fixed positioning removed, and the content offset cleared to prevent overlap. Existing links, cards, and content remain intact.",
+        "question": null,
+        "candidates": [],
+        "actions": [
+          {
+            "inputType": null,
+            "required": null,
+            "options": null,
+            "radioGroup": null,
+            "kind": "layout",
+            "columns": null,
+            "layout": "vertical",
+            "theme": null,
+            "href": null,
+            "targets": [
+              "e_ee6c5341-45ff-445e-b9a5-4f6c9e9d998e"
+            ],
+            "relativeTo": null,
+            "resultRef": null,
+            "element": null,
+            "text": null,
+            "description": null,
+            "labels": [],
+            "position": null,
+            "styleRef": null,
+            "style": null,
+            "destination": null,
+            "newViewTitle": null
+          },
+          {
+            "inputType": null,
+            "required": null,
+            "options": null,
+            "radioGroup": null,
+            "kind": "style",
+            "columns": null,
+            "layout": null,
+            "theme": null,
+            "href": null,
+            "targets": [
+              "e_a7a156d6-df35-462d-bd93-7e2af776e451"
+            ],
+            "relativeTo": null,
+            "resultRef": null,
+            "element": null,
+            "text": null,
+            "description": null,
+            "labels": [],
+            "position": null,
+            "styleRef": null,
+            "style": {
+              "position": "static",
+              "inlineSize": "100%",
+              "blockSize": "auto",
+              "boxSizing": "border-box",
+              "top": "auto",
+              "right": "auto",
+              "bottom": "auto",
+              "left": "auto"
+            },
+            "destination": null,
+            "newViewTitle": null
+          },
+          {
+            "inputType": null,
+            "required": null,
+            "options": null,
+            "radioGroup": null,
+            "kind": "style",
+            "columns": null,
+            "layout": null,
+            "theme": null,
+            "href": null,
+            "targets": [
+              "e_d1ee2d35-37f9-494d-b0f1-29a539dc75b4"
+            ],
+            "relativeTo": null,
+            "resultRef": null,
+            "element": null,
+            "text": null,
+            "description": null,
+            "labels": [],
+            "position": null,
+            "styleRef": null,
+            "style": {
+              "inlineSize": "100%",
+              "boxSizing": "border-box",
+              "marginLeft": 0
+            },
+            "destination": null,
+            "newViewTitle": null
+          }
+        ]
+      },
+      "grounded": {
+        "status": "edit",
+        "scope": "page",
+        "message": "The page will be arranged vertically: the existing navigation will sit above the main content, with its fixed positioning removed, and the content offset cleared to prevent overlap. Existing links, cards, and content remain intact.",
+        "question": null,
+        "candidates": [],
+        "actions": [
+          {
+            "kind": "layout",
+            "layout": "vertical",
+            "targets": [
+              "e_ee6c5341-45ff-445e-b9a5-4f6c9e9d998e"
+            ],
+            "relativeTo": null,
+            "resultRef": null,
+            "element": null,
+            "text": null,
+            "description": null,
+            "labels": [],
+            "position": null,
+            "styleRef": null,
+            "style": null,
+            "destination": null,
+            "newViewTitle": null
+          },
+          {
+            "kind": "style",
+            "targets": [
+              "e_a7a156d6-df35-462d-bd93-7e2af776e451"
+            ],
+            "relativeTo": null,
+            "resultRef": null,
+            "element": null,
+            "text": null,
+            "description": null,
+            "labels": [],
+            "position": null,
+            "styleRef": null,
+            "style": {
+              "position": "static",
+              "inlineSize": "100%",
+              "blockSize": "auto",
+              "boxSizing": "border-box",
+              "top": "auto",
+              "right": "auto",
+              "bottom": "auto",
+              "left": "auto"
+            },
+            "destination": null,
+            "newViewTitle": null
+          },
+          {
+            "kind": "style",
+            "targets": [
+              "e_d1ee2d35-37f9-494d-b0f1-29a539dc75b4"
+            ],
+            "relativeTo": null,
+            "resultRef": null,
+            "element": null,
+            "text": null,
+            "description": null,
+            "labels": [],
+            "position": null,
+            "styleRef": null,
+            "style": {
+              "inlineSize": "100%",
+              "boxSizing": "border-box",
+              "marginLeft": 0
+            },
+            "destination": null,
+            "newViewTitle": null
+          }
+        ]
+      },
+      "applied": true,
+      "executionError": "",
+      "html": "<aside id=\"navigation\" style=\"position: static !important; top: auto !important; left: auto; bottom: auto !important; width: 180px; height: 600px; display: flex !important; flex-direction: row !important; padding: 20px; gap: 16px; background: rgb(240, 237, 250); color: rgb(39, 36, 53); inline-size: 100% !important; block-size: auto !important; right: auto !important; flex-wrap: wrap !important; min-height: 0px !important; box-sizing: border-box !important;\"><strong>Workspace</strong><a href=\"/home\">Home</a><a href=\"/profile\">Profile</a></aside><main id=\"content\" style=\"margin-left: 0px; padding: 24px; inline-size: 100% !important; box-sizing: border-box !important; margin-right: 0px !important;\"><h1>Overview</h1><p>Your recent activity</p><div id=\"cards\" style=\"display:flex;flex-direction:row;gap:16px\"><article id=\"summary\" style=\"background:#ffffff;color:#272435;padding:20px;border-radius:24px\"><h2>Summary</h2><p>Workspace details</p><button style=\"background:rgb(134,68,255);color:white\">Open summary</button></article><article id=\"activity\" style=\"background:#ffffff;color:#272435;padding:20px;border-radius:24px\"><h2>Activity</h2><p>Recent updates</p><button style=\"background:transparent;color:rgb(134,68,255);border:1px solid rgb(134,68,255)\">Open activity</button></article></div></main>",
+      "rootStyle": "display: flex !important; flex-direction: column !important; background: rgb(250, 249, 252); color: rgb(39, 36, 53); min-inline-size: 0 !important; box-sizing: border-box !important; flex-wrap: nowrap !important;",
+      "workflow": {
+        "schemaVersion": 1,
+        "id": "ad258dda-7890-4ccb-b58d-1cfb5812c428",
+        "name": "Flow — example.test/layout — 2026-10-29 23:25:49 UTC — ad258d",
+        "origin": "https://example.test",
+        "route": "/layout",
+        "createdAt": "2026-10-29T23:25:49.574Z",
+        "updatedAt": "2026-10-29T23:25:59.657Z",
+        "entry": "d86827f1-b0b5-4d11-af4b-442804d6469e",
+        "maxStates": 30,
+        "states": [
+          {
+            "id": "d86827f1-b0b5-4d11-af4b-442804d6469e",
+            "title": "Existing application",
+            "parent": null,
+            "view": "base",
+            "operations": [
+              {
+                "id": "86475dc8-685f-41ee-9f71-0e98c1e341be",
+                "kind": "style",
+                "target": {
+                  "ancestorTags": [
+                    "body",
+                    "html"
+                  ],
+                  "tag": "div",
+                  "role": "",
+                  "name": "Workspace Home Profile Overview Your recent activity Summary Workspace details Open summary Activity Recent updates Open activity",
+                  "text": "Workspace Home Profile Overview Your recent activity Summary Workspace details Open summary Activity Recent updates Open activity",
+                  "attrs": {
+                    "id": "app"
+                  },
+                  "parent": {
+                    "tag": "body",
+                    "id": "",
+                    "role": "",
+                    "label": ""
+                  },
+                  "previous": "",
+                  "next": ""
+                },
+                "style": {
+                  "minInlineSize": "0",
+                  "boxSizing": "border-box",
+                  "display": "flex",
+                  "flexDirection": "column",
+                  "flexWrap": "nowrap"
+                }
+              },
+              {
+                "id": "22e9d3ca-3c0e-4bb9-94a3-fc2c6a0537b2",
+                "kind": "style",
+                "target": {
+                  "ancestorTags": [
+                    "div",
+                    "body",
+                    "html"
+                  ],
+                  "tag": "aside",
+                  "role": "complementary",
+                  "name": "Workspace Home Profile",
+                  "text": "Workspace Home Profile",
+                  "attrs": {
+                    "id": "navigation"
+                  },
+                  "parent": {
+                    "tag": "div",
+                    "id": "app",
+                    "role": "",
+                    "label": ""
+                  },
+                  "previous": "",
+                  "next": "Overview Your recent activity Summary Workspace details Open summary Activity Recent updates Open ac"
+                },
+                "style": {
+                  "position": "static",
+                  "inlineSize": "100%",
+                  "blockSize": "auto",
+                  "top": "auto",
+                  "right": "auto",
+                  "bottom": "auto",
+                  "left": "auto",
+                  "display": "flex",
+                  "flexDirection": "row",
+                  "flexWrap": "wrap",
+                  "minHeight": 0
+                }
+              },
+              {
+                "id": "0615273c-3609-4008-b7b3-d8c104bc72b0",
+                "kind": "style",
+                "target": {
+                  "ancestorTags": [
+                    "div",
+                    "body",
+                    "html"
+                  ],
+                  "tag": "main",
+                  "role": "main",
+                  "name": "Overview Your recent activity Summary Workspace details Open summary Activity Recent updates Open activity",
+                  "text": "Overview Your recent activity Summary Workspace details Open summary Activity Recent updates Open activity",
+                  "attrs": {
+                    "id": "content"
+                  },
+                  "parent": {
+                    "tag": "div",
+                    "id": "app",
+                    "role": "",
+                    "label": ""
+                  },
+                  "previous": "Workspace Home Profile",
+                  "next": ""
+                },
+                "style": {
+                  "inlineSize": "100%",
+                  "boxSizing": "border-box",
+                  "marginRight": 0,
+                  "marginLeft": 0
+                }
+              },
+              {
+                "id": "b6a9d463-b338-400e-8248-1ca000ed9d0a",
+                "kind": "style",
+                "target": {
+                  "ancestorTags": [
+                    "div",
+                    "body",
+                    "html"
+                  ],
+                  "tag": "aside",
+                  "role": "complementary",
+                  "name": "Workspace Home Profile",
+                  "text": "Workspace Home Profile",
+                  "attrs": {
+                    "id": "navigation"
+                  },
+                  "parent": {
+                    "tag": "div",
+                    "id": "app",
+                    "role": "",
+                    "label": ""
+                  },
+                  "previous": "",
+                  "next": "Overview Your recent activity Summary Workspace details Open summary Activity Recent updates Open ac"
+                },
+                "style": {
+                  "position": "static",
+                  "inlineSize": "100%",
+                  "blockSize": "auto",
+                  "boxSizing": "border-box",
+                  "top": "auto",
+                  "right": "auto",
+                  "bottom": "auto",
+                  "left": "auto"
+                }
+              },
+              {
+                "id": "03903c4b-2442-4a55-bf12-cd85c0815a04",
+                "kind": "style",
+                "target": {
+                  "ancestorTags": [
+                    "div",
+                    "body",
+                    "html"
+                  ],
+                  "tag": "main",
+                  "role": "main",
+                  "name": "Overview Your recent activity Summary Workspace details Open summary Activity Recent updates Open activity",
+                  "text": "Overview Your recent activity Summary Workspace details Open summary Activity Recent updates Open activity",
+                  "attrs": {
+                    "id": "content"
+                  },
+                  "parent": {
+                    "tag": "div",
+                    "id": "app",
+                    "role": "",
+                    "label": ""
+                  },
+                  "previous": "Workspace Home Profile",
+                  "next": ""
+                },
+                "style": {
+                  "inlineSize": "100%",
+                  "boxSizing": "border-box",
+                  "marginLeft": 0
+                }
+              }
+            ]
+          }
+        ],
+        "edges": []
+      },
+      "directions": [
+        "column",
+        "",
+        "row"
+      ]
+    },
+    {
+      "instruction": "Now arrange the page horizontally instead",
+      "source": "provider",
+      "selected": null,
+      "proposed": {
+        "status": "edit",
+        "scope": "page",
+        "message": "The page will be arranged horizontally again, placing the existing navigation beside the main content. All links, cards, and content will remain intact.",
+        "question": null,
+        "candidates": [],
+        "actions": [
+          {
+            "inputType": null,
+            "required": false,
+            "options": null,
+            "radioGroup": null,
+            "kind": "layout",
+            "columns": null,
+            "layout": "horizontal",
+            "theme": null,
+            "href": null,
+            "targets": [
+              "e_ee6c5341-45ff-445e-b9a5-4f6c9e9d998e"
+            ],
+            "relativeTo": null,
+            "resultRef": null,
+            "element": null,
+            "text": null,
+            "description": null,
+            "labels": [],
+            "position": null,
+            "styleRef": null,
+            "style": null,
+            "destination": null,
+            "newViewTitle": null
+          }
+        ]
+      },
+      "grounded": {
+        "status": "edit",
+        "scope": "page",
+        "message": "The page will be arranged horizontally again, placing the existing navigation beside the main content. All links, cards, and content will remain intact.",
+        "question": null,
+        "candidates": [],
+        "actions": [
+          {
+            "kind": "layout",
+            "layout": "horizontal",
+            "targets": [
+              "e_ee6c5341-45ff-445e-b9a5-4f6c9e9d998e"
+            ],
+            "relativeTo": null,
+            "resultRef": null,
+            "element": null,
+            "text": null,
+            "description": null,
+            "labels": [],
+            "position": null,
+            "styleRef": null,
+            "style": null,
+            "destination": null,
+            "newViewTitle": null
+          }
+        ]
+      },
+      "applied": true,
+      "executionError": "",
+      "html": "<aside id=\"navigation\" style=\"position: static !important; top: auto !important; left: auto !important; bottom: auto !important; width: 180px; height: 600px; display: flex !important; flex-direction: column !important; padding: 20px; gap: 16px; background: rgb(240, 237, 250); color: rgb(39, 36, 53); inline-size: auto !important; block-size: auto !important; right: auto !important; flex-wrap: wrap !important; min-height: 0px !important; box-sizing: border-box !important; min-inline-size: 0 !important; flex-shrink: 1 !important; flex-grow: 0;\"><strong>Workspace</strong><a href=\"/home\">Home</a><a href=\"/profile\">Profile</a></aside><main id=\"content\" style=\"margin-left: 0px !important; padding: 24px; inline-size: auto !important; box-sizing: border-box !important; margin-right: 0px !important; min-inline-size: 0 !important; flex-shrink: 1 !important; flex-grow: 1;\"><h1>Overview</h1><p>Your recent activity</p><div id=\"cards\" style=\"display:flex;flex-direction:row;gap:16px\"><article id=\"summary\" style=\"background:#ffffff;color:#272435;padding:20px;border-radius:24px\"><h2>Summary</h2><p>Workspace details</p><button style=\"background:rgb(134,68,255);color:white\">Open summary</button></article><article id=\"activity\" style=\"background:#ffffff;color:#272435;padding:20px;border-radius:24px\"><h2>Activity</h2><p>Recent updates</p><button style=\"background:transparent;color:rgb(134,68,255);border:1px solid rgb(134,68,255)\">Open activity</button></article></div></main>",
+      "rootStyle": "display: flex !important; flex-direction: row !important; background: rgb(250, 249, 252); color: rgb(39, 36, 53); min-inline-size: 0 !important; box-sizing: border-box !important; flex-wrap: wrap !important;",
+      "workflow": {
+        "schemaVersion": 1,
+        "id": "ad258dda-7890-4ccb-b58d-1cfb5812c428",
+        "name": "Flow — example.test/layout — 2026-10-29 23:25:49 UTC — ad258d",
+        "origin": "https://example.test",
+        "route": "/layout",
+        "createdAt": "2026-10-29T23:25:49.574Z",
+        "updatedAt": "2026-10-29T23:26:02.820Z",
+        "entry": "d86827f1-b0b5-4d11-af4b-442804d6469e",
+        "maxStates": 30,
+        "states": [
+          {
+            "id": "d86827f1-b0b5-4d11-af4b-442804d6469e",
+            "title": "Existing application",
+            "parent": null,
+            "view": "base",
+            "operations": [
+              {
+                "id": "86475dc8-685f-41ee-9f71-0e98c1e341be",
+                "kind": "style",
+                "target": {
+                  "ancestorTags": [
+                    "body",
+                    "html"
+                  ],
+                  "tag": "div",
+                  "role": "",
+                  "name": "Workspace Home Profile Overview Your recent activity Summary Workspace details Open summary Activity Recent updates Open activity",
+                  "text": "Workspace Home Profile Overview Your recent activity Summary Workspace details Open summary Activity Recent updates Open activity",
+                  "attrs": {
+                    "id": "app"
+                  },
+                  "parent": {
+                    "tag": "body",
+                    "id": "",
+                    "role": "",
+                    "label": ""
+                  },
+                  "previous": "",
+                  "next": ""
+                },
+                "style": {
+                  "minInlineSize": "0",
+                  "boxSizing": "border-box",
+                  "display": "flex",
+                  "flexDirection": "column",
+                  "flexWrap": "nowrap"
+                }
+              },
+              {
+                "id": "22e9d3ca-3c0e-4bb9-94a3-fc2c6a0537b2",
+                "kind": "style",
+                "target": {
+                  "ancestorTags": [
+                    "div",
+                    "body",
+                    "html"
+                  ],
+                  "tag": "aside",
+                  "role": "complementary",
+                  "name": "Workspace Home Profile",
+                  "text": "Workspace Home Profile",
+                  "attrs": {
+                    "id": "navigation"
+                  },
+                  "parent": {
+                    "tag": "div",
+                    "id": "app",
+                    "role": "",
+                    "label": ""
+                  },
+                  "previous": "",
+                  "next": "Overview Your recent activity Summary Workspace details Open summary Activity Recent updates Open ac"
+                },
+                "style": {
+                  "position": "static",
+                  "inlineSize": "100%",
+                  "blockSize": "auto",
+                  "top": "auto",
+                  "right": "auto",
+                  "bottom": "auto",
+                  "left": "auto",
+                  "display": "flex",
+                  "flexDirection": "row",
+                  "flexWrap": "wrap",
+                  "minHeight": 0
+                }
+              },
+              {
+                "id": "0615273c-3609-4008-b7b3-d8c104bc72b0",
+                "kind": "style",
+                "target": {
+                  "ancestorTags": [
+                    "div",
+                    "body",
+                    "html"
+                  ],
+                  "tag": "main",
+                  "role": "main",
+                  "name": "Overview Your recent activity Summary Workspace details Open summary Activity Recent updates Open activity",
+                  "text": "Overview Your recent activity Summary Workspace details Open summary Activity Recent updates Open activity",
+                  "attrs": {
+                    "id": "content"
+                  },
+                  "parent": {
+                    "tag": "div",
+                    "id": "app",
+                    "role": "",
+                    "label": ""
+                  },
+                  "previous": "Workspace Home Profile",
+                  "next": ""
+                },
+                "style": {
+                  "inlineSize": "100%",
+                  "boxSizing": "border-box",
+                  "marginRight": 0,
+                  "marginLeft": 0
+                }
+              },
+              {
+                "id": "b6a9d463-b338-400e-8248-1ca000ed9d0a",
+                "kind": "style",
+                "target": {
+                  "ancestorTags": [
+                    "div",
+                    "body",
+                    "html"
+                  ],
+                  "tag": "aside",
+                  "role": "complementary",
+                  "name": "Workspace Home Profile",
+                  "text": "Workspace Home Profile",
+                  "attrs": {
+                    "id": "navigation"
+                  },
+                  "parent": {
+                    "tag": "div",
+                    "id": "app",
+                    "role": "",
+                    "label": ""
+                  },
+                  "previous": "",
+                  "next": "Overview Your recent activity Summary Workspace details Open summary Activity Recent updates Open ac"
+                },
+                "style": {
+                  "position": "static",
+                  "inlineSize": "100%",
+                  "blockSize": "auto",
+                  "boxSizing": "border-box",
+                  "top": "auto",
+                  "right": "auto",
+                  "bottom": "auto",
+                  "left": "auto"
+                }
+              },
+              {
+                "id": "03903c4b-2442-4a55-bf12-cd85c0815a04",
+                "kind": "style",
+                "target": {
+                  "ancestorTags": [
+                    "div",
+                    "body",
+                    "html"
+                  ],
+                  "tag": "main",
+                  "role": "main",
+                  "name": "Overview Your recent activity Summary Workspace details Open summary Activity Recent updates Open activity",
+                  "text": "Overview Your recent activity Summary Workspace details Open summary Activity Recent updates Open activity",
+                  "attrs": {
+                    "id": "content"
+                  },
+                  "parent": {
+                    "tag": "div",
+                    "id": "app",
+                    "role": "",
+                    "label": ""
+                  },
+                  "previous": "Workspace Home Profile",
+                  "next": ""
+                },
+                "style": {
+                  "inlineSize": "100%",
+                  "boxSizing": "border-box",
+                  "marginLeft": 0
+                }
+              },
+              {
+                "id": "6689f89d-35d4-4d1e-8d0e-60cb0c68f6b5",
+                "kind": "style",
+                "target": {
+                  "ancestorTags": [
+                    "body",
+                    "html"
+                  ],
+                  "tag": "div",
+                  "role": "",
+                  "name": "Workspace Home Profile Overview Your recent activity Summary Workspace details Open summary Activity Recent updates Open activity",
+                  "text": "Workspace Home Profile Overview Your recent activity Summary Workspace details Open summary Activity Recent updates Open activity",
+                  "attrs": {
+                    "id": "app"
+                  },
+                  "parent": {
+                    "tag": "body",
+                    "id": "",
+                    "role": "",
+                    "label": ""
+                  },
+                  "previous": "",
+                  "next": ""
+                },
+                "style": {
+                  "minInlineSize": "0",
+                  "boxSizing": "border-box",
+                  "display": "flex",
+                  "flexDirection": "row",
+                  "flexWrap": "wrap"
+                }
+              },
+              {
+                "id": "ab83fa74-41e3-49e6-a942-7627e6459f6d",
+                "kind": "style",
+                "target": {
+                  "ancestorTags": [
+                    "div",
+                    "body",
+                    "html"
+                  ],
+                  "tag": "aside",
+                  "role": "complementary",
+                  "name": "Workspace Home Profile",
+                  "text": "Workspace Home Profile",
+                  "attrs": {
+                    "id": "navigation"
+                  },
+                  "parent": {
+                    "tag": "div",
+                    "id": "app",
+                    "role": "",
+                    "label": ""
+                  },
+                  "previous": "",
+                  "next": "Overview Your recent activity Summary Workspace details Open summary Activity Recent updates Open ac"
+                },
+                "style": {
+                  "inlineSize": "auto",
+                  "minInlineSize": "0",
+                  "flexShrink": 1
+                }
+              },
+              {
+                "id": "4c11ee6f-556e-4cc8-91de-c8f513edf0bb",
+                "kind": "style",
+                "target": {
+                  "ancestorTags": [
+                    "div",
+                    "body",
+                    "html"
+                  ],
+                  "tag": "main",
+                  "role": "main",
+                  "name": "Overview Your recent activity Summary Workspace details Open summary Activity Recent updates Open activity",
+                  "text": "Overview Your recent activity Summary Workspace details Open summary Activity Recent updates Open activity",
+                  "attrs": {
+                    "id": "content"
+                  },
+                  "parent": {
+                    "tag": "div",
+                    "id": "app",
+                    "role": "",
+                    "label": ""
+                  },
+                  "previous": "Workspace Home Profile",
+                  "next": ""
+                },
+                "style": {
+                  "inlineSize": "auto",
+                  "minInlineSize": "0",
+                  "flexShrink": 1
+                }
+              },
+              {
+                "id": "18d332f8-82f9-4370-8e2c-3ce0b4b385b9",
+                "kind": "style",
+                "target": {
+                  "ancestorTags": [
+                    "div",
+                    "body",
+                    "html"
+                  ],
+                  "tag": "aside",
+                  "role": "complementary",
+                  "name": "Workspace Home Profile",
+                  "text": "Workspace Home Profile",
+                  "attrs": {
+                    "id": "navigation"
+                  },
+                  "parent": {
+                    "tag": "div",
+                    "id": "app",
+                    "role": "",
+                    "label": ""
+                  },
+                  "previous": "",
+                  "next": "Overview Your recent activity Summary Workspace details Open summary Activity Recent updates Open ac"
+                },
+                "style": {
+                  "inlineSize": "auto",
+                  "minInlineSize": "0",
+                  "flexDirection": "column",
+                  "flexGrow": 0
+                }
+              },
+              {
+                "id": "c93ce990-2e03-437d-b7fb-f254c80bd1af",
+                "kind": "style",
+                "target": {
+                  "ancestorTags": [
+                    "div",
+                    "body",
+                    "html"
+                  ],
+                  "tag": "main",
+                  "role": "main",
+                  "name": "Overview Your recent activity Summary Workspace details Open summary Activity Recent updates Open activity",
+                  "text": "Overview Your recent activity Summary Workspace details Open summary Activity Recent updates Open activity",
+                  "attrs": {
+                    "id": "content"
+                  },
+                  "parent": {
+                    "tag": "div",
+                    "id": "app",
+                    "role": "",
+                    "label": ""
+                  },
+                  "previous": "Workspace Home Profile",
+                  "next": ""
+                },
+                "style": {
+                  "inlineSize": "auto",
+                  "minInlineSize": "0",
+                  "flexGrow": 1
+                }
+              }
+            ]
+          }
+        ],
+        "edges": []
+      },
+      "directions": [
+        "row",
+        "",
+        "row"
+      ]
+    }
+  ],
+  "findings": {
+    "lastStatus": "edit",
+    "executionError": "",
+    "operations": 10,
+    "navStyle": "position: static !important; top: auto !important; left: auto !important; bottom: auto !important; width: 180px; height: 600px; display: flex !important; flex-direction: column !important; padding: 20px; gap: 16px; background: rgb(240, 237, 250); color: rgb(39, 36, 53); inline-size: auto !important; block-size: auto !important; right: auto !important; flex-wrap: wrap !important; min-height: 0px !important; box-sizing: border-box !important; min-inline-size: 0 !important; flex-shrink: 1 !important; flex-grow: 0 !important;",
+    "contentStyle": "margin-left: 0px !important; padding: 24px; inline-size: auto !important; box-sizing: border-box !important; margin-right: 0px !important; min-inline-size: 0 !important; flex-shrink: 1 !important; flex-grow: 1 !important;",
+    "cardsStyle": "display: flex; flex-direction: row; gap: 16px;",
+    "rootStyle": "display: flex !important; flex-direction: row !important; background: rgb(250, 249, 252); color: rgb(39, 36, 53); min-inline-size: 0 !important; box-sizing: border-box !important; flex-wrap: wrap !important;",
+    "links": [
+      {
+        "text": "Home",
+        "href": "/home"
+      },
+      {
+        "text": "Profile",
+        "href": "/profile"
+      }
+    ],
+    "headings": [
+      "Overview",
+      "Summary",
+      "Activity"
+    ],
+    "textPreserved": true,
+    "changed": true
+  },
+  "attempts": [
+    {
+      "instruction": "Could you arrange the page vertically",
+      "plan": {
+        "status": "edit",
+        "scope": "page",
+        "message": "The page will be arranged vertically: the existing navigation will sit above the main content, with its fixed positioning removed, and the content offset cleared to prevent overlap. Existing links, cards, and content remain intact.",
+        "question": null,
+        "candidates": [],
+        "actions": [
+          {
+            "inputType": null,
+            "required": null,
+            "options": null,
+            "radioGroup": null,
+            "kind": "layout",
+            "columns": null,
+            "layout": "vertical",
+            "theme": null,
+            "href": null,
+            "targets": [
+              "e_ee6c5341-45ff-445e-b9a5-4f6c9e9d998e"
+            ],
+            "relativeTo": null,
+            "resultRef": null,
+            "element": null,
+            "text": null,
+            "description": null,
+            "labels": [],
+            "position": null,
+            "styleRef": null,
+            "style": null,
+            "destination": null,
+            "newViewTitle": null
+          },
+          {
+            "inputType": null,
+            "required": null,
+            "options": null,
+            "radioGroup": null,
+            "kind": "style",
+            "columns": null,
+            "layout": null,
+            "theme": null,
+            "href": null,
+            "targets": [
+              "e_a7a156d6-df35-462d-bd93-7e2af776e451"
+            ],
+            "relativeTo": null,
+            "resultRef": null,
+            "element": null,
+            "text": null,
+            "description": null,
+            "labels": [],
+            "position": null,
+            "styleRef": null,
+            "style": {
+              "position": "static",
+              "inlineSize": "100%",
+              "blockSize": "auto",
+              "boxSizing": "border-box",
+              "top": "auto",
+              "right": "auto",
+              "bottom": "auto",
+              "left": "auto"
+            },
+            "destination": null,
+            "newViewTitle": null
+          },
+          {
+            "inputType": null,
+            "required": null,
+            "options": null,
+            "radioGroup": null,
+            "kind": "style",
+            "columns": null,
+            "layout": null,
+            "theme": null,
+            "href": null,
+            "targets": [
+              "e_d1ee2d35-37f9-494d-b0f1-29a539dc75b4"
+            ],
+            "relativeTo": null,
+            "resultRef": null,
+            "element": null,
+            "text": null,
+            "description": null,
+            "labels": [],
+            "position": null,
+            "styleRef": null,
+            "style": {
+              "inlineSize": "100%",
+              "boxSizing": "border-box",
+              "marginLeft": 0
+            },
+            "destination": null,
+            "newViewTitle": null
+          }
+        ]
+      }
+    },
+    {
+      "instruction": "Now arrange the page horizontally instead",
+      "plan": {
+        "status": "edit",
+        "scope": "page",
+        "message": "The page will be arranged horizontally again, placing the existing navigation beside the main content. All links, cards, and content will remain intact.",
+        "question": null,
+        "candidates": [],
+        "actions": [
+          {
+            "inputType": null,
+            "required": false,
+            "options": null,
+            "radioGroup": null,
+            "kind": "layout",
+            "columns": null,
+            "layout": "horizontal",
+            "theme": null,
+            "href": null,
+            "targets": [
+              "e_ee6c5341-45ff-445e-b9a5-4f6c9e9d998e"
+            ],
+            "relativeTo": null,
+            "resultRef": null,
+            "element": null,
+            "text": null,
+            "description": null,
+            "labels": [],
+            "position": null,
+            "styleRef": null,
+            "style": null,
+            "destination": null,
+            "newViewTitle": null
+          }
+        ]
+      }
+    }
+  ],
+  "record": {
+    "draft": {
+      "schemaVersion": 1,
+      "id": "ad258dda-7890-4ccb-b58d-1cfb5812c428",
+      "name": "Flow — example.test/layout — 2026-10-29 23:25:49 UTC — ad258d",
+      "origin": "https://example.test",
+      "route": "/layout",
+      "createdAt": "2026-10-29T23:25:49.574Z",
+      "updatedAt": "2026-10-29T23:26:02.820Z",
+      "entry": "d86827f1-b0b5-4d11-af4b-442804d6469e",
+      "maxStates": 30,
+      "states": [
+        {
+          "id": "d86827f1-b0b5-4d11-af4b-442804d6469e",
+          "title": "Existing application",
+          "parent": null,
+          "view": "base",
+          "operations": [
+            {
+              "id": "86475dc8-685f-41ee-9f71-0e98c1e341be",
+              "kind": "style",
+              "target": {
+                "ancestorTags": [
+                  "body",
+                  "html"
+                ],
+                "tag": "div",
+                "role": "",
+                "name": "Workspace Home Profile Overview Your recent activity Summary Workspace details Open summary Activity Recent updates Open activity",
+                "text": "Workspace Home Profile Overview Your recent activity Summary Workspace details Open summary Activity Recent updates Open activity",
+                "attrs": {
+                  "id": "app"
+                },
+                "parent": {
+                  "tag": "body",
+                  "id": "",
+                  "role": "",
+                  "label": ""
+                },
+                "previous": "",
+                "next": ""
+              },
+              "style": {
+                "minInlineSize": "0",
+                "boxSizing": "border-box",
+                "display": "flex",
+                "flexDirection": "column",
+                "flexWrap": "nowrap"
+              }
+            },
+            {
+              "id": "22e9d3ca-3c0e-4bb9-94a3-fc2c6a0537b2",
+              "kind": "style",
+              "target": {
+                "ancestorTags": [
+                  "div",
+                  "body",
+                  "html"
+                ],
+                "tag": "aside",
+                "role": "complementary",
+                "name": "Workspace Home Profile",
+                "text": "Workspace Home Profile",
+                "attrs": {
+                  "id": "navigation"
+                },
+                "parent": {
+                  "tag": "div",
+                  "id": "app",
+                  "role": "",
+                  "label": ""
+                },
+                "previous": "",
+                "next": "Overview Your recent activity Summary Workspace details Open summary Activity Recent updates Open ac"
+              },
+              "style": {
+                "position": "static",
+                "inlineSize": "100%",
+                "blockSize": "auto",
+                "top": "auto",
+                "right": "auto",
+                "bottom": "auto",
+                "left": "auto",
+                "display": "flex",
+                "flexDirection": "row",
+                "flexWrap": "wrap",
+                "minHeight": 0
+              }
+            },
+            {
+              "id": "0615273c-3609-4008-b7b3-d8c104bc72b0",
+              "kind": "style",
+              "target": {
+                "ancestorTags": [
+                  "div",
+                  "body",
+                  "html"
+                ],
+                "tag": "main",
+                "role": "main",
+                "name": "Overview Your recent activity Summary Workspace details Open summary Activity Recent updates Open activity",
+                "text": "Overview Your recent activity Summary Workspace details Open summary Activity Recent updates Open activity",
+                "attrs": {
+                  "id": "content"
+                },
+                "parent": {
+                  "tag": "div",
+                  "id": "app",
+                  "role": "",
+                  "label": ""
+                },
+                "previous": "Workspace Home Profile",
+                "next": ""
+              },
+              "style": {
+                "inlineSize": "100%",
+                "boxSizing": "border-box",
+                "marginRight": 0,
+                "marginLeft": 0
+              }
+            },
+            {
+              "id": "b6a9d463-b338-400e-8248-1ca000ed9d0a",
+              "kind": "style",
+              "target": {
+                "ancestorTags": [
+                  "div",
+                  "body",
+                  "html"
+                ],
+                "tag": "aside",
+                "role": "complementary",
+                "name": "Workspace Home Profile",
+                "text": "Workspace Home Profile",
+                "attrs": {
+                  "id": "navigation"
+                },
+                "parent": {
+                  "tag": "div",
+                  "id": "app",
+                  "role": "",
+                  "label": ""
+                },
+                "previous": "",
+                "next": "Overview Your recent activity Summary Workspace details Open summary Activity Recent updates Open ac"
+              },
+              "style": {
+                "position": "static",
+                "inlineSize": "100%",
+                "blockSize": "auto",
+                "boxSizing": "border-box",
+                "top": "auto",
+                "right": "auto",
+                "bottom": "auto",
+                "left": "auto"
+              }
+            },
+            {
+              "id": "03903c4b-2442-4a55-bf12-cd85c0815a04",
+              "kind": "style",
+              "target": {
+                "ancestorTags": [
+                  "div",
+                  "body",
+                  "html"
+                ],
+                "tag": "main",
+                "role": "main",
+                "name": "Overview Your recent activity Summary Workspace details Open summary Activity Recent updates Open activity",
+                "text": "Overview Your recent activity Summary Workspace details Open summary Activity Recent updates Open activity",
+                "attrs": {
+                  "id": "content"
+                },
+                "parent": {
+                  "tag": "div",
+                  "id": "app",
+                  "role": "",
+                  "label": ""
+                },
+                "previous": "Workspace Home Profile",
+                "next": ""
+              },
+              "style": {
+                "inlineSize": "100%",
+                "boxSizing": "border-box",
+                "marginLeft": 0
+              }
+            },
+            {
+              "id": "6689f89d-35d4-4d1e-8d0e-60cb0c68f6b5",
+              "kind": "style",
+              "target": {
+                "ancestorTags": [
+                  "body",
+                  "html"
+                ],
+                "tag": "div",
+                "role": "",
+                "name": "Workspace Home Profile Overview Your recent activity Summary Workspace details Open summary Activity Recent updates Open activity",
+                "text": "Workspace Home Profile Overview Your recent activity Summary Workspace details Open summary Activity Recent updates Open activity",
+                "attrs": {
+                  "id": "app"
+                },
+                "parent": {
+                  "tag": "body",
+                  "id": "",
+                  "role": "",
+                  "label": ""
+                },
+                "previous": "",
+                "next": ""
+              },
+              "style": {
+                "minInlineSize": "0",
+                "boxSizing": "border-box",
+                "display": "flex",
+                "flexDirection": "row",
+                "flexWrap": "wrap"
+              }
+            },
+            {
+              "id": "ab83fa74-41e3-49e6-a942-7627e6459f6d",
+              "kind": "style",
+              "target": {
+                "ancestorTags": [
+                  "div",
+                  "body",
+                  "html"
+                ],
+                "tag": "aside",
+                "role": "complementary",
+                "name": "Workspace Home Profile",
+                "text": "Workspace Home Profile",
+                "attrs": {
+                  "id": "navigation"
+                },
+                "parent": {
+                  "tag": "div",
+                  "id": "app",
+                  "role": "",
+                  "label": ""
+                },
+                "previous": "",
+                "next": "Overview Your recent activity Summary Workspace details Open summary Activity Recent updates Open ac"
+              },
+              "style": {
+                "inlineSize": "auto",
+                "minInlineSize": "0",
+                "flexShrink": 1
+              }
+            },
+            {
+              "id": "4c11ee6f-556e-4cc8-91de-c8f513edf0bb",
+              "kind": "style",
+              "target": {
+                "ancestorTags": [
+                  "div",
+                  "body",
+                  "html"
+                ],
+                "tag": "main",
+                "role": "main",
+                "name": "Overview Your recent activity Summary Workspace details Open summary Activity Recent updates Open activity",
+                "text": "Overview Your recent activity Summary Workspace details Open summary Activity Recent updates Open activity",
+                "attrs": {
+                  "id": "content"
+                },
+                "parent": {
+                  "tag": "div",
+                  "id": "app",
+                  "role": "",
+                  "label": ""
+                },
+                "previous": "Workspace Home Profile",
+                "next": ""
+              },
+              "style": {
+                "inlineSize": "auto",
+                "minInlineSize": "0",
+                "flexShrink": 1
+              }
+            },
+            {
+              "id": "18d332f8-82f9-4370-8e2c-3ce0b4b385b9",
+              "kind": "style",
+              "target": {
+                "ancestorTags": [
+                  "div",
+                  "body",
+                  "html"
+                ],
+                "tag": "aside",
+                "role": "complementary",
+                "name": "Workspace Home Profile",
+                "text": "Workspace Home Profile",
+                "attrs": {
+                  "id": "navigation"
+                },
+                "parent": {
+                  "tag": "div",
+                  "id": "app",
+                  "role": "",
+                  "label": ""
+                },
+                "previous": "",
+                "next": "Overview Your recent activity Summary Workspace details Open summary Activity Recent updates Open ac"
+              },
+              "style": {
+                "inlineSize": "auto",
+                "minInlineSize": "0",
+                "flexDirection": "column",
+                "flexGrow": 0
+              }
+            },
+            {
+              "id": "c93ce990-2e03-437d-b7fb-f254c80bd1af",
+              "kind": "style",
+              "target": {
+                "ancestorTags": [
+                  "div",
+                  "body",
+                  "html"
+                ],
+                "tag": "main",
+                "role": "main",
+                "name": "Overview Your recent activity Summary Workspace details Open summary Activity Recent updates Open activity",
+                "text": "Overview Your recent activity Summary Workspace details Open summary Activity Recent updates Open activity",
+                "attrs": {
+                  "id": "content"
+                },
+                "parent": {
+                  "tag": "div",
+                  "id": "app",
+                  "role": "",
+                  "label": ""
+                },
+                "previous": "Workspace Home Profile",
+                "next": ""
+              },
+              "style": {
+                "inlineSize": "auto",
+                "minInlineSize": "0",
+                "flexGrow": 1
+              }
+            }
+          ]
+        }
+      ],
+      "edges": []
+    },
+    "enabled": true,
+    "currentVersion": 0,
+    "versions": []
+  }
+}

@@ -1,3 +1,10 @@
+/** Compact percentage labels may be split into value, sign and percent runs. */
+export function percentageTextRuns(el:HTMLElement):Text[]|null{
+ if(el.matches('input,textarea,select,svg,script,style,[contenteditable="true"]')||el.querySelector('h1,h2,h3,h4,h5,h6,p,button,a,input,textarea,select,table,ul,ol'))return null;
+ const runs:Text[]=[];const walk=el.ownerDocument.createTreeWalker(el,NodeFilter.SHOW_TEXT);let node:Node|null;
+ while((node=walk.nextNode()))if(node.textContent?.trim()&&!node.parentElement?.closest('svg,[hidden],[aria-hidden="true"],[data-dx-ignore]')){runs.push(node as Text);if(runs.length>8)return null;}
+ return /^[+\-−]?\s*\d+(?:[.,]\d+)?\s*%$/.test(runs.map(node=>node.data).join('').trim())?runs:null;
+}
 /** A single direct text run can be edited without replacing icons, badges or listeners. */
 export function editableText(el:HTMLElement,textPath?:number[]):Text|null {
   if(textPath){

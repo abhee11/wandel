@@ -252,8 +252,33 @@ For a deterministic engine demonstration, run `npm run dev`, open `/?fixture=fea
 
 ## Voice and conversational editing
 
-Voice is included in the regular extension: `npm run build` → reload `dist/` in Chrome. In Edit mode choose **Voice assistant** beside **Imagine a feature** and **Edit this page**. Select an element, enable scoped voice/context sharing, then hold **Hold to speak** and release to send (20-second maximum). Typed local instructions work without cloud consent; denied microphone permission or unavailable cloud service leaves typing available. Switching back retains the multi-step feature prompt.
+Voice is included in the regular extension: `npm run build` → reload `dist/` in Chrome. In Edit mode choose **Voice assistant** beside **Imagine a feature** and **Edit this page**. Select an element, enable scoped voice/context sharing, use **Set up microphone** once if Chrome needs permission, then click **Start speaking** and **Stop & send** (20-second maximum). Typed chat uses contextual AI directly, without per-request sharing dialogs; straightforward commands still run locally. Microphone recording remains an explicit action with browser permission. If the AI service is unavailable, local editing remains available. Switching back retains the multi-step feature prompt.
 
 Server cloud interpretation/transcription uses the existing signed-in account and OpenAI configuration (`OPENAI_API_KEY`, `OPENAI_MODEL`, optional `OPENAI_TRANSCRIBE_MODEL`). Endpoints are enabled by default; set `WANDEL_ASSISTANT_ENABLED=false` to disable them. No microphone recording or provider request occurs merely by opening the interface. Never put secret API keys into the extension.
 
 `npm run build:assistant` remains an alias of `npm run build` for old instructions. It no longer creates `dist-assistant/` or a separately named extension. Disable/remove any previously installed Assistant Beta to avoid two editors on one page. The optional local-only free build remains offline and does not include cloud voice.
+
+
+Conversational editing now keeps a bounded chat for the current workflow in panel session storage. Ask “Do you see a card?” to identify and highlight a card, then “Duplicate it into a Feedback card and for the button use Create.” Visual duplication preserves the original card structure and computed appearance; host event handlers and live links are not copied. Connect the new button explicitly to a prototype view or app route.
+
+“Make it connect to /profile page” checks existing workflow screens and the visited-screen library. An exact route match can be connected directly. Unknown routes open the destination browser; choose **Use this screen & close**, then confirm the captured destination in chat. Ambiguous source controls and destinations require selection. The assistant does not claim that a production feature or backend action has been implemented.
+
+Live spoken previews use Chrome’s recognition service where available; bounded WAV transcription remains the fallback and final instruction. Privacy consent names both services. Assistant network requests include a deadline covering token lookup and response parsing; a failed request retains editable text. Microphone setup is confined to first-time/missing permission, keeps the original app attached, and returns to its exact tab/window.
+
+## Implement a prototype in application code
+
+Open **Build this flow →** in the extension footer to copy an implementation prompt or download a JSON reference bundle. This local export needs no sign-in. The GitHub route adds repository selection, a reviewed source diff, a new branch and draft PR, and exact-commit CI status. It requires configuring Wandel's GitHub App and enabling the coding model on the API server. Setup, data boundaries, beta limits and the live acceptance checklist are in [the implementation handoff guide](docs/IMPLEMENTATION_HANDOFF.md).
+
+## Connected screen continuity
+
+A connected workflow keeps the same ID and earlier connections through Screen 1 → Profile → the next real application screen. Each connection is checkpointed before confirmation; closing the panel preserves the tab's workflow context. Navigation to a known screen resumes that context, and an unavailable handoff shows recovery controls instead of silently creating a separate workflow. Explicitly starting a new workflow keeps the earlier stored draft.
+
+The regression walkthrough covers duplicating a control on Screen 1, connecting it to Profile, duplicating another control there, connecting to Library, saving, reopening and replaying both links from the entry. Additional tests cover tab isolation, missing handoff recovery, and preventing an old page's delayed checkpoint from overwriting a newer destination draft.
+
+### Page tools and image references
+
+The side panel's **Page tools** menu provides a reversible **Show original** toggle, a static original/current **Split view**, page naming, and **New prototype page** routes such as `/feedback`. Sending a standalone `/route` in chat also creates that local workflow screen. A prototype route is not a deployed route in the source application.
+
+Select a section in **Visual edit**, then choose **3 section layouts** to compare Split, Stacked and Editorial compositions. Applying one styles the original elements so existing connections remain attached; Undo restores the prior layout. These are local layout compositions, not three independent AI generations.
+
+Use **＋ Image** in chat to attach a PNG, JPEG or WebP reference (up to 10 MB; compressed locally). The explicit attachment is sent with subsequent messages until removed. Ask Wandel to create a similar editable component; no automatic page screenshot is uploaded. MirrorTalk manual verification and current limitations are recorded in [the beta check](docs/MIRRORTALK_BETA_CHECK_2026-10-30.md).

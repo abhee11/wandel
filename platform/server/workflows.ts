@@ -21,11 +21,12 @@ export function workflowStore(db:DB,entitlements:Entitlements,clock:()=>Date){
    const replay=one<{fingerprint:string;revision:number}>(db,'SELECT * FROM workflow_saves WHERE user_id=? AND request_key=?',userId,data.requestId);
    if(replay){if(replay.fingerprint!==fingerprint)throw new APIError(409,'IDEMPOTENCY_CONFLICT','This save key was used for another change.');return {...read(userId,w.id),savedRevision:replay.revision};}
    const existing=get(userId,w.id),e=entitlements.get(userId),depth=workflowDepth(w);
-   if(e.limits.maxDepth!==null&&depth>e.limits.maxDepth)throw new APIError(403,'DEPTH_LIMIT_REACHED',`This flow has ${depth} steps. Free account saves allow ${e.limits.maxDepth}. Upgrade or save temporarily.`,{upgradeUrl:'/extension/upgrade'});
+   if(e.limits.maxDepth!==null&&depth>e.limits.maxDepth)throw new APIError(403,'DEPTH_LIMIT_REACHED',`This flow has ${depth} steps. Free account saves allow ${e.limits.maxDepth}. Upgrade, or save it on this computer.`,{upgradeUrl:'/extension/upgrade'});
    if(!existing)entitlements.requireCreate(userId);
    if(existing?data.revision!==existing.revision:data.revision!==null)throw new APIError(409,'REVISION_CONFLICT','A different saved version exists. Open it from Account saves before replacing it; your current draft is still here.');
    const count=existing?one<{n:number}>(db,'SELECT count(*) n FROM prototype_versions WHERE prototype_id=?',existing.id)!.n:0;
-   if(e.limits.savedVersions!==null&&count>=e.limits.savedVersions)throw new APIError(403,'VERSION_LIMIT_REACHED',`Free account saves allow ${e.limits.savedVersions} versions. Upgrade or save temporarily.`,{upgradeUrl:'/extension/upgrade'});
+   // A plan's version limit keeps the newest versions: the oldest are dropped rather than refusing the save.
+   if(existing&&e.limits.savedVersions!==null&&count>=e.limits.savedVersions)db.prepare('DELETE FROM prototype_versions WHERE prototype_id=? AND version IN (SELECT version FROM prototype_versions WHERE prototype_id=? ORDER BY version LIMIT ?)').run(existing.id,existing.id,count-e.limits.savedVersions+1);
    const id=existing?.id||randomUUID(),now=clock().toISOString(),version=(existing?.current_version||0)+1,revision=(existing?.revision||0)+1;
    if(!existing){db.prepare('INSERT INTO prototypes (id,user_id,name,description,target_domain,current_version,revision,created_at,updated_at,workflow_id) VALUES (?,?,?,?,?,?,?,?,?,?)').run(id,userId,w.name,'',w.origin,version,revision,now,now,w.id);db.prepare('INSERT INTO prototype_definitions VALUES (?,?)').run(id,JSON.stringify(w));}
    else{db.prepare('UPDATE prototypes SET name=?,current_version=?,revision=?,updated_at=? WHERE id=?').run(w.name,version,revision,now,id);db.prepare('UPDATE prototype_definitions SET definition=? WHERE prototype_id=?').run(JSON.stringify(w),id);}
@@ -35,5 +36,9 @@ export function workflowStore(db:DB,entitlements:Entitlements,clock:()=>Date){
   }).immediate();
  }
  function list(userId:string){return all<Row>(db,'SELECT p.*,d.definition FROM prototypes p JOIN prototype_definitions d ON p.id=d.prototype_id WHERE p.user_id=? AND p.workflow_id IS NOT NULL ORDER BY p.updated_at DESC',userId).map(p=>({id:p.workflow_id,name:p.name,origin:p.target_domain,route:JSON.parse(p.definition).route,revision:p.revision,version:p.current_version,updatedAt:p.updated_at}));}
- return {read,save,list};
+ function remove(userId:string,id:string){const row=get(userId,id);if(!row)throw new APIError(404,'NOT_FOUND','Workflow not found.');db.prepare('DELETE FROM prototypes WHERE id=?').run(row.id);return {deleted:true};}
+ // A rename changes only the name; it is not a new version and does not count against version limits.
+ function rename(userId:string,id:string,input:unknown){const {name}=z.object({name:z.string().trim().min(1).max(300)}).strict().parse(input);const row=get(userId,id);if(!row)throw new APIError(404,'NOT_FOUND','Workflow not found.');
+  db.transaction(()=>{const definition={...JSON.parse(row.definition),name};db.prepare('UPDATE prototypes SET name=?,updated_at=? WHERE id=?').run(name,clock().toISOString(),row.id);db.prepare('UPDATE prototype_definitions SET definition=? WHERE prototype_id=?').run(JSON.stringify(definition),row.id);})();return {name};}
+ return {read,save,list,remove,rename};
 }

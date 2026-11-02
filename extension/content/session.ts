@@ -1,7 +1,12 @@
+import {AssistantMemorySchema} from '../shared/assistantMemory';
+import {captureScreen,type CaptureRect} from './screenCapture';
+import {compareScreens} from './comparison';
+import {copyPlacement} from './copyPlacement';
+import {rolledBackPreview,keptPreview} from '../assistant/applyVerified';
 import {AssistantController} from '../assistant/controller';
 import {inScope} from '../assistant/dom';
-import {stateURL,sameApplicationURL,type LiveNavigation,type LiveContext} from '../shared/liveNavigation';
-import {isTextEntry} from '../shared/keyboard';
+import {stateURL,sameApplicationURL,samePage,type LiveNavigation,type LiveContext,type PausedWorkflow} from '../shared/liveNavigation';
+import {isTextEntry,shortcutKey} from '../shared/keyboard';
 import {fieldFor,eventsFor,conditionPasses} from './connections';
 import {choicePlan} from '../ai/choicePlan';
 import {captureDesign,nativeOperations,inferDestination,readStyle} from './nativeDesign';
@@ -13,6 +18,8 @@ import {sectionOperations} from '../ai/section';
 import {sectionTarget} from './selection';
 import {compileFlow,buttonTheme} from '../ai/flow';
 import {BatchSchema} from '../ai/planSchema';
+import {duplicateIntent} from '../ai/duplicateIntent';
+import {copyWithHeading} from './duplicateHeading';
 import { captureCopy } from './duplicate';
 import { VisitedScreenSchema, ConnectionSpecSchema, RecordSchema, OperationSchema, StyleSchema, clone, routeOf, uid, type Workflow, type Selection, type Snapshot, type Command, type SavedRecord, type CopyNode, type ConnectionEvent,type ConnectionWorkspace } from '../shared/model';
 import { createWorkflow, addOperation, addChild, addCapturedScreen, addLiveScreen, transition, History, validateWorkflow } from '../prototype/engine';
@@ -25,6 +32,7 @@ import { textAlignment } from './textAlignment';
 import { Renderer } from './renderer';
 import { describe, resolve } from './locator';
 export class Session {
+  private destroyed=false;
   private assistant:AssistantController|undefined;
   workflow:Workflow; stateId:string; selected:Selection|null=null; picking=false; dragging=false; replay=false; enabled=true; dirty=false;
   connectionWorkspace:ConnectionWorkspace|null=null;
@@ -38,6 +46,8 @@ export class Session {
   private defaults(){return Object.fromEntries((this.workflow.variables||[]).map(v=>[v.key,v.value]));}
   private authoring=false;
   private interacting=false;
+  private previewOriginal=false;
+  private closeComparison:(()=>void)|undefined;
   private panelMinimized=false;
   private restoringPanel=false;
   panelAttached(){if(this.liveSession)return true;if(!this.panelMinimized&&!this.restoringPanel)return false;this.restoringPanel=false;this.panelMinimized=false;this.emit();return true;}
@@ -47,14 +57,16 @@ export class Session {
   private selectionOutline=document.createElement('div');
   private selectionElement:HTMLElement|null=null;
   private selectionFrame:number|undefined;
+  private assistantCheckpoint:{token:string;before:Workflow;stateId:string;dirty:boolean;past:History['past'];future:History['future'];after:string}|null=null;
   history=new History(); visits:string[]=[]; unresolved:string[]=[]; record:SavedRecord|null=null; library:SavedRecord[]=[];
   private pageEditor:PageEditor;
   private historyGroup:string|undefined;
   private closeLayouts:(()=>void)|undefined;
   renderer:Renderer; private observer:MutationObserver; private timer:ReturnType<typeof setTimeout>|undefined;
   private draftTimer:ReturnType<typeof setTimeout>|undefined;
+  private draftPending=false;
   private listeners=new Set<(s:Snapshot)=>void>(); private outline:HTMLElement; private queue:Promise<unknown>=Promise.resolve();
-  constructor(public root:HTMLElement,public repository:Repository,public url:URL, private options:{ assistantEnabled?:boolean;liveNavigation?:LiveNavigation;connectionViewport?:()=>{width:number;height:number};externalConnections?:boolean;requestConnections?:()=>void|Promise<void>;directSelection?:boolean;requestSave?:()=>void;requestSignIn?:()=>Promise<void>;requestClose?:()=>Promise<void>;requestPlan?:(prompt:string,selection:Selection)=>Promise<unknown> } = {}) {
+  constructor(public root:HTMLElement,public repository:Repository,public url:URL, private options:{ historyStore?:{read(id:string):Promise<unknown>;write(id:string,value:unknown):Promise<void>};assistantEnabled?:boolean;liveNavigation?:LiveNavigation;connectionViewport?:()=>{width:number;height:number};externalConnections?:boolean;requestConnections?:()=>void|Promise<void>;directSelection?:boolean;requestSectionChat?:(rect:DOMRect,label:string)=>void;requestSave?:()=>void;requestSignIn?:()=>Promise<void>;requestClose?:()=>Promise<void>;requestPlan?:(prompt:string,selection:Selection)=>Promise<unknown> } = {}) {
     this.projectionActive=!!options.directSelection;this.workflow=createWorkflow(url);this.stateId=this.workflow.entry;
     this.renderer=new Renderer(root,id=>this.click(id),id=>{if(this.runningConnections)this.click(id);else{const node=this.renderer.owned.get(id);if(node)this.select(node);}});
     this.outline=document.createElement('div');this.outline.dataset.dxIgnore='true';this.outline.style.cssText='position:fixed;pointer-events:none;z-index:2147483647;border:2px solid #6473f4;border-radius:4px;background:#6c7afa12;display:none;box-sizing:border-box;';document.documentElement.append(this.outline);
@@ -69,11 +81,13 @@ export class Session {
     window.addEventListener('keydown',this.escape,true);window.addEventListener('keyup',this.keyup,true);
     window.addEventListener('dragstart',this.nativeDrag,true);window.addEventListener('pointerdown',this.dragStart,true);window.addEventListener('pointermove',this.dragMove,true);window.addEventListener('pointerup',this.dragEnd,true);window.addEventListener('pointercancel',this.cancelDrag,true);window.addEventListener('blur',this.blur);
   }
-  async init() {if(!await this.resumeLive())await this.loadRoute(false);this.emit();}
-  private observe() { this.observer.observe(this.root,{childList:true,subtree:true,characterData:true,attributes:true,attributeFilter:['id','data-testid','data-test','data-qa','aria-label','hidden']}); }
+  // Returning to a page restores the draft last edited there; Start new workflow is an explicit choice.
+  async init() {if(!await this.resumeLive())await this.loadRoute();this.emit();}
+  private observe() { if(this.destroyed)return;this.observer.observe(this.root,{childList:true,subtree:true,characterData:true,attributes:true,attributeFilter:['id','data-testid','data-test','data-qa','aria-label','hidden']}); }
   private render(reset=false) {
+    if(this.destroyed)return;
     this.observer.disconnect();
-    try {const matchingPage=stateURL(this.workflow,this.stateId)===this.url.href;if(reset||!matchingPage)this.renderer.reset();this.unresolved=this.enabled&&this.projectionActive?(matchingPage?this.renderer.reconcile(this.workflow,this.stateId,this.runningConnections?this.replayData:this.defaults()):['This step belongs to another application page. Open its connected route before editing.']):[];} finally { this.observe(); }
+    try {const matchingPage=samePage(stateURL(this.workflow,this.stateId),this.url.href);if(reset||!matchingPage)this.renderer.reset();this.unresolved=this.enabled&&this.projectionActive&&!this.previewOriginal?(matchingPage?this.renderer.reconcile(this.workflow,this.stateId,this.runningConnections?this.replayData:this.defaults()):['This step belongs to another application page. Open its connected route before editing.']):[];} finally { this.observe(); }
     this.emit();
   }
   async loadRoute(restore=true) {
@@ -81,32 +95,50 @@ export class Session {
     this.replayData={};this.replayHistory=[];
     this.library=await this.repository.list(this.url.origin,routeOf(this.url));
     const active=await this.repository.active(this.url.origin,routeOf(this.url));
-    this.record=restore?this.library.find(r=>r.draft.id===active)||null:null;
-    this.workflow=clone(this.record?.draft || createWorkflow(this.url));this.stateId=this.workflow.states.find(s=>s.liveURL===this.url.href)?.id||this.workflow.entry;this.enabled=this.record?.enabled??true;
-    this.dirty=false;this.history=new History();this.visits=[];this.selected=null;this.picking=this.authoring;this.outline.style.display='none';this.replay=false;this.render(true);
+    // A workflow that spans pages is listed under its first page; its other pages find it through their live screen.
+    const spanning=active&&!this.library.some(r=>r.draft.id===active)?await this.repository.get(active):null;
+    this.record=restore?this.library.find(r=>r.draft.id===active)||(spanning&&spanning.draft.origin===this.url.origin&&spanning.draft.states.some(s=>s.liveURL&&samePage(s.liveURL,this.url.href))?spanning:null):null;
+    this.workflow=clone(this.record?.draft || createWorkflow(this.url));this.stateId=this.workflow.states.find(s=>s.liveURL&&samePage(s.liveURL,this.url.href))?.id||this.workflow.entry;this.enabled=this.record?.enabled??true;
+    // A restored draft with edits after its last saved version is still unsaved work.
+    const last=this.record?.versions.at(-1)?.workflow;this.dirty=!!this.record&&(last?JSON.stringify(this.record.draft)!==JSON.stringify(last):this.record.draft.states.length>1||this.record.draft.edges.length>0||this.record.draft.states.some(s=>s.operations.length>0));this.history=await this.historyFor(this.workflow.id);this.visits=[];this.selected=null;this.picking=this.authoring;this.outline.style.display='none';this.replay=false;this.render(true);
   }
   navigate(url:URL):Promise<void> {const work=this.queue.then(()=>this.changeRoute(url));this.queue=work.catch(()=>undefined);return work;}
   private routeDrafts=new Map<string,{workflow:Workflow;dirty:boolean;record:SavedRecord|null;enabled:boolean}>();
   private async changeRoute(url:URL) {
     if(url.href===this.url.href)return;
     if(this.dirty)this.routeDrafts.set(this.workflow.id,{workflow:clone(this.workflow),dirty:this.dirty,record:this.record,enabled:this.enabled});
-    this.suspend();this.url=url;if(await this.resumeLive())return;await this.loadRoute(false);
+    if(this.dirty)await this.checkpoint(false);
+    this.suspend();this.url=url;if(await this.resumeLive())return;await this.loadRoute();
     this.projectionActive=this.authoring;this.picking=this.authoring;this.render(true);
   }
+  private navigationError='';
+  private pausedWorkflow:PausedWorkflow|null=null;
   private liveSession=false;
   private navigating=false;
   private leaving=false;
   private liveDialogs:Record<string,string>={};
   async pageRestored(){this.leaving=false;await this.resumeLive();}
-  pageLeaving(){this.leaving=true;this.suspend();}
+  // Undo history belongs to a workflow, not a page: it survives route changes in memory and full page loads through the history store.
+  private histories=new Map<string,History>();
+  private async historyFor(id:string){
+    let history=this.histories.get(id);if(history)return history;history=new History();
+    try{const saved=await this.options.historyStore?.read(id) as {past?:unknown;future?:unknown}|undefined;const entries=(value:unknown)=>Array.isArray(value)?value.filter((e):e is {workflow:Workflow;stateId:string}=>!!e&&typeof e==='object'&&typeof (e as {stateId?:unknown}).stateId==='string'&&!!(e as {workflow?:unknown}).workflow):[];history.past=entries(saved?.past);history.future=entries(saved?.future);}catch{/* history is a convenience; the draft itself is unaffected */}
+    this.histories.set(id,history);return history;
+  }
+  private persistHistory(){const id=this.workflow.id;this.histories.set(id,this.history);void this.options.historyStore?.write(id,{past:this.history.past.slice(-20),future:this.history.future.slice(-20)}).catch(()=>{});}
+  // A draft save still waiting on its short delay is written now, so leaving right after an edit keeps it.
+  pageLeaving(){const pending=this.draftPending;clearTimeout(this.draftTimer);this.draftPending=false;if(pending&&!this.navigating)void this.checkpoint(false).catch(()=>{});this.leaving=true;this.suspend();}
   private async resumeLive(){
     if(!this.options.liveNavigation)return false;
-    let context:LiveContext|null;try{context=await this.options.liveNavigation.read();}catch(error){this.pageEditor.notify(error instanceof Error?error.message:'Could not restore this workflow.');return false;}
-    if(!context)return false;const record=await this.repository.get(context.workflowId);if(!record)return false;
-    if(record.draft.origin!==this.url.origin||stateURL(record.draft,context.stateId)!==this.url.href)return false;
+    try{
+    const context=await this.options.liveNavigation.read();this.pausedWorkflow=this.options.liveNavigation.paused||null;if(!context)return false;
+    const record=await this.repository.get(context.workflowId);if(!record)throw new Error('The active workflow draft is unavailable. Restore it from Saved workflows.');
+    if(record.draft.origin!==this.url.origin||!samePage(stateURL(record.draft,context.stateId),this.url.href))throw new Error('Return to a connected screen and retry. The active workflow could not be matched to this page.');
+    this.navigationError='';
     this.workflow=clone(record.draft);this.record=record;this.stateId=context.stateId;this.enabled=record.enabled;this.visits=context.visits;this.liveDialogs=context.dialogs;this.liveSession=true;this.leaving=false;this.navigating=false;
-    this.authoring=true;this.projectionActive=true;this.interacting=context.mode==='interact';this.replay=context.mode==='replay';this.picking=context.mode==='edit';this.panelMinimized=context.minimized;this.replayData=this.defaults();this.selected=null;this.dirty=false;this.history=new History();
+    this.authoring=true;this.projectionActive=true;this.interacting=context.mode==='interact';this.replay=context.mode==='replay';this.picking=context.mode==='edit';this.panelMinimized=context.minimized;this.replayData=this.defaults();this.selected=null;this.dirty=false;this.history=await this.historyFor(this.workflow.id);
     this.library=await this.repository.list(this.url.origin,this.workflow.route);this.render(true);this.restoreDialog();return true;
+    }catch(error){this.navigationError='Wandel could not resume your workflow. '+(error instanceof Error?error.message:'Retry from a connected screen.');this.suspend();this.emit();return true;}
   }
   private restoreDialog(){
     const title=this.liveDialogs[this.stateId];if(!title)return;
@@ -115,7 +147,7 @@ export class Session {
     if(candidates.length===1){this.renderer.forwarding=true;try{candidates[0].click();}finally{this.renderer.forwarding=false;}}else this.pageEditor.notify('Open “'+title+'” in the application to return to this step. Your workflow is restored.');
   }
   private async navigateState(id:string,visits:string[],mode:'edit'|'interact'|'replay'=this.mode()==='closed'?'edit':this.mode() as 'edit'|'interact'|'replay'){
-    const url=sameApplicationURL(stateURL(this.workflow,id),this.workflow.origin);if(url===this.url.href)return false;
+    const url=sameApplicationURL(stateURL(this.workflow,id),this.workflow.origin);if(samePage(url,this.url.href))return false;
     if(!this.options.liveNavigation)throw new Error('Live application navigation is unavailable. Reload Wandel and refresh this page.');
     const dialog=[...this.root.querySelectorAll<HTMLElement>('[role=dialog],dialog[open]')].filter(n=>n.getBoundingClientRect().width>0).at(-1);
     const title=(dialog?.querySelector('h1,h2,h3')?.textContent||dialog?.getAttribute('aria-label')||'').trim().slice(0,120);if(title)this.liveDialogs[this.stateId]=title;
@@ -123,12 +155,12 @@ export class Session {
     try{await this.options.liveNavigation.go(url,{workflowId:this.workflow.id,stateId:id,visits:visits.slice(-60),mode,minimized:this.panelMinimized,dialogs:this.liveDialogs});}catch(error){this.navigating=false;throw error;}return true;
   }
   /** Synchronous teardown also runs before BFCache/pagehide freezes the document. */
-  suspend(){this.assistant?.reset();this.restoringPanel=false;this.panelMinimized=false;this.styleClipboard=null;this.replayData={};this.replayHistory=[];this.closeLayouts?.();this.resizeHeld=false;this.cancelDrag();this.projectionActive=false;this.picking=false;this.dragging=false;this.replay=false;this.selected=null;this.hovered=null;this.render(true);}
+  suspend(){this.closeComparison?.();this.previewOriginal=false;this.assistant?.reset();this.restoringPanel=false;this.panelMinimized=false;this.styleClipboard=null;this.replayData={};this.replayHistory=[];this.closeLayouts?.();this.resizeHeld=false;this.cancelDrag();this.projectionActive=false;this.picking=false;this.dragging=false;this.replay=false;this.selected=null;this.hovered=null;this.render(true);}
 
   subscribe(listener:(s:Snapshot)=>void) {this.listeners.add(listener);listener(this.snapshot());return()=>{this.listeners.delete(listener);};}
-  snapshot():Snapshot {this.seenViews.add(this.stateId);return clone({...(this.assistant?{assistant:this.assistant.snapshot()}:{}),liveSession:this.liveSession,panelMinimized:this.panelMinimized,panelRestoring:this.restoringPanel,connectionWorkspace:this.connectionWorkspace,visited:[...this.seenViews],mode:this.mode(),styleSource:this.styleClipboard?.selection||null,workflow:this.workflow,stateId:this.stateId,selected:this.selected,picking:this.picking,dragging:this.dragging,replay:this.replay,enabled:this.enabled,dirty:this.dirty,canUndo:!!this.history.past.length,canRedo:!!this.history.future.length,canBack:!!this.visits.length,unresolved:this.unresolved,currentVersion:this.record?.currentVersion||this.record?.versions.at(-1)?.number||0,versions:this.record?.versions.map(({number,savedAt,workflow})=>({number,savedAt,name:workflow.name}))||[],library:[...this.library.map(r=>({id:r.draft.id,name:this.routeDrafts.has(r.draft.id)?this.routeDrafts.get(r.draft.id)!.workflow.name+' (unsaved)':r.draft.name,versions:r.versions.length})),...[...this.routeDrafts.values()].filter(d=>d.workflow.origin===this.url.origin&&d.workflow.route===routeOf(this.url)&&!this.library.some(r=>r.draft.id===d.workflow.id)).map(d=>({id:d.workflow.id,name:d.workflow.name+' (unsaved)',versions:d.record?.versions.length||0}))]});}
+  snapshot():Snapshot {this.seenViews.add(this.stateId);return clone({previewOriginal:this.previewOriginal,...(this.assistant?{assistant:this.assistant.snapshot()}:{}),navigationError:this.navigationError,...(this.pausedWorkflow?{resumeChoice:{name:this.pausedWorkflow.name,page:new URL(this.pausedWorkflow.url).pathname}}:{}),liveSession:this.liveSession,panelMinimized:this.panelMinimized,panelRestoring:this.restoringPanel,connectionWorkspace:this.connectionWorkspace,visited:[...new Set([...this.seenViews,...this.visits])],mode:this.mode(),styleSource:this.styleClipboard?.selection||null,workflow:this.workflow,stateId:this.stateId,selected:this.selected,picking:this.picking,dragging:this.dragging,replay:this.replay,enabled:this.enabled,dirty:this.dirty,canUndo:!!this.history.past.length,canRedo:!!this.history.future.length,canBack:!!this.visits.length,unresolved:this.unresolved,currentVersion:this.record?.currentVersion||this.record?.versions.at(-1)?.number||0,versions:this.record?.versions.map(({number,savedAt,workflow})=>({number,savedAt,name:workflow.name}))||[],library:[...this.library.map(r=>({id:r.draft.id,name:this.routeDrafts.has(r.draft.id)?this.routeDrafts.get(r.draft.id)!.workflow.name+' (unsaved)':r.draft.name,versions:r.versions.length})),...[...this.routeDrafts.values()].filter(d=>d.workflow.origin===this.url.origin&&d.workflow.route===routeOf(this.url)&&!this.library.some(r=>r.draft.id===d.workflow.id)).map(d=>({id:d.workflow.id,name:d.workflow.name+' (unsaved)',versions:d.record?.versions.length||0}))]});}
   private lastEmission='';
-  private emit() {this.updateSelection();const s=this.snapshot(),serialized=JSON.stringify(s);if(serialized===this.lastEmission)return;this.lastEmission=serialized;this.listeners.forEach(fn=>fn(s));}
+  private emit() {if(this.destroyed)return;this.updateSelection();const s=this.snapshot(),serialized=JSON.stringify(s);if(serialized===this.lastEmission)return;this.lastEmission=serialized;this.listeners.forEach(fn=>fn(s));}
   private updateSelection(){
     this.selectionElement=this.selecting?this.findSelected():null;
     if(!this.selectionElement){this.selectionOutline.style.display='none';if(this.selectionFrame!==undefined)window.cancelAnimationFrame(this.selectionFrame);this.selectionFrame=undefined;return;}
@@ -142,8 +174,10 @@ export class Session {
     const styles={display:r.width&&r.height?'block':'none',left:`${r.left}px`,top:`${r.top}px`,width:`${r.width}px`,height:`${r.height}px`};
     for(const [key,value] of Object.entries(styles))if(this.selectionOutline.style.getPropertyValue(key)!==value)this.selectionOutline.style.setProperty(key,value);
   };
+  chatHere(){const target=this.findSelected();if(!target||!this.selected)return;this.assistant??=new AssistantController(this.root,this.renderer.owned);this.assistant.collector.reset();this.assistant.collector.focusLocator=this.selected.locator;this.options.requestSectionChat?.(target.getBoundingClientRect(),this.selected.label);}
+  clearChatFocus(){if(this.assistant)this.assistant.collector.focusLocator=null;}
   private select(el:HTMLElement) {this.historyGroup=undefined;this.selected=describe(el,this.renderer.idFor(el));this.outline.style.display='none';this.emit();}
-  private get selecting() {return !this.panelMinimized&&!this.interacting&&this.projectionActive&&this.enabled&&!this.replay&&(this.picking||!!this.options.directSelection);}
+  private get selecting() {return !this.previewOriginal&&!this.panelMinimized&&!this.interacting&&this.projectionActive&&this.enabled&&!this.replay&&(this.picking||!!this.options.directSelection);}
   private hovered:HTMLElement|null=null;
   private hoverHint:HTMLElement|null=null;
   private paintHover(el:HTMLElement,text?:string) {
@@ -207,12 +241,13 @@ export class Session {
     this.suppressClick=true;setTimeout(()=>{this.suppressClick=false;},0);
     if(Math.abs(d.dx)+Math.abs(d.dy)>2){this.selected=d.selection;void this.dispatch({type:'style',style:this.gestureStyle(d)}).catch(this.gestureError);}
   };
-  private keyup=(e:KeyboardEvent)=>{if(e.code==='KeyS'||e.key.toLowerCase()==='s')this.resizeHeld=false;};
+  private keyup=(e:KeyboardEvent)=>{const key=shortcutKey(e);if(!key)return;if(e.code==='KeyS'||key==='s')this.resizeHeld=false;};
   private blur=()=>{this.resizeHeld=false;this.cancelDrag();};
   private escape=(e:KeyboardEvent)=>{
+    const key=shortcutKey(e);if(!key)return;
     if(e.key==='Escape'&&this.closeLayouts){e.preventDefault();e.stopImmediatePropagation();this.closeLayouts();return;}
     const path=e.composedPath(),origin=path[0];const selected=this.selecting?this.findSelected():null;const editable=isTextEntry(origin)&&!(origin instanceof Element&&selected?.contains(origin)&&!path.includes(this.pageEditor.host));
-    if(!editable&&this.selecting&&(e.code==='KeyS'||e.key.toLowerCase()==='s')){this.resizeHeld=true;if(e.altKey){e.preventDefault();e.stopImmediatePropagation();}return;}
+    if(!editable&&this.selecting&&(e.code==='KeyS'||key==='s')){this.resizeHeld=true;if(e.altKey){e.preventDefault();e.stopImmediatePropagation();}return;}
     if(!editable&&this.selecting&&!this.dragData&&e.altKey&&['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)&&this.hovered?.isConnected){
       e.preventDefault();e.stopImmediatePropagation();
       const el=this.hovered,dx=e.key==='ArrowLeft'?-1:e.key==='ArrowRight'?1:0,dy=e.key==='ArrowUp'?-1:e.key==='ArrowDown'?1:0;
@@ -220,8 +255,10 @@ export class Session {
       const {width,height}=this.dimensions(el),{x,y}=this.offset(el);
       void this.dispatch({type:'style',style:this.resizeHeld?{width:this.bound(width+dx,1,4000),height:this.bound(height+dy,1,4000)}:{x:this.bound(x+dx,-10000,10000),y:this.bound(y+dy,-10000,10000)}}).catch(this.gestureError);return;
     }
-    if(!editable&&this.selecting&&(e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='z'){e.preventDefault();e.stopImmediatePropagation();void this.dispatch({type:e.shiftKey?'redo':'undo'});return;}
+    if(!editable&&this.selecting&&(e.metaKey||e.ctrlKey)&&key==='z'){e.preventDefault();e.stopImmediatePropagation();void this.dispatch({type:e.shiftKey?'redo':'undo'});return;}
     if(e.key==='Escape'&&e.composedPath().some(node=>node instanceof HTMLElement&&node.hasAttribute('data-dx-editor')))return;
+    // In Interact the app's own Escape (closing its dialogs and menus) must reach it.
+    if(e.key==='Escape'&&this.mode()==='interact')return;
     if(e.key==='Escape'&&!editable&&!e.repeat&&this.projectionActive){
       e.preventDefault();e.stopImmediatePropagation();
       if(this.dragData){this.cancelDrag();this.dragging=false;return;}
@@ -260,7 +297,7 @@ export class Session {
       const trigger=this.connectionSource(target,'click');
       if(trigger){event.preventDefault();event.stopImmediatePropagation();this.click(trigger);return;}
       const owned=this.renderer.findOwned(target);
-      if(owned&&this.workflow.edges.some(edge=>edge.from===this.stateId&&edge.source===owned.id&&(edge.event||'click')==='click')){this.renderer.captureClick(event);return;}
+      if(owned&&this.workflow.edges.some(edge=>edge.from===this.stateId&&edge.source===owned.id&&(edge.event||'click')==='click')){event.preventDefault();event.stopImmediatePropagation();this.click(owned.id);return;}
       if(this.replay)try{if(this.renderer.forwardClick(target)){event.preventDefault();event.stopImmediatePropagation();return;}}catch(error){event.preventDefault();event.stopImmediatePropagation();this.gestureError(error);return;}
       if(target.matches('input,textarea')&&this.renderer.findOwned(target)){event.stopImmediatePropagation();return;}
     }
@@ -277,7 +314,7 @@ export class Session {
     const next=edge?(passes?edge.to:edge.otherwise):undefined;
     if(edge&&!next){this.pageEditor.notify('Complete the connection conditions before continuing.');return;}
     if(next&&passes&&this.runningConnections&&this.workflow.states.findIndex(s=>s.id===next)>this.workflow.states.findIndex(s=>s.id===this.stateId)&&!this.renderer.validateInputs(source))return;
-    if(next&&stateURL(this.workflow,next)!==this.url.href){
+    if(next&&!samePage(stateURL(this.workflow,next),this.url.href)){
       if(this.navigating)return;const from=this.stateId,workflow=this.workflow.id;this.navigating=true;
       const work=this.queue.then(async()=>{if(this.stateId!==from||this.workflow.id!==workflow){this.navigating=false;return;}try{await this.navigateState(next,[...this.visits,from]);}catch(error){this.navigating=false;this.pageEditor.notify(error instanceof Error?error.message:'Could not open the connected page.');}});this.queue=work;return;
     }
@@ -286,15 +323,16 @@ export class Session {
   }
   private commit(next:Workflow,nextState=this.stateId,group?:string,repaint=true) {const validated=validateWorkflow(next);if(!group||group!==this.historyGroup)this.history.push(this.workflow,this.stateId);this.historyGroup=group;this.workflow=validated;this.workflow.updatedAt=new Date().toISOString();this.stateId=nextState;this.dirty=true;if(repaint)this.render(true);this.scheduleDraft();}
   private scheduleDraft(){
-    clearTimeout(this.draftTimer);this.draftTimer=setTimeout(()=>{const work=this.queue.then(()=>this.checkpoint());this.queue=work.catch(this.gestureError);},500);
+    if(this.destroyed)return;    clearTimeout(this.draftTimer);this.draftPending=true;this.draftTimer=setTimeout(()=>{this.draftPending=false;const work=this.queue.then(()=>this.checkpoint());this.queue=work.catch(this.gestureError);},500);
   }
-  private async checkpoint(){
+  private async checkpoint(remember=true){
+    if(this.destroyed||this.navigating||this.leaving)return;clearTimeout(this.draftTimer);
     const record:SavedRecord={draft:clone(this.workflow),enabled:this.enabled,currentVersion:this.record?.currentVersion||0,versions:this.record?.versions||[]};
-    await this.repository.put(record);await this.repository.setActive(record.draft);
-    await this.rememberLivePosition();
+    await this.repository.put(record);await this.repository.setActive(record.draft);this.persistHistory();
+    if(remember)await this.rememberLivePosition();
     this.library=await this.repository.list(this.url.origin,routeOf(this.url));this.emit();
   }
-  private async rememberLivePosition(){if(this.liveSession&&!this.navigating)await this.options.liveNavigation?.remember?.({workflowId:this.workflow.id,stateId:this.stateId,visits:this.visits.slice(-60),mode:this.mode()==='closed'?'edit':this.mode() as 'edit'|'interact'|'replay',minimized:this.panelMinimized,dialogs:this.liveDialogs});}
+  private async rememberLivePosition(){if(!this.navigationError&&!this.navigating&&(this.liveSession||this.dirty||this.record||this.workflow.edges.length))await this.options.liveNavigation?.remember?.({workflowId:this.workflow.id,stateId:this.stateId,visits:this.visits.slice(-60),mode:this.mode()==='closed'?'edit':this.mode() as 'edit'|'interact'|'replay',minimized:this.panelMinimized,dialogs:this.liveDialogs});}
   scopedSelection(scope:'element'|'section'|'page'='element'){
     const selected=this.findSelected();if(!selected)throw new Error('Select an element first.');
     const target=scope==='page'?this.root:scope==='section'?sectionTarget(selected,this.root):selected;
@@ -303,6 +341,7 @@ export class Session {
   highlightScope(scope:'element'|'section'|'page'){this.selectionElement=resolve(this.scopedSelection(scope).locator,this.root,this.renderer.owned);this.paintSelection();}
   isPreviewingLayouts(){return Boolean(this.closeLayouts);}
   async promptHere(prompt:string,scope:'element'|'section'|'page'){
+    if(duplicateIntent(prompt))return this.dispatch({type:'copyPrompt',prompt});
     if(isSettingsRequest(prompt))return this.dispatch({type:'settingsPrompt',prompt});
     if(/(?:generate|show|create).*(?:layouts?|alternatives)|^reimagine (?:this|this section)[.!]?$/i.test(prompt)){this.openLayouts(/\b5\b|five/i.test(prompt)?5:3);return this.snapshot();}
     const current=this.snapshot(),selection=this.scopedSelection(scope);
@@ -317,16 +356,19 @@ export class Session {
   openLayouts(count=3){
     if(!this.isAuthoring())throw new Error('Return to Edit and select a section.');
     const selected=this.findSelected();if(!selected)throw new Error('Select a section first.');
-    const target=sectionTarget(selected,this.root),selection=describe(target,this.renderer.idFor(target));
+    const target=selected.children.length>=2?selected:sectionTarget(selected,this.root),selection=describe(target,this.renderer.idFor(target));
     if(target===this.root)throw new Error('Select a section inside the page, rather than the entire document.');
     if(!resolve(selection.locator,this.root,this.renderer.owned))throw new Error('This section cannot be identified reliably. Select a smaller section or one with a distinct heading.');
     const expected=JSON.stringify(this.workflow),state=this.stateId;
-    this.closeLayouts?.();this.closeLayouts=chooseLayout(target,count,(copy,name)=>{
+    this.closeLayouts?.();this.closeLayouts=chooseLayout(target,count,(copy,name,sources)=>{
       const work=this.queue.then(()=>{
         if(JSON.stringify(this.workflow)!==expected||this.stateId!==state||!this.isAuthoring())throw new Error('The workflow changed while previewing. Generate layouts again.');
         if(resolve(selection.locator,this.root,this.renderer.owned)!==target)throw new Error('The original section changed. Select it again.');
-        const id=uid(),operation=OperationSchema.parse({id:uid(),kind:'insert',target:selection.locator,position:'before',node:{id,kind:'panel',text:name+' layout',isolated:true,copy}});
-        this.commit(addOperation(this.workflow,this.stateId,operation));const node=this.renderer.owned.get(id);if(node)this.select(node);this.emit();
+        // Apply layout styles to the original nodes. Keeping their identities
+        // preserves connections, entered values and native component handlers.
+        let next=clone(this.workflow);
+        for(const part of copy){const node=sources.get(part.id);if(!node||!node.isConnected)continue;const locator=describe(node,this.renderer.idFor(node)).locator;if(resolve(locator,this.root,this.renderer.owned)!==node)throw new Error('A section item changed while previewing. Generate layouts again.');const style=Object.fromEntries(Object.entries(part.style).filter(([key,value])=>getComputedStyle(node).getPropertyValue(key)!==value));if(Object.keys(style).length)next=addOperation(next,this.stateId,OperationSchema.parse({id:uid(),kind:'appearance',target:locator,style}));}
+        this.commit(next);if(target.isConnected)this.select(target);this.emit();
       });this.queue=work.catch(this.gestureError);
     },()=>{this.closeLayouts=undefined;});
   }
@@ -344,33 +386,86 @@ export class Session {
   isAuthoring(){return this.selecting;}
   findSelected(){return this.selected?resolve(this.selected.locator,this.root,this.renderer.owned):null;}
   private async execute(c:Command):Promise<Snapshot> {
-    if(['reset','new'].includes(c.type)){await this.options.liveNavigation?.clear();this.liveSession=false;}
+    if(this.destroyed)throw new Error('Wandel was disconnected. Reload this page to reconnect.');
+    if(c.type==='resumeWorkflow'){await this.resumeLive();return this.snapshot();}
+    if(c.type==='dismissResumeChoice'){this.pausedWorkflow=null;await this.options.liveNavigation?.clear();this.emit();return this.snapshot();}
+    if(c.type==='continueWorkflowHere'){
+      // This page joins the paused workflow as another live application screen.
+      const paused=this.pausedWorkflow;if(!paused)throw new Error('There is no paused workflow to continue.');
+      const record=await this.repository.get(paused.workflowId);if(!record)throw new Error('The paused workflow draft is unavailable. Open it from Saved workflows.');
+      if(record.draft.origin!==this.url.origin)throw new Error('Continue a workflow only on pages of the same application.');
+      const next=clone(record.draft);if(next.states.length>=next.maxStates)throw new Error('This workflow has reached its screen limit. Start a new workflow for this page.');
+      const id=uid();next.states.push({id,title:(document.title||routeOf(this.url)).slice(0,120),parent:paused.stateId,view:'base',liveURL:this.url.href,operations:[]});
+      this.workflow=validateWorkflow(next);this.record=record;this.stateId=id;this.visits=[...paused.visits,paused.stateId].slice(-60);this.liveDialogs={};this.liveSession=true;this.pausedWorkflow=null;this.navigationError='';
+      this.dirty=true;this.history=await this.historyFor(this.workflow.id);this.selected=null;this.render(true);await this.checkpoint();return this.snapshot();
+    }
+    if(this.navigationError&&!['snapshot','new','reset'].includes(c.type))throw new Error(this.navigationError);
+    if(['reset','new'].includes(c.type)){this.navigationError='';this.pausedWorkflow=null;await this.options.liveNavigation?.clear();this.liveSession=false;}
     if(this.dragData&&c.type!=='snapshot')this.cancelDrag();
-    const editing=['appearance','alignText','insertElement','fieldSettings','pasteStyle','image','prompt','text','child','link','undo','redo','style','remove','drag','duplicateElement','mirror'];
+    const editing=['appearance','alignText','insertElement','fieldSettings','pasteStyle','image','prompt','text','child','link','undo','redo','style','remove','drag','duplicateElement','copyPrompt','mirror'];
     if(editing.includes(c.type)&&this.replay)throw new Error('Return to Edit to change the workflow.');
-    if(['appearance','alignText','insertElement','fieldSettings','pasteStyle','image','prompt','text','child','link','style','remove','drag','duplicateElement','mirror'].includes(c.type)&&!this.enabled)throw new Error('Enable the workflow before editing.');
+    if(['appearance','alignText','insertElement','fieldSettings','pasteStyle','image','prompt','text','child','link','style','remove','drag','duplicateElement','copyPrompt','mirror'].includes(c.type)&&!this.enabled)throw new Error('Enable the workflow before editing.');
     if(c.type==='connectionAnchor'){this.pageEditor.connectionAnchor(c.ratio);return this.snapshot();}
     if(c.type==='snapshot')return this.snapshot();
+    if(c.type==='previewOriginal'){this.previewOriginal=c.value;this.cancelDrag();this.selected=null;this.hovered=null;this.closeComparison?.();this.render(true);return this.snapshot();}
+    if(c.type==='compareOriginal'){
+      const showingOriginal=this.previewOriginal;this.closeComparison?.();
+      let current:ReturnType<typeof captureScreen>,original:ReturnType<typeof captureScreen>;const currentGeometry=new Map<string,CaptureRect>(),originalGeometry=new Map<string,CaptureRect>();
+      try{this.previewOriginal=false;this.render(true);current=captureScreen(document,this.url,this.renderer.owned.get('view:'+this.stateId)||this.root,currentGeometry);this.renderer.reset();original=captureScreen(document,this.url,this.root,originalGeometry);}finally{this.previewOriginal=showingOriginal;this.render(true);}
+      this.closeComparison=compareScreens(original!,current!,originalGeometry,currentGeometry);return this.snapshot();
+    }
+    if(this.previewOriginal&&!['pause','closeEditor','minimizePanel','restorePanel','checkpointDraft'].includes(c.type))throw new Error('Return to your changes before editing the prototype.');
+    if(c.type==='tagPage'){const title=c.title.trim();if(!title||title.length>300)throw new Error('Enter a page name.');const next=clone(this.workflow),state=next.states.find(state=>state.id===this.stateId)!;state.title=title;state.tagged=true;this.commit(next);return this.snapshot();}
+    if(c.type==='createPage'){
+      if(!/^\/(?!\/)[a-zA-Z0-9/_-]*$/.test(c.route)||c.route.length>200)throw new Error('Use a prototype route such as /feedback.');
+      if(this.workflow.states.some(state=>state.virtualRoute===c.route))throw new Error('That prototype page already exists in Your flow.');
+      if(this.workflow.states.length>=this.workflow.maxStates)throw new Error('This workflow has reached its screen limit.');
+      const next=clone(this.workflow),id=uid(),title=c.title?.trim()||c.route.split('/').filter(Boolean).join(' ')||'New page';
+      next.states.push({id,title,parent:this.stateId,view:'panel',presentation:'screen',virtualRoute:c.route,tagged:true,design:{...captureDesign(this.findSelected()||this.root.querySelector<HTMLElement>('h1,h2,h3,button,[role=button]')||this.root),surface:{'background-color':'#fff',color:'#242333','font-family':'system-ui, sans-serif','font-size':'16px','font-weight':'400',padding:'32px'}},operations:[]});
+      this.previewOriginal=false;this.selected=null;this.interacting=true;this.projectionActive=true;this.picking=false;this.replay=false;this.commit(next,id);return this.snapshot();
+    }
+
     if(c.type==='checkpointDraft'){await this.checkpoint();if(c.navigating){clearTimeout(this.draftTimer);this.navigating=true;}return this.snapshot();}
     if(c.type==='cancelWorkflowNavigation'){if(this.workflow.id===c.workflowId)this.navigating=false;return this.snapshot();}
     if(c.type.startsWith('assistant')){
       if(!assistantEnabled&&!this.options.assistantEnabled)throw new Error('The offline build supports local editing. Open regular Wandel for voice and conversational edits.');
-      if(!this.isAuthoring())throw new Error('Switch to Edit to use the conversational assistant.');
+      // Chat can inspect a page even when its prototype overlay is off.
+      if(c.type==='assistantApply')this.enabled=true;
       this.assistant??=new AssistantController(this.root,this.renderer.owned);
-      if(c.type==='assistantContext')this.assistant.collect(this.workflow,this.stateId,this.selected,this.hovered);
+      if(c.type==='assistantContext'){
+        if(c.chat){const inactive=!this.projectionActive;this.cancelDrag();this.interacting=true;this.projectionActive=true;this.picking=false;this.dragging=false;this.replay=false;this.outline.style.display='none';if(inactive||this.workflow.states.find(state=>state.id===this.stateId)?.view==='panel'&&!this.renderer.owned.get('view:'+this.stateId)?.isConnected)this.render();}
+        this.assistant.collect(this.workflow,this.stateId,this.selected,this.hovered,c.inspect,c.instruction);
+      }
+      if(c.type==='assistantRemember'){this.workflow.assistantMemory=AssistantMemorySchema.parse(c.memory);this.dirty=true;this.scheduleDraft();}
       if(c.type==='assistantReset')this.assistant.reset();
       if(c.type==='assistantStyle')this.assistant.style(c.ref);
       if(c.type==='assistantCandidates')this.assistant.highlight(c.refs);
       if(c.type==='assistantCandidate'){this.assistant.clearHighlights();const node=this.assistant.collector.get(c.ref);this.select(node);}
+      if(c.type==='assistantRollback'){
+        const checkpoint=this.assistantCheckpoint;
+        if(!checkpoint||checkpoint.token!==c.token||checkpoint.after!==JSON.stringify(this.workflow))throw new Error('The workflow changed after the preview; automatic rollback was skipped to preserve newer work.');
+        this.workflow=checkpoint.before;this.stateId=checkpoint.stateId;this.dirty=checkpoint.dirty;this.history.past=checkpoint.past;this.history.future=checkpoint.future;this.selected=null;this.assistantCheckpoint=null;this.assistant.rollback();this.render(true);this.scheduleDraft();
+      }
       if(c.type==='assistantApply'){
+        // Render conversational changes without enabling visual selection or
+        // drag handles. Only the explicit Edit command enters visual editing.
+        this.authoring=true;this.projectionActive=true;this.replay=false;this.interacting=true;this.picking=false;this.dragging=false;
+
         const previousTarget=this.selected?resolve(this.selected.locator,this.root,this.renderer.owned):null;
-        const result=this.assistant.apply(c.plan,c.token,this.workflow,this.stateId,(next,stateId)=>{
+        const previousOwned=[...this.renderer.owned].find(([,node])=>node===previousTarget)?.[0];
+        const checkpoint={token:c.token,before:this.workflow,stateId:this.stateId,dirty:this.dirty,past:[...this.history.past],future:[...this.history.future]};
+        let flagged='';
+        const result=await this.assistant.apply(c.plan,c.token,this.workflow,this.stateId,async(next,stateId,verify)=>{
           const previous=this.workflow,previousState=this.stateId,dirty=this.dirty,past=[...this.history.past],future=[...this.history.future];
-          try{this.commit(next,stateId);if(this.unresolved.length)throw new Error('Preview could not be applied: '+this.unresolved[0]);}
-          catch(error){this.workflow=previous;this.stateId=previousState;this.dirty=dirty;this.history.past=past;this.history.future=future;this.render(true);throw error;}
+          try{this.commit(next,stateId);if(this.unresolved.length)throw new Error('Preview could not be applied: '+this.unresolved[0]);await new Promise<void>(resolve=>{const fallback=setTimeout(resolve,300);requestAnimationFrame(()=>requestAnimationFrame(()=>{clearTimeout(fallback);resolve();}));});}
+          catch(error){this.workflow=previous;this.stateId=previousState;this.dirty=dirty;this.history.past=past;this.history.future=future;this.render(true);throw new Error(rolledBackPreview+(error instanceof Error?error.message:'The preview did not pass verification.'));}
+          // A change that rendered but fails a layout check stays visible; the user decides to keep, fix or undo it.
+          try{verify();}catch(error){flagged=error instanceof Error?error.message:'A layout check did not pass.';}
         });
+        this.assistantCheckpoint={...checkpoint,after:JSON.stringify(this.workflow)};
         if(result.view){const heading=this.renderer.owned.get('heading:'+result.view);if(heading)this.select(heading);}
-        const recent=result.view?null:this.assistant.collector.recent.at(-1);if(recent){try{this.select(this.assistant.collector.get(recent));}catch{this.selected=null;}}else if(!result.view){if(previousTarget?.isConnected)this.select(previousTarget);else this.selected=null;}
+        const recent=result.view?null:this.assistant.collector.recent.at(-1);if(recent){try{this.select(this.assistant.collector.get(recent));}catch{this.selected=null;}}else if(!result.view){const retained=previousOwned?this.renderer.owned.get(previousOwned):previousTarget;if(retained?.isConnected)this.select(retained);else this.selected=null;}
+        if(flagged){this.emit();throw new Error(keptPreview+flagged);}
       }
       this.emit();return this.snapshot();
     }
@@ -398,7 +493,7 @@ export class Session {
       if(!this.isAuthoring())throw new Error('Return to Edit to connect views.');
       const spec=ConnectionSpecSchema.parse({to:c.to,newTitle:c.newTitle,screen:c.screen,event:c.event,conditions:c.conditions,otherwise:c.otherwise});
       const selected=this.findSelected();if(!selected||!this.selected)throw new Error('Select the source control again.');
-      const target=selected.matches('button,a,[role="button"],[role="link"],[role="link"]')?selected:fieldFor(selected);
+      const target=selected.matches('button,a,[role="button"],[role="link"]')?selected:fieldFor(selected)||selected;
       if(!target||!eventsFor(target).includes(spec.event))throw new Error('Choose a supported event for this control.');
       for(const condition of spec.conditions)if(!fieldFor(resolve(condition.target,this.root,this.renderer.owned)))throw new Error('A condition field is missing. Select it again.');
       let next=clone(this.workflow),source=this.renderer.idFor(target)||this.renderer.triggerFor(target);
@@ -410,7 +505,7 @@ export class Session {
       const previous=next.edges.find(e=>e.from===this.stateId&&e.source===source);
       next.edges=next.edges.filter(e=>e.from!==this.stateId||e.source!==source);
       next.edges.push({id:uid(),from:this.stateId,source,to,event:spec.event,conditions:spec.conditions,...(spec.otherwise?{otherwise:spec.otherwise}:{}),...(previous?.to===to&&previous.effects?{effects:previous.effects}:{})});
-      this.commit(next);this.emit();return this.snapshot();
+      this.commit(next);await this.checkpoint();this.emit();return this.snapshot();
     }
     if(c.type==='replayConnection'){
       const edge=this.workflow.edges.find(e=>e.id===c.id);if(!edge)throw new Error('This connection no longer exists.');
@@ -508,7 +603,7 @@ export class Session {
     else if(c.type==='signIn'){if(!this.options.requestSignIn)throw new Error('Open the Wandel panel and sign in under Account.');await this.options.requestSignIn();}
     else if(c.type==='selectSection'||c.type==='selectParent'){const current=this.findSelected();if(!current)throw new Error('Select an element first.');const target=c.type==='selectSection'?sectionTarget(current,this.root):current.parentElement;if(target&&this.root.contains(target))this.select(target);}
     else if(c.type==='pick'){if(this.replay)throw new Error('Return to Edit to select elements.');const selecting=this.selecting;this.interacting=selecting;this.projectionActive=true;this.picking=!selecting;if(selecting){this.selected=null;this.styleClipboard=null;}this.render();this.outline.style.display='none';}
-    else if(c.type==='pause'){if(!this.panelMinimized&&!this.navigating&&!this.leaving){await this.options.liveNavigation?.clear();this.liveSession=false;this.authoring=false;this.suspend();}}
+    else if(c.type==='pause'){if(!this.panelMinimized&&!this.navigating&&!this.leaving){if(this.dirty||this.record||this.workflow.edges.length)await this.checkpoint();this.authoring=false;this.suspend();}}
     else if(c.type==='drag'){if(!this.selected)throw new Error('Select an element first.');this.dragging=!this.dragging;this.picking=true;}
     else if(c.type==='style'||c.type==='remove'){
       if(!this.selected)throw new Error('Select an element first.');
@@ -528,15 +623,18 @@ export class Session {
       if(!source||!source.matches('button,a,[role="button"],[role="link"],input:not([type="file"]),textarea,label'))throw new Error('Mirror a single button or input field, rather than a whole section.');
       this.commit(addOperation(this.workflow,this.stateId,OperationSchema.parse({id:uid(),kind:'mirror',target:this.selected.locator,source:insertion.target})));
     }
-    else if(c.type==='duplicateElement'){
+    else if(c.type==='duplicateElement'||c.type==='copyPrompt'){
+      const intent=c.type==='copyPrompt'?duplicateIntent(c.prompt):null;
+      if(c.type==='copyPrompt'&&!intent)throw new Error('Use Copy this with heading "Recently Deleted", or describe additional changes separately.');
+      if(c.type==='copyPrompt'&&c.context&&(c.context.workflowId!==this.workflow.id||c.context.stateId!==this.stateId||c.context.selection!==JSON.stringify(this.selected?.locator)))throw new Error('Your selection changed. Select the card again before copying.');
       const target=this.findSelected();if(!target||!this.selected)throw new Error('Select an item to duplicate first.');
       if(target===this.root||target.matches('html,body'))throw new Error('Select an item inside the page to duplicate.');
       const original=this.workflow.states.flatMap(st=>st.operations).find(op=>op.kind==='insert'&&op.node.id===this.selected?.locator.owned?.replace(/:input$/,''));
-      const node=original?.kind==='insert'&&original.node.kind==='field'&&!original.node.copy?{...clone(original.node),id:uid(),binding:undefined}:{id:uid(),kind:'panel' as const,text:this.selected.label||'Copy',copy:captureCopy(target)};
+      const node=!intent?.heading&&original?.kind==='insert'&&original.node.kind==='field'&&!original.node.copy?{...clone(original.node),id:uid(),binding:undefined}:{id:uid(),kind:'panel' as const,text:intent?.heading||this.selected.label||'Copy',copy:intent?.heading?copyWithHeading(target,intent.heading):captureCopy(target)};
       const anchor=original?.kind==='insert'&&original.node.kind==='field'?{...this.selected.locator,owned:original.node.id}:this.selected.locator;
       const op=OperationSchema.parse({id:uid(),kind:'insert',target:anchor,position:'after',node});
-      this.commit(addOperation(this.workflow,this.stateId,op));
-      const copied=this.renderer.owned.get(node.id);if(copied)this.select(copied);
+      let next=this.workflow;for(const layout of copyPlacement(target,el=>[...this.renderer.owned].find(([,owned])=>owned===el)?.[0]))next=addOperation(next,this.stateId,layout);this.commit(addOperation(next,this.stateId,op));
+      const copied=this.renderer.owned.get(node.id);if(copied){this.select(copied);if(assistantEnabled||this.options.assistantEnabled)this.assistant??=new AssistantController(this.root,this.renderer.owned);this.assistant?.collect(this.workflow,this.stateId,this.selected,null);this.assistant?.recordExternal(intent?.heading?'Duplicated and renamed to '+intent.heading:'Duplicated selected element',[copied],copied);}
     }
     else if(c.type==='reset'){
       this.cancelDrag();this.dragging=false;
@@ -590,9 +688,20 @@ export class Session {
       if(!source){source=uid();workflow=addOperation(workflow,this.stateId,{id:uid(),kind:'trigger',target:this.selected.locator,source});}
       const next=clone(workflow);next.edges=next.edges.filter(e=>e.from!==this.stateId||e.source!==source);next.edges.push({id:uid(),from:this.stateId,source,to:c.id});this.commit(next);
     }
-    else if(c.type==='state') {if(!this.workflow.states.some(s=>s.id===c.id))throw new Error('State not found.');if(await this.navigateState(c.id,[...this.visits,this.stateId]))return this.snapshot();this.stateId=c.id;this.selected=null;this.visits=[];this.render(true);if(this.liveSession)await this.checkpoint();}
+    else if(c.type==='state') {
+      if(!this.workflow.states.some(s=>s.id===c.id))throw new Error('State not found.');this.projectionActive=true;if(c.id===this.stateId){this.render();return this.snapshot();}
+      const prior=this.visits.lastIndexOf(c.id),visits=prior>=0?this.visits.slice(0,prior):[...this.visits,this.stateId].slice(-60);
+      if(await this.navigateState(c.id,visits))return this.snapshot();
+      if(prior>=0){this.replayData=this.replayHistory[prior]||this.defaults();this.replayHistory=this.replayHistory.slice(0,prior);}else this.replayHistory.push(clone(this.replayData));
+      this.stateId=c.id;this.selected=null;this.visits=visits;this.render(true);if(this.liveSession)await this.checkpoint();
+    }
     else if(c.type==='rename') {const next=clone(this.workflow);next.name=c.text.trim();this.commit(next,this.stateId,undefined,false);}
-    else if(c.type==='undo'||c.type==='redo') {const next=this.history[c.type](this.workflow,this.stateId);if(next){this.workflow=next.workflow;this.stateId=next.stateId;this.selected=null;this.dirty=true;this.visits=[];this.render(true);}}
+    else if(c.type==='undo'||c.type==='redo') {const next=this.history[c.type](this.workflow,this.stateId);if(next){
+      // A change made on another page is undone in the workflow while this page stays open.
+      const elsewhere=!samePage(stateURL(next.workflow,next.stateId),this.url.href),here=next.workflow.states.find(s=>s.id===this.stateId);
+      this.workflow=next.workflow;if(!elsewhere||!here)this.stateId=next.stateId;this.selected=null;this.dirty=true;this.visits=[];this.render(true);this.persistHistory();this.scheduleDraft();
+      if(elsewhere&&here)this.pageEditor.notify(`${c.type==='undo'?'Undid':'Redid'} a change on “${next.workflow.states.find(s=>s.id===next.stateId)?.title||'another page'}”.`);
+    }}
     else if(c.type==='replay'){if(await this.navigateState(this.workflow.entry,[],'replay'))return this.snapshot();this.replayData=this.defaults();this.replayHistory=[];this.interacting=false;this.projectionActive=true;this.cancelDrag();this.dragging=false;this.replay=true;this.picking=false;this.outline.style.display='none';this.selected=null;this.stateId=this.workflow.entry;this.visits=[];this.render(true);}
     else if(c.type==='edit'){this.panelMinimized=false;const wasReplay=this.replay;this.replayData={};this.replayHistory=[];this.interacting=false;this.authoring=true;this.projectionActive=true;this.replay=false;this.picking=true;this.render(wasReplay);if(this.liveSession)await this.checkpoint();}
     else if(c.type==='back'){const previous=this.visits.at(-1);if(previous){if(await this.navigateState(previous,this.visits.slice(0,-1)))return this.snapshot();this.visits.pop();this.replayData=this.replayHistory.pop()||this.defaults();this.stateId=previous;this.selected=null;this.render(true);if(this.liveSession)await this.checkpoint();}}
@@ -610,12 +719,16 @@ export class Session {
       await this.repository.put(record);this.record=record;if(JSON.stringify(this.workflow)===JSON.stringify(c.expected))this.dirty=false;this.library=await this.repository.list(this.url.origin,routeOf(this.url));
     }
     else if(c.type==='restore'){this.record=await this.repository.restore(this.workflow.id,c.version);this.library=await this.repository.list(this.url.origin,routeOf(this.url));this.workflow=clone(this.record.draft);this.stateId=this.workflow.entry;this.history=new History();this.selected=null;this.dirty=false;this.visits=[];if(await this.navigateState(this.stateId,[]))return this.snapshot();this.render(true);}
-    else if(c.type==='load'){const draft=this.routeDrafts.get(c.id);if(draft&&draft.workflow.origin===this.url.origin&&draft.workflow.route===routeOf(this.url)){this.workflow=clone(draft.workflow);this.record=draft.record;this.dirty=draft.dirty;this.enabled=draft.enabled;this.stateId=this.workflow.entry;this.selected=null;this.history=new History();this.projectionActive=true;this.render(true);this.emit();return this.snapshot();}const record=await this.repository.get(c.id);if(!record || record.draft.origin!==this.url.origin || ![record.draft.origin+record.draft.route,...record.draft.states.flatMap(s=>s.liveURL?[s.liveURL]:[])].includes(this.url.href))throw new Error('Workflow does not match this page.');await this.options.liveNavigation?.clear();this.liveSession=false;await this.repository.setActive(record.draft);this.projectionActive=true;await this.loadRoute();}
+    else if(c.type==='load'){const draft=this.routeDrafts.get(c.id);if(draft&&draft.workflow.origin===this.url.origin&&draft.workflow.route===routeOf(this.url)){this.workflow=clone(draft.workflow);this.record=draft.record;this.dirty=draft.dirty;this.enabled=draft.enabled;this.stateId=this.workflow.entry;this.selected=null;this.history=await this.historyFor(this.workflow.id);this.projectionActive=true;this.render(true);this.emit();return this.snapshot();}const record=await this.repository.get(c.id);if(!record || record.draft.origin!==this.url.origin || ![record.draft.origin+record.draft.route,...record.draft.states.flatMap(s=>s.liveURL?[s.liveURL]:[])].includes(this.url.href))throw new Error('Workflow does not match this page.');await this.options.liveNavigation?.clear();this.liveSession=false;await this.repository.setActive(record.draft);this.projectionActive=true;await this.loadRoute();}
     else if(c.type==='duplicate'){const next=clone(this.workflow);next.id=uid();next.name+=' — copy';next.createdAt=new Date().toISOString();this.workflow=next;this.record=null;this.dirty=true;this.history=new History();this.render(true);}
     else if(c.type==='delete'){await this.repository.delete(this.workflow.id);this.record=null;this.workflow=createWorkflow(this.url);this.stateId=this.workflow.entry;this.dirty=false;this.selected=null;this.history=new History();this.library=await this.repository.list(this.url.origin,routeOf(this.url));this.render(true);}
-    else if(c.type==='new'){this.workflow=createWorkflow(this.url);this.record=null;this.stateId=this.workflow.entry;this.selected=null;this.history=new History();this.visits=[];this.replay=false;this.enabled=true;this.dirty=false;this.render(true);}
+    else if(c.type==='new'){
+      // Discard (from the panel's Start new): a never-saved draft is deleted; saved versions stay in the library. Either way this page stops reopening it.
+      if(c.discard){await this.repository.clearActive(this.workflow);if(!this.record?.versions.length)await this.repository.delete(this.workflow.id);this.routeDrafts.delete(this.workflow.id);}
+      this.library=await this.repository.list(this.url.origin,routeOf(this.url));this.workflow=createWorkflow(this.url);this.record=null;this.stateId=this.workflow.entry;this.selected=null;this.history=new History();this.visits=[];this.replay=false;this.enabled=true;this.dirty=false;this.render(true);}
     if(this.dirty&&editing.includes(c.type))this.scheduleDraft();
+    if(editing.includes(c.type)&&!['copyPrompt','duplicateElement'].includes(c.type)&&this.assistant){const selected=this.findSelected();this.assistant.recordExternal('Manual '+c.type+' applied',selected?[selected]:[]);}
     this.emit();return this.snapshot();
   }
-  destroy(){this.assistant?.reset();this.closeLayouts?.();clearTimeout(this.draftTimer);window.removeEventListener('change',this.connectionChange,true);window.removeEventListener('keydown',this.connectionEnter,true);window.removeEventListener('input',this.inputMirror,true);window.removeEventListener('change',this.inputMirror,true);if(this.selectionFrame!==undefined)window.cancelAnimationFrame(this.selectionFrame);this.selectionFrame=undefined;window.removeEventListener('scroll',this.paintSelection,true);window.removeEventListener('resize',this.paintSelection);this.selectionOutline.remove();this.pageEditor.destroy();this.cancelDrag();window.removeEventListener('dragstart',this.nativeDrag,true);window.removeEventListener('pointerdown',this.dragStart,true);window.removeEventListener('pointermove',this.dragMove,true);window.removeEventListener('pointerup',this.dragEnd,true);window.removeEventListener('pointercancel',this.cancelDrag,true);window.removeEventListener('blur',this.blur);this.observer.disconnect();clearTimeout(this.timer);window.removeEventListener('click',this.handleClick,true);window.removeEventListener('pointermove',this.hover,true);window.removeEventListener('keydown',this.escape,true);window.removeEventListener('keyup',this.keyup,true);this.renderer.reset();this.outline.remove();this.listeners.clear();}
+  destroy(){if(this.destroyed)return;this.destroyed=true;this.assistant?.reset();this.closeComparison?.();this.closeLayouts?.();clearTimeout(this.draftTimer);window.removeEventListener('change',this.connectionChange,true);window.removeEventListener('keydown',this.connectionEnter,true);window.removeEventListener('input',this.inputMirror,true);window.removeEventListener('change',this.inputMirror,true);if(this.selectionFrame!==undefined)window.cancelAnimationFrame(this.selectionFrame);this.selectionFrame=undefined;window.removeEventListener('scroll',this.paintSelection,true);window.removeEventListener('resize',this.paintSelection);this.selectionOutline.remove();this.pageEditor.destroy();this.cancelDrag();window.removeEventListener('dragstart',this.nativeDrag,true);window.removeEventListener('pointerdown',this.dragStart,true);window.removeEventListener('pointermove',this.dragMove,true);window.removeEventListener('pointerup',this.dragEnd,true);window.removeEventListener('pointercancel',this.cancelDrag,true);window.removeEventListener('blur',this.blur);this.observer.disconnect();clearTimeout(this.timer);window.removeEventListener('click',this.handleClick,true);window.removeEventListener('pointermove',this.hover,true);window.removeEventListener('keydown',this.escape,true);window.removeEventListener('keyup',this.keyup,true);this.renderer.reset();this.outline.remove();this.listeners.clear();}
 }

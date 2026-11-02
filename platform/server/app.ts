@@ -1,3 +1,7 @@
+import {billingCapabilities} from '../../extension/shared/billing';
+import {implementationService} from './implementation';
+import type {GitHubProvider} from './github';
+import type {ImplementationProvider} from './implementationProvider';
 import {workflowLinks} from './workflowLinks';
 import {redeemAccessCode} from './access';
 import {assistantService,type AssistantProvider} from './assistant';
@@ -28,8 +32,9 @@ const update=z.object({name:z.string().trim().min(1).max(300).optional(),descrip
 const publicUser=(u:User)=>({id:u.id,email:u.email,name:u.name,createdAt:u.created_at,updatedAt:u.updated_at});
 const publicPrototype=(p:Prototype)=>({id:p.id,name:p.name,description:p.description,targetDomain:p.target_domain,currentVersion:p.current_version,revision:p.revision,createdAt:p.created_at,updatedAt:p.updated_at,...(p.definition?{definition:JSON.parse(p.definition)}:{})});
 const json=(data:unknown,status=200,headers:Record<string,string>={})=>new Response(JSON.stringify(data),{status,headers:{'Content-Type':'application/json','Cache-Control':'no-store',...headers}});
-export function createPlatform(options:{db:DB;config:Config;ai:AIProvider;mail:MailProvider;clock?:()=>Date;analytics?:Analytics;billing?:BillingProvider;identity?:IdentityProvider;assistant?:AssistantProvider}){
+export function createPlatform(options:{db:DB;config:Config;ai:AIProvider;mail:MailProvider;clock?:()=>Date;analytics?:Analytics;billing?:BillingProvider;identity?:IdentityProvider;assistant?:AssistantProvider;github?:GitHubProvider;implementation?:ImplementationProvider}){
  const {db,config,ai,mail}=options,clock=options.clock||(()=>new Date()),entitlements=new Entitlements(db,config,clock),analytics=options.analytics||new LocalAnalytics(db,clock),billing:BillingProvider=options.billing||new MockBillingProvider(db,config,clock);
+ const implementation=implementationService(db,config.pepper,config.publicAPIOrigin||config.origin,options.github,options.implementation,clock,entitlements);
  const assistant=assistantService(db,entitlements,options.assistant,clock);
  const recordings=recordingStore(db,config.publicAPIOrigin||config.origin,clock);
  const workflows=workflowStore(db,entitlements,clock);
@@ -48,11 +53,12 @@ export function createPlatform(options:{db:DB;config:Config;ai:AIProvider;mail:M
  async function route(req:Request,ip:string):Promise<Response>{
   const path=new URL(req.url).pathname,method=req.method;
   if(path==='/api/billing/webhook'&&method==='POST'){if(!billing.webhook)throw new APIError(503,'BILLING_UNAVAILABLE','Stripe is not configured.');await billing.webhook(await req.text(),req.headers.get('stripe-signature')||'');return json({received:true});}
+  if(path==='/api/github/callback'&&method==='GET')return implementation.callback(req);
   const playback=path.match(/^\/api\/playback\/([a-f0-9]{64})(\/video)?$/);
   if(playback&&['GET','HEAD'].includes(method)){rateLimit(db,`video-view:${tokenHash(ip,config.pepper)}`,120,clock().getTime(),60000);return recordings.public(req,playback[1],!!playback[2]);}
   const publicFlow=path.match(/^\/api\/shared-workflows\/([a-f0-9]{64})$/);
   if(publicFlow&&method==='GET'){rateLimit(db,'workflow-view:'+tokenHash(ip,config.pepper),60,clock().getTime(),60000);return json(links.read(publicFlow[1]));}
-  if(path==='/api/plans'&&method==='GET')return json({plans:config.plans,proPriceCents:config.priceCents,currency:config.currency,mockBilling:!billing.mode&&config.mockBilling,billingMode:billing.mode||'mock',authMode:config.authMode,aiMode:config.aiMode});
+  if(path==='/api/plans'&&method==='GET')return json({plans:config.plans,proPriceCents:config.priceCents,currency:config.currency,mockBilling:!billing.mode&&config.mockBilling,billingMode:billing.mode||'mock',billing:billingCapabilities(billing.mode),authMode:config.authMode,aiMode:config.aiMode});
   if(config.authMode==='clerk'&&path.startsWith('/api/auth/'))throw new APIError(410,'CLERK_AUTH_REQUIRED','Use Clerk to manage your account.');
   if(path.startsWith('/api/auth/')&&method==='POST')rateLimit(db,`auth:ip:${ip}`,25,clock().getTime());
   if(path==='/api/auth/signup'&&method==='POST'){
@@ -81,7 +87,8 @@ export function createPlatform(options:{db:DB;config:Config;ai:AIProvider;mail:M
   }
   if(path==='/api/ai/guest-plan'&&method==='POST'){rateLimit(db,`guest-request:${tokenHash(ip,config.pepper)}`,12,clock().getTime(),60000);const raw=await req.text();if(Buffer.byteLength(raw)>2400)throw new APIError(413,'BODY_TOO_LARGE','Free preview requests must be under 2.4 KB.');let data:unknown;try{data=JSON.parse(raw);}catch{throw new APIError(400,'INVALID_JSON','Invalid request.');}return json(await guestPlan(db,ai,config.pepper,ip,data,clock()));}
   const u=await user(req);
-  if(['/api/assistant/plan','/api/assistant/transcribe'].includes(path)&&method==='POST')return json(await assistant.handle(u.id,req));
+  if(path.startsWith('/api/github/')||path==='/api/implementations'||path.startsWith('/api/implementations/'))return implementation.handle(u.id,req);
+  if(['/api/assistant/plan','/api/assistant/transcribe','/api/assistant/verify'].includes(path)&&method==='POST')return json(await assistant.handle(u.id,req));
   if(path==='/api/workflow-links'&&method==='GET')return json({links:links.list(u.id)});
   if(path==='/api/workflow-links'&&method==='POST'){rateLimit(db,'workflow-publish:'+u.id,5,clock().getTime(),60000);return json({link:links.create(u.id,await body(req))},201);}
   const workflowLink=path.match(/^\/api\/workflow-links\/([a-f0-9-]{36})$/);
@@ -96,6 +103,8 @@ export function createPlatform(options:{db:DB;config:Config;ai:AIProvider;mail:M
   if(path==='/api/workflows'&&method==='GET')return json({workflows:workflows.list(u.id)});
   if(path==='/api/workflows'&&method==='POST')return json(workflows.save(u.id,await body(req)));
   if(path.startsWith('/api/workflows/')&&method==='GET')return json(workflows.read(u.id,decodeURIComponent(path.slice('/api/workflows/'.length))));
+  if(path.startsWith('/api/workflows/')&&method==='DELETE')return json(workflows.remove(u.id,decodeURIComponent(path.slice('/api/workflows/'.length))));
+  if(path.startsWith('/api/workflows/')&&method==='PATCH')return json(workflows.rename(u.id,decodeURIComponent(path.slice('/api/workflows/'.length)),await body(req)));
   if(path==='/api/account/redeem'&&method==='POST'){rateLimit(db,'access-code:'+u.id,5,clock().getTime(),60000);const input=z.object({code:z.string().trim().min(1).max(80)}).strict().parse(await body(req));const grant=redeemAccessCode(db,u.id,input.code,clock());return json({grant,entitlements:entitlements.get(u.id)});}
   if(path==='/api/me'&&method==='GET')return json({user:publicUser(u),entitlements:entitlements.get(u.id)});
   if(path==='/api/entitlements'&&method==='GET')return json(entitlements.get(u.id));
@@ -138,7 +147,7 @@ export function createPlatform(options:{db:DB;config:Config;ai:AIProvider;mail:M
    try{const plan=BatchSchema.parse(await ai.plan({prompt:data.prompt,selection:data.selection}));db.prepare("UPDATE ai_actions SET status='succeeded',result=?,updated_at=? WHERE id=?").run(JSON.stringify(plan),now(),actionId);return json({plan,usage:entitlements.get(u.id).usage});}
    catch(error){db.prepare("UPDATE ai_actions SET status='failed',updated_at=? WHERE id=?").run(now(),actionId);if(error instanceof AIProviderError){console.warn(JSON.stringify({event:'ai_request_failed',code:error.code}));throw new APIError(503,error.code,error.message+' No edit was charged.');}throw new APIError(502,'AI_UNAVAILABLE','AI could not complete the request. No edit was charged. Please retry.');}
   }
-  if(path==='/api/billing'&&method==='GET')return json({subscription:entitlements.subscription(u.id),entitlements:entitlements.get(u.id),priceCents:config.priceCents,currency:config.currency,mock:!billing.mode&&config.mockBilling,billingMode:billing.mode||'mock'});
+  if(path==='/api/billing'&&method==='GET')return json({subscription:entitlements.subscription(u.id),entitlements:entitlements.get(u.id),priceCents:config.priceCents,currency:config.currency,mock:!billing.mode&&config.mockBilling,billingMode:billing.mode||'mock',billing:billingCapabilities(billing.mode)});
   if(path==='/api/billing/checkout'&&method==='POST'){rateLimit(db,`checkout:${u.id}`,10,clock().getTime());if(entitlements.get(u.id).plan==='PRO')throw new APIError(409,'ALREADY_SUBSCRIBED','You already have Pro.');track('upgrade_clicked',u.id);const checkout=await billing.start(u.id);track('checkout_started',u.id);return json(checkout,201);}
   const checkout=path.match(/^\/api\/billing\/checkout\/([^/]+)(\/complete)?$/);
   if(checkout){const c=one<Checkout>(db,'SELECT * FROM checkouts WHERE id=? AND user_id=?',checkout[1],u.id);if(!c)throw new APIError(404,'NOT_FOUND','Checkout not found.');if(method==='GET'&&!checkout[2])return json({id:c.id,status:c.status,priceCents:c.price_cents,currency:c.currency,expiresAt:c.expires_at,mock:c.provider==='mock'});
@@ -154,7 +163,7 @@ export function createPlatform(options:{db:DB;config:Config;ai:AIProvider;mail:M
    if(req.method==='OPTIONS'){if(!allowed)throw new APIError(403,'ORIGIN_DENIED','This origin is not allowed.');response=new Response(null,{status:204});}
    else {if(!['GET','HEAD'].includes(req.method)&&!req.headers.get('authorization')&&!allowed&&new URL(req.url).pathname!=='/api/billing/webhook')throw new APIError(403,'CSRF_REJECTED','A trusted Origin header is required.');response=await route(req,ip);}
   }catch(error){if(error instanceof APIError)response=json({error:{code:error.code,message:error.message,...error.details},requestId},error.status,error.status===429?{'Retry-After':String(error.details.retryAfter||60)}:{});else if(error instanceof z.ZodError)response=json({error:{code:'INVALID_INPUT',message:'Check the request fields.',fields:error.issues.map(x=>({path:x.path.join('.'),message:x.message}))},requestId},400);else{console.error(JSON.stringify({requestId,error:'unhandled_api_error'}));response=json({error:{code:'INTERNAL_ERROR',message:'Something went wrong. Please retry.'},requestId},500);}}
-  response.headers.set('X-Request-Id',requestId);response.headers.set('X-Content-Type-Options','nosniff');response.headers.set('Referrer-Policy','no-referrer');if(allowed&&origin){response.headers.set('Access-Control-Allow-Origin',origin);if(!publicRead)response.headers.set('Access-Control-Allow-Credentials','true');response.headers.set('Vary','Origin');response.headers.set('Access-Control-Allow-Headers','Content-Type, Authorization');response.headers.set('Access-Control-Allow-Methods','GET, POST, PUT, DELETE, OPTIONS');}
+  response.headers.set('X-Request-Id',requestId);response.headers.set('X-Content-Type-Options','nosniff');response.headers.set('Referrer-Policy','no-referrer');if(allowed&&origin){response.headers.set('Access-Control-Allow-Origin',origin);if(!publicRead)response.headers.set('Access-Control-Allow-Credentials','true');response.headers.set('Vary','Origin');response.headers.set('Access-Control-Allow-Headers','Content-Type, Authorization');response.headers.set('Access-Control-Allow-Methods','GET, POST, PUT, PATCH, DELETE, OPTIONS');}
   console.info(JSON.stringify({requestId,method:req.method,path:new URL(req.url).pathname.replace(/^(\/api\/(?:playback|shared-workflows)\/)[^/]+/,'$1[redacted]'),status:response.status}));return response;
  }};
 }

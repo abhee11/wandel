@@ -17,7 +17,13 @@ it('binds real navigation to the requesting tab, resumes after refresh, and reco
 it('rejects cross-origin or mismatched destinations and messages from another sender or frame',async()=>{
  const e=environment();expect(await e.send({action:'go',url:'https://evil.example/profile',context:e.context})).toHaveProperty('error');expect(await e.send({action:'go',url:'https://example.com/other',context:e.context})).toHaveProperty('error');expect(await e.send({action:'go',url:'https://example.com/profile',context:e.context},{id:'other',tab:{id:7},frameId:0})).toBeUndefined();expect(await e.send({action:'go',url:'https://example.com/profile',context:e.context},{id:'wandel',tab:{id:7},frameId:1})).toBeUndefined();expect(e.update).not.toHaveBeenCalled();
 });
-it('preserves saved records after failed navigation and stops restoring on unrelated routes',async()=>{
+it('preserves saved records after failed navigation and blocks unrelated routes without forgetting the active workflow',async()=>{
  const e=environment();e.update.mockRejectedValueOnce(new Error('Tab unavailable'));expect((await e.send({action:'go',url:'https://example.com/profile',context:e.context})).error).toContain('Tab unavailable');expect(e.store['wandel:live:7']).toBeUndefined();expect(e.store['dx:workflow:'+e.w.id]).toBeTruthy();
- e.store['wandel:live:7']=e.context;e.tab.url='https://example.com/unrelated';expect(await e.send({action:'read'})).toEqual({context:null});expect(e.store['wandel:live:7']).toBeUndefined();
+ e.store['wandel:live:7']=e.context;e.tab.url='https://example.com/unrelated';expect((await e.send({action:'read'})).error).toContain('not a recorded screen');expect(e.store['wandel:live:7']).toEqual(e.context);
 });
+
+it('follows a recorded screen reached through the native app and recovers a missing live handoff from the tab anchor',async()=>{
+ const e=environment(),start={...e.context,stateId:e.w.entry,visits:[]};await e.send({action:'remember',context:start});expect(e.store['wandel:workflow-tab:7']).toEqual(start);delete e.store['wandel:live:7'];e.tab.url='https://example.com/profile';expect((await e.send({action:'read'})).context).toMatchObject({workflowId:e.w.id,stateId:e.stateId,visits:[e.w.entry]});
+ await e.send({action:'clear'});expect(e.store['wandel:workflow-tab:7']).toBeUndefined();expect((await e.send({action:'read'})).context).toBeNull();
+});
+it('does not attach another tab to an active workflow',async()=>{const e=environment();await e.send({action:'remember',context:{...e.context,stateId:e.w.entry,visits:[]}});expect((await e.send({action:'read'},{id:'wandel',tab:{id:8},frameId:0})).context).toBeNull();});

@@ -1,0 +1,571 @@
+{
+  "case": "navigation",
+  "fixture": "<div id=\"app\" style=\"display:flex;flex-direction:row;background:#faf9fc;color:#272435\"><aside id=\"navigation\" style=\"position:fixed;top:0;left:0;bottom:0;width:180px;height:600px;display:flex;flex-direction:column;padding:20px;gap:16px;background:#f0edfa;color:#272435\"><strong>Workspace</strong><a href=\"/home\">Home</a><a href=\"/profile\">Profile</a></aside><main id=\"content\" style=\"margin-left:220px;padding:24px\"><h1>Overview</h1><p>Your recent activity</p><div id=\"cards\" style=\"display:flex;flex-direction:row;gap:16px\"><article id=\"summary\" style=\"background:#ffffff;color:#272435;padding:20px;border-radius:24px\"><h2>Summary</h2><p>Workspace details</p><button style=\"background:rgb(134,68,255);color:white\">Open summary</button></article><article id=\"activity\" style=\"background:#ffffff;color:#272435;padding:20px;border-radius:24px\"><h2>Activity</h2><p>Recent updates</p><button style=\"background:transparent;color:rgb(134,68,255);border:1px solid rgb(134,68,255)\">Open activity</button></article></div></main></div>",
+  "stages": [
+    {
+      "instruction": "Could you make the left panel nav to header",
+      "source": "provider",
+      "selected": null,
+      "proposed": {
+        "status": "edit",
+        "scope": "page",
+        "message": "Convert the existing left navigation into a full-width horizontal header. Its Workspace label and Home/Profile links are preserved, while the fixed sidebar positioning and the main content’s left offset are cleared so the page reflows without overlap.",
+        "question": null,
+        "candidates": [],
+        "actions": [
+          {
+            "inputType": null,
+            "required": false,
+            "options": null,
+            "radioGroup": null,
+            "kind": "layout",
+            "columns": null,
+            "layout": "header",
+            "theme": null,
+            "href": null,
+            "targets": [
+              "e_0dd604d9-ab9c-470d-8d69-6756d72e81b1"
+            ],
+            "relativeTo": null,
+            "resultRef": null,
+            "element": null,
+            "text": null,
+            "description": null,
+            "labels": [],
+            "position": null,
+            "styleRef": null,
+            "style": null,
+            "destination": null,
+            "newViewTitle": null
+          }
+        ]
+      },
+      "grounded": {
+        "status": "edit",
+        "scope": "page",
+        "message": "Convert the existing left navigation into a full-width horizontal header. Its Workspace label and Home/Profile links are preserved, while the fixed sidebar positioning and the main content’s left offset are cleared so the page reflows without overlap.",
+        "question": null,
+        "candidates": [],
+        "actions": [
+          {
+            "kind": "layout",
+            "layout": "header",
+            "targets": [
+              "e_0dd604d9-ab9c-470d-8d69-6756d72e81b1"
+            ],
+            "relativeTo": null,
+            "resultRef": null,
+            "element": null,
+            "text": null,
+            "description": null,
+            "labels": [],
+            "position": null,
+            "styleRef": null,
+            "style": null,
+            "destination": null,
+            "newViewTitle": null
+          }
+        ]
+      },
+      "applied": true,
+      "executionError": "",
+      "html": "<aside id=\"navigation\" style=\"position: static !important; top: auto !important; left: auto !important; bottom: auto !important; width: 180px; height: 600px; display: flex !important; flex-direction: row !important; padding: 20px; gap: 16px; background: rgb(240, 237, 250); color: rgb(39, 36, 53); inline-size: 100% !important; block-size: auto !important; max-inline-size: 100% !important; min-inline-size: 0 !important; box-sizing: border-box !important; right: auto !important; align-items: center !important; justify-content: space-between !important; flex-wrap: wrap !important; min-height: 0px !important; flex-grow: 0 !important; flex-shrink: 0;\"><strong>Workspace</strong><a href=\"/home\" style=\"inline-size: auto !important; align-self: center !important; margin-top: 0px !important; margin-bottom: 0px !important; flex-grow: 0 !important; flex-shrink: 0;\">Home</a><a href=\"/profile\" style=\"inline-size: auto !important; align-self: center !important; margin-top: 0px !important; margin-bottom: 0px !important; flex-grow: 0 !important; flex-shrink: 0;\">Profile</a></aside><main id=\"content\" style=\"margin-left: 0px; padding: 24px; inline-size: 100% !important; min-inline-size: 0 !important; box-sizing: border-box !important; margin-right: 0px !important;\"><h1>Overview</h1><p>Your recent activity</p><div id=\"cards\" style=\"display:flex;flex-direction:row;gap:16px\"><article id=\"summary\" style=\"background:#ffffff;color:#272435;padding:20px;border-radius:24px\"><h2>Summary</h2><p>Workspace details</p><button style=\"background:rgb(134,68,255);color:white\">Open summary</button></article><article id=\"activity\" style=\"background:#ffffff;color:#272435;padding:20px;border-radius:24px\"><h2>Activity</h2><p>Recent updates</p><button style=\"background:transparent;color:rgb(134,68,255);border:1px solid rgb(134,68,255)\">Open activity</button></article></div></main>",
+      "rootStyle": "display: flex !important; flex-direction: column !important; background: rgb(250, 249, 252); color: rgb(39, 36, 53); inline-size: 100% !important; box-sizing: border-box !important;",
+      "workflow": {
+        "schemaVersion": 1,
+        "id": "8c853798-4674-4020-aebb-e895fa5e430b",
+        "name": "Flow — example.test/layout — 2026-10-29 23:25:39 UTC — 8c8537",
+        "origin": "https://example.test",
+        "route": "/layout",
+        "createdAt": "2026-10-29T23:25:39.366Z",
+        "updatedAt": "2026-10-29T23:25:42.228Z",
+        "entry": "6e98eb98-93ce-4909-aa76-ca5364f4e924",
+        "maxStates": 30,
+        "states": [
+          {
+            "id": "6e98eb98-93ce-4909-aa76-ca5364f4e924",
+            "title": "Existing application",
+            "parent": null,
+            "view": "base",
+            "operations": [
+              {
+                "id": "cd9a0c17-abf6-4605-993d-0dbaa2616066",
+                "kind": "style",
+                "target": {
+                  "ancestorTags": [
+                    "body",
+                    "html"
+                  ],
+                  "tag": "div",
+                  "role": "",
+                  "name": "Workspace Home Profile Overview Your recent activity Summary Workspace details Open summary Activity Recent updates Open activity",
+                  "text": "Workspace Home Profile Overview Your recent activity Summary Workspace details Open summary Activity Recent updates Open activity",
+                  "attrs": {
+                    "id": "app"
+                  },
+                  "parent": {
+                    "tag": "body",
+                    "id": "",
+                    "role": "",
+                    "label": ""
+                  },
+                  "previous": "",
+                  "next": ""
+                },
+                "style": {
+                  "inlineSize": "100%",
+                  "boxSizing": "border-box",
+                  "display": "flex",
+                  "flexDirection": "column"
+                }
+              },
+              {
+                "id": "6d79f7d2-7205-470b-be6a-6aac122fbf25",
+                "kind": "style",
+                "target": {
+                  "ancestorTags": [
+                    "div",
+                    "body",
+                    "html"
+                  ],
+                  "tag": "aside",
+                  "role": "complementary",
+                  "name": "Workspace Home Profile",
+                  "text": "Workspace Home Profile",
+                  "attrs": {
+                    "id": "navigation"
+                  },
+                  "parent": {
+                    "tag": "div",
+                    "id": "app",
+                    "role": "",
+                    "label": ""
+                  },
+                  "previous": "",
+                  "next": "Overview Your recent activity Summary Workspace details Open summary Activity Recent updates Open ac"
+                },
+                "style": {
+                  "position": "static",
+                  "inlineSize": "100%",
+                  "blockSize": "auto",
+                  "maxInlineSize": "100%",
+                  "minInlineSize": "0",
+                  "boxSizing": "border-box",
+                  "top": "auto",
+                  "right": "auto",
+                  "bottom": "auto",
+                  "left": "auto",
+                  "display": "flex",
+                  "flexDirection": "row",
+                  "alignItems": "center",
+                  "justifyContent": "space-between",
+                  "flexWrap": "wrap",
+                  "minHeight": 0,
+                  "flexGrow": 0,
+                  "flexShrink": 0
+                }
+              },
+              {
+                "id": "80cb9345-05ff-46ae-874f-b37ae07b1083",
+                "kind": "style",
+                "target": {
+                  "structure": {
+                    "anchorId": "navigation",
+                    "path": [
+                      1
+                    ]
+                  },
+                  "ancestorTags": [
+                    "aside",
+                    "div",
+                    "body",
+                    "html"
+                  ],
+                  "tag": "a",
+                  "role": "link",
+                  "name": "Home",
+                  "text": "Home",
+                  "attrs": {},
+                  "parent": {
+                    "tag": "aside",
+                    "id": "navigation",
+                    "role": "complementary",
+                    "label": ""
+                  },
+                  "previous": "Workspace",
+                  "next": "Profile"
+                },
+                "style": {
+                  "inlineSize": "auto",
+                  "alignSelf": "center",
+                  "marginTop": 0,
+                  "marginBottom": 0,
+                  "flexGrow": 0,
+                  "flexShrink": 0
+                }
+              },
+              {
+                "id": "90f32b12-79d8-4480-955f-14837979fc58",
+                "kind": "style",
+                "target": {
+                  "structure": {
+                    "anchorId": "navigation",
+                    "path": [
+                      2
+                    ]
+                  },
+                  "ancestorTags": [
+                    "aside",
+                    "div",
+                    "body",
+                    "html"
+                  ],
+                  "tag": "a",
+                  "role": "link",
+                  "name": "Profile",
+                  "text": "Profile",
+                  "attrs": {},
+                  "parent": {
+                    "tag": "aside",
+                    "id": "navigation",
+                    "role": "complementary",
+                    "label": ""
+                  },
+                  "previous": "Home",
+                  "next": ""
+                },
+                "style": {
+                  "inlineSize": "auto",
+                  "alignSelf": "center",
+                  "marginTop": 0,
+                  "marginBottom": 0,
+                  "flexGrow": 0,
+                  "flexShrink": 0
+                }
+              },
+              {
+                "id": "9c77cb89-509f-4afb-8263-f02985980a61",
+                "kind": "style",
+                "target": {
+                  "ancestorTags": [
+                    "div",
+                    "body",
+                    "html"
+                  ],
+                  "tag": "main",
+                  "role": "main",
+                  "name": "Overview Your recent activity Summary Workspace details Open summary Activity Recent updates Open activity",
+                  "text": "Overview Your recent activity Summary Workspace details Open summary Activity Recent updates Open activity",
+                  "attrs": {
+                    "id": "content"
+                  },
+                  "parent": {
+                    "tag": "div",
+                    "id": "app",
+                    "role": "",
+                    "label": ""
+                  },
+                  "previous": "Workspace Home Profile",
+                  "next": ""
+                },
+                "style": {
+                  "inlineSize": "100%",
+                  "minInlineSize": "0",
+                  "boxSizing": "border-box",
+                  "marginRight": 0,
+                  "marginLeft": 0
+                }
+              }
+            ]
+          }
+        ],
+        "edges": []
+      },
+      "directions": [
+        "column",
+        "",
+        "row"
+      ]
+    }
+  ],
+  "findings": {
+    "lastStatus": "edit",
+    "executionError": "",
+    "operations": 5,
+    "navStyle": "position: static !important; top: auto !important; left: auto !important; bottom: auto !important; width: 180px; height: 600px; display: flex !important; flex-direction: row !important; padding: 20px; gap: 16px; background: rgb(240, 237, 250); color: rgb(39, 36, 53); inline-size: 100% !important; block-size: auto !important; max-inline-size: 100% !important; min-inline-size: 0 !important; box-sizing: border-box !important; right: auto !important; align-items: center !important; justify-content: space-between !important; flex-wrap: wrap !important; min-height: 0px !important; flex-grow: 0 !important; flex-shrink: 0 !important;",
+    "contentStyle": "margin-left: 0px !important; padding: 24px; inline-size: 100% !important; min-inline-size: 0 !important; box-sizing: border-box !important; margin-right: 0px !important;",
+    "cardsStyle": "display: flex; flex-direction: row; gap: 16px;",
+    "rootStyle": "display: flex !important; flex-direction: column !important; background: rgb(250, 249, 252); color: rgb(39, 36, 53); inline-size: 100% !important; box-sizing: border-box !important;",
+    "links": [
+      {
+        "text": "Home",
+        "href": "/home"
+      },
+      {
+        "text": "Profile",
+        "href": "/profile"
+      }
+    ],
+    "headings": [
+      "Overview",
+      "Summary",
+      "Activity"
+    ],
+    "textPreserved": true,
+    "changed": true
+  },
+  "attempts": [
+    {
+      "instruction": "Could you make the left panel nav to header",
+      "plan": {
+        "status": "edit",
+        "scope": "page",
+        "message": "Convert the existing left navigation into a full-width horizontal header. Its Workspace label and Home/Profile links are preserved, while the fixed sidebar positioning and the main content’s left offset are cleared so the page reflows without overlap.",
+        "question": null,
+        "candidates": [],
+        "actions": [
+          {
+            "inputType": null,
+            "required": false,
+            "options": null,
+            "radioGroup": null,
+            "kind": "layout",
+            "columns": null,
+            "layout": "header",
+            "theme": null,
+            "href": null,
+            "targets": [
+              "e_0dd604d9-ab9c-470d-8d69-6756d72e81b1"
+            ],
+            "relativeTo": null,
+            "resultRef": null,
+            "element": null,
+            "text": null,
+            "description": null,
+            "labels": [],
+            "position": null,
+            "styleRef": null,
+            "style": null,
+            "destination": null,
+            "newViewTitle": null
+          }
+        ]
+      }
+    }
+  ],
+  "record": {
+    "draft": {
+      "schemaVersion": 1,
+      "id": "8c853798-4674-4020-aebb-e895fa5e430b",
+      "name": "Flow — example.test/layout — 2026-10-29 23:25:39 UTC — 8c8537",
+      "origin": "https://example.test",
+      "route": "/layout",
+      "createdAt": "2026-10-29T23:25:39.366Z",
+      "updatedAt": "2026-10-29T23:25:42.228Z",
+      "entry": "6e98eb98-93ce-4909-aa76-ca5364f4e924",
+      "maxStates": 30,
+      "states": [
+        {
+          "id": "6e98eb98-93ce-4909-aa76-ca5364f4e924",
+          "title": "Existing application",
+          "parent": null,
+          "view": "base",
+          "operations": [
+            {
+              "id": "cd9a0c17-abf6-4605-993d-0dbaa2616066",
+              "kind": "style",
+              "target": {
+                "ancestorTags": [
+                  "body",
+                  "html"
+                ],
+                "tag": "div",
+                "role": "",
+                "name": "Workspace Home Profile Overview Your recent activity Summary Workspace details Open summary Activity Recent updates Open activity",
+                "text": "Workspace Home Profile Overview Your recent activity Summary Workspace details Open summary Activity Recent updates Open activity",
+                "attrs": {
+                  "id": "app"
+                },
+                "parent": {
+                  "tag": "body",
+                  "id": "",
+                  "role": "",
+                  "label": ""
+                },
+                "previous": "",
+                "next": ""
+              },
+              "style": {
+                "inlineSize": "100%",
+                "boxSizing": "border-box",
+                "display": "flex",
+                "flexDirection": "column"
+              }
+            },
+            {
+              "id": "6d79f7d2-7205-470b-be6a-6aac122fbf25",
+              "kind": "style",
+              "target": {
+                "ancestorTags": [
+                  "div",
+                  "body",
+                  "html"
+                ],
+                "tag": "aside",
+                "role": "complementary",
+                "name": "Workspace Home Profile",
+                "text": "Workspace Home Profile",
+                "attrs": {
+                  "id": "navigation"
+                },
+                "parent": {
+                  "tag": "div",
+                  "id": "app",
+                  "role": "",
+                  "label": ""
+                },
+                "previous": "",
+                "next": "Overview Your recent activity Summary Workspace details Open summary Activity Recent updates Open ac"
+              },
+              "style": {
+                "position": "static",
+                "inlineSize": "100%",
+                "blockSize": "auto",
+                "maxInlineSize": "100%",
+                "minInlineSize": "0",
+                "boxSizing": "border-box",
+                "top": "auto",
+                "right": "auto",
+                "bottom": "auto",
+                "left": "auto",
+                "display": "flex",
+                "flexDirection": "row",
+                "alignItems": "center",
+                "justifyContent": "space-between",
+                "flexWrap": "wrap",
+                "minHeight": 0,
+                "flexGrow": 0,
+                "flexShrink": 0
+              }
+            },
+            {
+              "id": "80cb9345-05ff-46ae-874f-b37ae07b1083",
+              "kind": "style",
+              "target": {
+                "structure": {
+                  "anchorId": "navigation",
+                  "path": [
+                    1
+                  ]
+                },
+                "ancestorTags": [
+                  "aside",
+                  "div",
+                  "body",
+                  "html"
+                ],
+                "tag": "a",
+                "role": "link",
+                "name": "Home",
+                "text": "Home",
+                "attrs": {},
+                "parent": {
+                  "tag": "aside",
+                  "id": "navigation",
+                  "role": "complementary",
+                  "label": ""
+                },
+                "previous": "Workspace",
+                "next": "Profile"
+              },
+              "style": {
+                "inlineSize": "auto",
+                "alignSelf": "center",
+                "marginTop": 0,
+                "marginBottom": 0,
+                "flexGrow": 0,
+                "flexShrink": 0
+              }
+            },
+            {
+              "id": "90f32b12-79d8-4480-955f-14837979fc58",
+              "kind": "style",
+              "target": {
+                "structure": {
+                  "anchorId": "navigation",
+                  "path": [
+                    2
+                  ]
+                },
+                "ancestorTags": [
+                  "aside",
+                  "div",
+                  "body",
+                  "html"
+                ],
+                "tag": "a",
+                "role": "link",
+                "name": "Profile",
+                "text": "Profile",
+                "attrs": {},
+                "parent": {
+                  "tag": "aside",
+                  "id": "navigation",
+                  "role": "complementary",
+                  "label": ""
+                },
+                "previous": "Home",
+                "next": ""
+              },
+              "style": {
+                "inlineSize": "auto",
+                "alignSelf": "center",
+                "marginTop": 0,
+                "marginBottom": 0,
+                "flexGrow": 0,
+                "flexShrink": 0
+              }
+            },
+            {
+              "id": "9c77cb89-509f-4afb-8263-f02985980a61",
+              "kind": "style",
+              "target": {
+                "ancestorTags": [
+                  "div",
+                  "body",
+                  "html"
+                ],
+                "tag": "main",
+                "role": "main",
+                "name": "Overview Your recent activity Summary Workspace details Open summary Activity Recent updates Open activity",
+                "text": "Overview Your recent activity Summary Workspace details Open summary Activity Recent updates Open activity",
+                "attrs": {
+                  "id": "content"
+                },
+                "parent": {
+                  "tag": "div",
+                  "id": "app",
+                  "role": "",
+                  "label": ""
+                },
+                "previous": "Workspace Home Profile",
+                "next": ""
+              },
+              "style": {
+                "inlineSize": "100%",
+                "minInlineSize": "0",
+                "boxSizing": "border-box",
+                "marginRight": 0,
+                "marginLeft": 0
+              }
+            }
+          ]
+        }
+      ],
+      "edges": []
+    },
+    "enabled": true,
+    "currentVersion": 0,
+    "versions": []
+  }
+}
