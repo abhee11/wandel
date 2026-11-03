@@ -18,6 +18,8 @@ export function renameCopyHeading(source:HTMLElement,heading:string,copy:CopyNod
  if(headings.length>1)throw new Error('This selection contains multiple headings. Select one card to copy.');
  let target:HTMLElement|Text|null=headings[0]||copiedHeading(source);
  if(!target){const walk=document.createTreeWalker(source,NodeFilter.SHOW_TEXT);let node:Node|null;while((node=walk.nextNode())){const parent=node.parentElement;if(node.textContent?.trim()&&parent&&visible(parent)&&(!parent.closest(controls)||source.matches(controls))&&identities.has(node)){target=node as Text;break;}}}
+ // A small item (an option, a tab, a row) whose label the usual rules cannot see still gets its first copied text renamed.
+ if(!target&&source.getBoundingClientRect().height<140){const first=copy.findIndex(item=>item.tag==='#text'&&item.text.trim());if(first>=0){copy[first].text=heading;for(let i=first+1;i<copy.length;i++)if(copy[i].tag==='#text'&&copy[i].parent===copy[first].parent)copy[i].text='';return first;}}
  if(!target)throw new Error('No clear heading was found. Select the card heading or a smaller section.');
  const texts:Text[]=[];
  if(target instanceof Text)texts.push(target);else{const walk=document.createTreeWalker(target,NodeFilter.SHOW_TEXT);let node:Node|null;while((node=walk.nextNode()))if(node.textContent?.trim()&&identities.has(node))texts.push(node as Text);}

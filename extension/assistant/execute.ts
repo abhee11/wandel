@@ -9,6 +9,7 @@ import {findCard} from './card';
 import {captureCopy} from '../content/duplicate';
 import {watched} from '../content/watch';
 import {safeDeclarations} from '../content/behavior';
+import {structureAround,structureOf} from './layoutMap';
 import {renameCopyHeading} from '../content/duplicateHeading';
 import {sensitive} from './privacy';
 import {clone,uid,OperationSchema,type Workflow,type Locator,type Operation,type CopyNode} from '../shared/model';
@@ -39,6 +40,31 @@ export function compileAssistant(workflow:Workflow,stateId:string,planInput:unkn
  const releaseFixedHeights=(start:HTMLElement)=>{let layers:HTMLElement[]=[];for(let node:HTMLElement|null=start,depth=0;node&&depth<8&&!node.matches('html,body');node=node.parentElement,depth++){const css=getComputedStyle(node);if(css.position==='fixed')return;if(css.position==='absolute')layers.push(node);if(layers.length&&/px$/.test(node.style.height)){for(const layer of layers)add({id:uid(),kind:'style',target:locatorOf(layer),style:{position:'relative'}});add({id:uid(),kind:'style',target:locatorOf(node),style:{blockSize:'auto'}});layers=[];}}};
  const resolveLayoutSource=(locator:Locator)=>locator.owned?collector.ownedNode(locator.owned):resolve(locator,collector.rootNode,new Map());
  const locate=(ref:string)=>{if(outputs.has(ref))return outputs.get(ref)!;const node=collector.get(ref),id=collector.ownedId(node);const locator=id?owned(id):describe(node).locator;if(!id){locator.structure=structuralIdentity(node);const classes=node.getAttribute('class');if(classes)locator.attrs.class=classes;}return {node,id,locator};};
+ // Layout-level placement, shared by every action: end adds the next item of the list, grid or row the target belongs to, after
+ // any item added there earlier in this plan; row-below opens one full-width row under that structure, laid out as a grid, and
+ // fills it in order. The row leaves narrow columns so its items keep a usable width.
+ // A row leaves the column it was anchored in, but never the container it fills: it climbs only while it is a column of a wider layout.
+ const wideAnchor=(node:HTMLElement)=>{let row=node;
+  for(let depth=0;depth<8;depth++){const parent=row.parentElement;if(!parent||parent===collector.rootNode||parent.matches('body,main,[role=main]'))break;
+   const inner=parent.clientWidth-parseFloat(getComputedStyle(parent).paddingLeft||'0')-parseFloat(getComputedStyle(parent).paddingRight||'0'),kind=structureOf(parent)?.kind;
+   const wrapper=[...parent.children].filter(child=>child.getBoundingClientRect().height>0).length<=1;
+   if(wrapper||row.getBoundingClientRect().width<inner*0.85||kind==='grid'||kind==='row')row=parent;else break;}
+  return row;};
+ const rowFill=new Map<HTMLElement,number>();
+ for(const action of plan.actions)if(action.position==='row-below'&&action.targets[0]&&!action.targets[0].startsWith('new:')){try{const node=collector.get(action.targets[0]),key=structureAround(node)?.container||node;rowFill.set(key,(rowFill.get(key)||0)+1);}catch{/* an unknown target fails when the action runs */}}
+ const rows=new Map<HTMLElement,string>(),appended=new Map<HTMLElement,string>();
+ const placeAt=(node:HTMLElement,where:'end'|'row-below')=>{
+  const structure=structureAround(node),key=structure?.container||node;
+  if(where==='row-below'){
+   let row=rows.get(key);
+   if(!row){row=uid();const anchor=wideAnchor(key),css=getComputedStyle(key),gap=css.columnGap&&css.columnGap!=='normal'?css.columnGap:'24px',columns=Math.max(1,Math.min(4,rowFill.get(key)||structure?.columns||3));
+    add({id:uid(),kind:'insert',target:locatorOf(anchor),position:'after',node:{id:row,kind:'panel',text:'',appearance:{display:'block','box-sizing':'border-box',width:'100%','max-width':'100%','min-width':'0',height:'auto',margin:'24px 0 0',padding:'0'}}});
+    add({id:uid(),kind:'css',target:owned(row),css:`display:grid;grid-template-columns:repeat(${columns},minmax(0,1fr));gap:${gap};align-items:start`});created.push(row);rows.set(key,row);}
+   return {locator:owned(row),position:'inside' as const,key};
+  }
+  const previous=appended.get(key);if(previous)return {locator:owned(previous),position:'after' as const,key};
+  const last=structure?.items[structure.items.length-1]||node;releaseFixedHeights(last);return {locator:locatorOf(last),position:'after' as const,key};
+ };
  // One more item in an existing list, menu or option group is a copy of an item there, renamed, never a new control styled from elsewhere:
  // it keeps the list's own look, spacing and direction. Several new items follow each other in the order given.
  const listItem=(node:HTMLElement,inside:boolean)=>{
@@ -49,10 +75,14 @@ export function compileAssistant(workflow:Workflow,stateId:string,planInput:unkn
  };
  const lastCopy=new Map<HTMLElement,string>();let listCount=0;
  plan.actions=plan.actions.map(action=>{
-  if(action.kind!=='create'||!['button','link','text'].includes(action.element||'')||action.targets.length!==1||!action.text?.trim()||action.targets[0].startsWith('new:')||!['after','before','beside','inside',null,undefined].includes(action.position))return action;
+  // A copy cannot go inside a button, link, option or list row: it becomes the next item of that item's list.
+  if(action.kind==='duplicate'&&action.position==='inside'&&!action.relativeTo&&action.targets[0]&&!action.targets[0].startsWith('new:')){try{if(collector.get(action.targets[0]).matches('button,a,li,[role=option],[role=menuitem],[role=tab],[role=radio],[role=listitem]'))return {...action,position:'end' as const};}catch{/* checked when it runs */}}
+  if(action.kind!=='create'||!['button','link','text'].includes(action.element||'')||action.targets.length!==1||!action.text?.trim()||action.targets[0].startsWith('new:')||!['after','before','beside','inside','end',null,undefined].includes(action.position))return action;
   let node:HTMLElement;try{node=collector.get(action.targets[0]);}catch{return action;}
-  const item=listItem(node,action.position==='inside');if(!item||(action.element==='text'&&!item.matches('li,[role=option],[role=menuitem],[role=listitem]')))return action;
+  const item=listItem(node,action.position==='inside'||action.position==='end'&&!!structureOf(node));if(!item||(action.element==='text'&&!item.matches('li,[role=option],[role=menuitem],[role=listitem]')))return action;
   const ref=collector.ref(item),resultRef=action.resultRef||'new:list-'+(++listCount),previous=lastCopy.get(item);lastCopy.set(item,resultRef);
+  // At the end of the list the resolver appends in order; next to an item, each copy follows the previous one.
+  if(action.position==='end')return {...action,kind:'duplicate' as const,element:null,targets:[ref],relativeTo:null,position:'end' as const,description:null,labels:[],styleRef:null,style:null,resultRef};
   return {...action,kind:'duplicate' as const,element:null,targets:[ref],relativeTo:previous||ref,position:'after' as const,description:null,labels:[],styleRef:null,style:null,resultRef};
  });
  for(const action of plan.actions){
@@ -91,9 +121,11 @@ export function compileAssistant(workflow:Workflow,stateId:string,planInput:unkn
    // locate optional labels, but must never shrink, expand or reject this source.
    // The one exception: the only visible part of a list item stands for the item, so a copy becomes a new row of the list.
    let source=targets[0].node,sourceLocator=targets[0].locator;{const item=source.parentElement;if(!targets[0].id&&item?.matches('li')&&![...item.children].some(child=>child!==source&&child instanceof HTMLElement&&visible(child))){source=item;sourceLocator=locatorOf(item);}}
+   // A label inside an option, tab, menu item, list row or small button stands for that whole item: copying just the label would lose the row's layout and its selected state.
+   {const holder=source.closest<HTMLElement>('[role=option],[role=menuitem],[role=menuitemradio],[role=menuitemcheckbox],[role=tab],[role=radio],[role=listitem],li,button,a');if(holder&&holder!==source&&holder.getBoundingClientRect().height<140&&!holder.closest('nav,header')){source=holder;sourceLocator=locatorOf(holder);}}
    if(source.matches('html,body'))throw new Error('Select an element inside the page to copy.');
    if(sensitive(source)||source.querySelector('[data-private],[data-sensitive]'))throw new Error('This card includes private content and cannot be duplicated by the assistant.');
-   const selectedSource=source.matches('[aria-selected=true],[aria-checked=true],[aria-current]:not([aria-current=false])')||/\bselected\b/i.test(source.getAttribute('aria-label')||'');
+   const selectedMark='[aria-selected=true],[aria-checked=true],[aria-current]:not([aria-current=false])',selectedSource=source.matches(selectedMark)||!!source.querySelector(selectedMark)||[source,...source.querySelectorAll('[aria-label]')].some(node=>/\bselected\b/i.test(node.getAttribute('aria-label')||''));
    const identities=new Map<Node,number>(),copy=captureCopy(source,identities);if(findCard(source)?.controls.length===0)copy[0].style.width='auto';
    // A grid or row can stretch the original past its content; the copy keeps that rendered height as its minimum.
    {const height=Math.round(source.getBoundingClientRect().height);if(height>0)copy[0].style['min-height']=height+'px';}
@@ -114,13 +146,18 @@ export function compileAssistant(workflow:Workflow,stateId:string,planInput:unkn
    if(selectedSource)for(const item of copy)if(item.icon)item.style.display='none';
    // A destination (relativeTo) places the copy there, such as inside a new row; otherwise it sits beside or after its original.
    const destination=action.relativeTo?locate(action.relativeTo):null;
-   if(destination){copy[0].style.width='auto';copy[0].style['min-width']='0';copy[0].style['max-width']='100%';}
-   if(action.position!=='below'&&!destination)copyPlacement(source,node=>collector.ownedId(node)).forEach(add);
+   const placed=action.position==='end'||action.position==='row-below'?placeAt(source,action.position):null;
+   // A copy placed elsewhere keeps its original's full width when the original fills its container (a list row), and sizes to its content otherwise.
+   if(destination||placed){const fills=!!source.parentElement&&source.getBoundingClientRect().width>=source.parentElement.clientWidth*0.9;copy[0].style.width=fills?'100%':'auto';copy[0].style['min-width']='0';copy[0].style['max-width']='100%';}
+   if(action.position!=='below'&&!destination&&!placed)copyPlacement(source,node=>collector.ownedId(node)).forEach(add);
    const sourceBounds=source.getBoundingClientRect();
    const id=uid(),insertParts=copy,sourceParts=new Map<string,HTMLElement>();for(const [part,index] of identities)if(part instanceof HTMLElement)sourceParts.set(index===0?id:copy[index].id,part);
    // Beside: a card alone in a grid or row cell gets the next cell; inserting after the card itself would stack it inside its own cell.
    let besideAnchor=sourceLocator;if(action.position==='beside'){let cell:HTMLElement=source;while(cell.parentElement&&!cell.parentElement.matches('body,main')&&cell.parentElement.children.length===1)cell=cell.parentElement;const row=cell.parentElement,css=row&&getComputedStyle(row);if(cell!==source&&css&&(css.display.includes('grid')||css.display.includes('flex')&&!css.flexDirection.startsWith('column')))besideAnchor=locatorOf(cell);}
-   add({id:uid(),kind:'insert',target:destination?destination.locator:besideAnchor,position:destination?((action.position==='over'?'inside':action.position)==='before'?'before':(action.position==='over'?'inside':action.position)==='after'?'after':'inside'):action.position==='beside'?'after':(action.position==='over'?'inside':action.position)||'after',node:{id,kind:'panel',text:action.text||'Card copy',copy}});created.push(id);cardId=id;checks.push(()=>{const copy=collector.ownedNode(id);if(!copy)throw new Error('The copied component is missing.');const copyBaseline=(node:HTMLElement)=>{const part=sourceParts.get(node===copy?id:node.dataset.dxOwned||'');return part&&sourceIssues.get(part);};verifyContent(copy,copyBaseline);const original=(targets[0].id&&collector.ownedNode(targets[0].id))||source;if(!destination&&action.position==='below')verifyBelow(copy,original,sourceBounds,node=>sourceIssues.get(node),copyBaseline);if(!destination&&action.position==='beside')verifyBeside(copy,original,sourceBounds);const label=(index:number|undefined)=>index===undefined?null:index===0?copy:collector.ownedNode(insertParts[index].id);if(action.text&&label(headingIndex)?.textContent?.replace(/\s+/g,' ').trim()!==action.text.replace(/\s+/g,' ').trim())throw new Error('The copied heading did not match the request.');if(action.description&&label(descriptionIndex)?.textContent?.replace(/\s+/g,' ').trim()!==action.description.replace(/\s+/g,' ').trim())throw new Error('The copied description did not match the request.');});
+   if(placed&&action.position==='end')appended.set(placed.key,id);
+   // A copy beside its original may grow a fixed-height layer the app sized for one card.
+   if(!placed&&!destination&&action.position!=='below')releaseFixedHeights(source);
+   add({id:uid(),kind:'insert',target:placed?placed.locator:destination?destination.locator:besideAnchor,position:placed?placed.position:destination?((action.position==='over'?'inside':action.position)==='before'?'before':(action.position==='over'?'inside':action.position)==='after'?'after':'inside'):action.position==='beside'?'after':(action.position==='over'?'inside':action.position) as 'before'|'after'|'inside'|'below'||'after',node:{id,kind:'panel',text:action.text||'Card copy',copy}});created.push(id);cardId=id;checks.push(()=>{const copy=collector.ownedNode(id);if(!copy)throw new Error('The copied component is missing.');const copyBaseline=(node:HTMLElement)=>{const part=sourceParts.get(node===copy?id:node.dataset.dxOwned||'');return part&&sourceIssues.get(part);};verifyContent(copy,copyBaseline);const original=(targets[0].id&&collector.ownedNode(targets[0].id))||source;if(!destination&&action.position==='below')verifyBelow(copy,original,sourceBounds,node=>sourceIssues.get(node),copyBaseline);if(!destination&&action.position==='beside')verifyBeside(copy,original,sourceBounds);const label=(index:number|undefined)=>{if(index!==undefined&&insertParts[index]?.tag==='#text')index=insertParts[index].parent;return index===undefined||index<0?null:index===0?copy:collector.ownedNode(insertParts[index].id);};if(action.text&&label(headingIndex)?.textContent?.replace(/\s+/g,' ').trim()!==action.text.replace(/\s+/g,' ').trim())throw new Error('The copied heading did not match the request.');if(action.description&&label(descriptionIndex)?.textContent?.replace(/\s+/g,' ').trim()!==action.description.replace(/\s+/g,' ').trim())throw new Error('The copied description did not match the request.');});
    if(action.resultRef){outputs.set(action.resultRef,{node:source,id,locator:owned(id)});for(const [part,index] of identities)if(part instanceof HTMLElement)outputs.set(action.resultRef+'/'+collector.ref(part),{node:part,id:index===0?id:copy[index].id,locator:owned(index===0?id:copy[index].id)});const controls=[...source.querySelectorAll<HTMLElement>('button,a,[role=button],[role=link]')];if(controls.length===1){const part=identities.get(controls[0]);if(part!==undefined)outputs.set(action.resultRef+':button',{node:controls[0],id:copy[part].id,locator:owned(copy[part].id)});}}
   }else if(action.kind==='reorder'){
    if(targets.length!==1||!action.relativeTo||!['before','after','inside'].includes(action.position||''))throw new Error('Choose an element and where it should move.');
@@ -162,17 +199,18 @@ export function compileAssistant(workflow:Workflow,stateId:string,planInput:unkn
   }else if(action.kind==='create'&&action.element==='block'){
    if(!action.block||targets.length!==1)throw new Error('A block needs its parts and one target to sit in, before or after.');
    // over floats the block at an exact spot on its target, without moving anything around it.
-   const over=action.position==='over',position:'before'|'after'|'inside'|'below'=action.position==='over'?'inside':action.position==='beside'?'after':action.position||'after',block=withIds(action.block),id=uid();let {node:anchor,locator:anchorLocator}=targets[0];
+   const placedBlock=action.position==='end'||action.position==='row-below'?placeAt(targets[0].node,action.position):null;
+   const over=action.position==='over',position:'before'|'after'|'inside'|'below'=placedBlock?placedBlock.position:action.position==='over'?'inside':action.position==='beside'?'after':action.position as 'before'|'after'|'inside'|'below'||'after',block=withIds(action.block),id=uid();let {node:anchor,locator:anchorLocator}=targets[0];if(placedBlock){anchorLocator=placedBlock.locator;if(action.position==='end')appended.set(placedBlock.key,id);}
    if(over&&anchor.matches('button,a,input,textarea,select,img,svg')&&anchor.parentElement){anchor=anchor.parentElement;anchorLocator=locatorOf(anchor);}
    if(over&&getComputedStyle(anchor).position==='static')add({id:uid(),kind:'style',target:anchorLocator,style:{position:'relative'}});
    if(position==='inside'&&anchor.matches('button,a,input,textarea,select,img'))throw new Error('Place a block inside a container, not a control.');
    // A section placed before or after an item of a horizontal row would squeeze into that row and shift its title, so it moves up to the row itself and gets its own line. Only beside keeps it in the row.
    let lifted=false;
-   if(position!=='inside'&&(action.position!=='beside'||block.nodes[0].type==='crumbs')){const horizontal=(el:HTMLElement)=>{const css=getComputedStyle(el);return /flex/.test(css.display)&&/^row/.test(css.flexDirection);};for(let depth=0;depth<4&&anchor.parentElement&&!anchor.parentElement.matches('body')&&horizontal(anchor.parentElement);depth++){anchor=anchor.parentElement;anchorLocator=locatorOf(anchor);lifted=true;}}
+   if(!placedBlock&&position!=='inside'&&(action.position!=='beside'||block.nodes[0].type==='crumbs')){const horizontal=(el:HTMLElement)=>{const css=getComputedStyle(el);return /flex/.test(css.display)&&/^row/.test(css.flexDirection);};for(let depth=0;depth<4&&anchor.parentElement&&!anchor.parentElement.matches('body')&&horizontal(anchor.parentElement);depth++){anchor=anchor.parentElement;anchorLocator=locatorOf(anchor);lifted=true;}}
    // Content that grows a card must also grow the slot the host page sized for it.
    if(position!=='before')releaseFixedHeights(anchor);
    // A bar or lifted section lines up with the row it sits next to, so its content starts where that row's content does.
-   const inset=(lifted||block.nodes[0].type==='crumbs')&&position!=='inside'?(()=>{const css=getComputedStyle(anchor);return `0 ${css.paddingRight} 0 ${css.paddingLeft}`;})():'0';
+   const inset=!placedBlock&&(lifted||block.nodes[0].type==='crumbs')&&position!=='inside'?(()=>{const css=getComputedStyle(anchor);return `0 ${css.paddingRight} 0 ${css.paddingLeft}`;})():'0';
    const offset=(value:unknown)=>typeof value==='number'?value+'px':typeof value==='string'&&/^-?\d+(\.\d+)?(px|%)$/.test(value)?value:undefined,spot=action.style as Record<string,unknown>|null;
    const floating=over?{position:'absolute','z-index':'20',width:'max-content','max-width':'100%',...Object.fromEntries((['top','right','bottom','left'] as const).map(side=>[side,offset(spot?.[side])]).filter(([,value])=>value)),...(!['top','bottom'].some(side=>offset(spot?.[side]))?{top:'0'}:{}),...(!['left','right'].some(side=>offset(spot?.[side]))?{left:'0'}:{})}:{};
    add({id:uid(),kind:'insert',target:anchorLocator,position,node:{id,kind:'panel',text:block.nodes.find(part=>part.type==='heading')?.text||'Section',block,appearance:{display:'block','box-sizing':'border-box',width:'100%','max-width':'100%','min-width':'0',height:'auto',padding:inset,'border-radius':'0',margin:over?'0':position==='before'?'0 0 24px':'24px 0 0','font-family':'inherit',color:'inherit',...floating}}});created.push(id);group=id;
@@ -182,13 +220,12 @@ export function compileAssistant(workflow:Workflow,stateId:string,planInput:unkn
    if(action.resultRef)outputs.set(action.resultRef,{node:anchor,id,locator:owned(id)});
   }else if(action.kind==='create'){
    if(!action.element||action.element==='chart'||action.element==='block'||(!action.text?.trim()&&!['panel','header'].includes(action.element))||targets.length!==1)throw new Error('Specify one insertion target, an element type, and its label.');
-   const {node}=targets[0],id=uid(),anchorBounds=node.getBoundingClientRect(),anchorIssues=contentBaseline(node);let position=action.position==='beside'?'after':(action.position==='over'?'inside':action.position)||'after',locator=targets[0].locator;
+   const {node}=targets[0],id=uid(),anchorBounds=node.getBoundingClientRect(),anchorIssues=contentBaseline(node);let position:'before'|'after'|'inside'|'below'=action.position==='beside'?'after':(action.position==='over'||action.position==='end'||action.position==='row-below'?'inside':action.position)||'after',locator=targets[0].locator;
+   if(action.position==='end'||action.position==='row-below'){const placedHere=placeAt(node,action.position);position=placedHere.position;locator=placedHere.locator;if(action.position==='end')appended.set(placedHere.key,id);}
    if(action.element==='header'){const content=node===collector.rootNode?(node.matches('main,[role=main]')?node:node.querySelector<HTMLElement>('main,[role=main]')||node):node;const first=[...content.children].find((child):child is HTMLElement=>child instanceof HTMLElement&&!sensitive(child)&&visible(child));locator=first?describe(first,collector.ownedId(first)).locator:describe(content,collector.ownedId(content)).locator;position=first?'before':'inside';}
    // A row that will hold copies needs the page's content width: placed after a card inside a narrow column it would squeeze them, so it moves after the widest layout container around that card.
    if(action.element==='panel'&&(position==='after'||position==='before')&&action.resultRef&&plan.actions.some(other=>other.kind==='duplicate'&&other.relativeTo===action.resultRef)){
-    const content=(node.closest<HTMLElement>('main,[role=main]')||collector.rootNode).getBoundingClientRect().width;let row:HTMLElement=node;
-    for(let depth=0;depth<8&&row.parentElement&&row.parentElement!==collector.rootNode&&row.getBoundingClientRect().width<content*0.8;depth++)row=row.parentElement;
-    if(row!==node)locator=locatorOf(row);
+    const row=wideAnchor(node);if(row!==node)locator=locatorOf(row);
    }
    if(action.element==='link'&&!action.href)throw new Error('A link needs a destination route.');
    const section=node.parentElement;if(action.element==='panel'&&position==='after'&&node.matches('h1,h2,h3,h4,[role=heading]')&&section&&!section.matches('body,main,[role=dialog]')&&section.querySelectorAll('h1,h2,h3,h4,[role=heading]').length===1&&section.querySelector('button,[role=button],[role=radio]'))locator=describe(section).locator;
