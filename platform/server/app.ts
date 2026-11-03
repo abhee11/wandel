@@ -88,7 +88,7 @@ export function createPlatform(options:{db:DB;config:Config;ai:AIProvider;mail:M
   if(path==='/api/ai/guest-plan'&&method==='POST'){rateLimit(db,`guest-request:${tokenHash(ip,config.pepper)}`,12,clock().getTime(),60000);const raw=await req.text();if(Buffer.byteLength(raw)>2400)throw new APIError(413,'BODY_TOO_LARGE','Free preview requests must be under 2.4 KB.');let data:unknown;try{data=JSON.parse(raw);}catch{throw new APIError(400,'INVALID_JSON','Invalid request.');}return json(await guestPlan(db,ai,config.pepper,ip,data,clock()));}
   const u=await user(req);
   if(path.startsWith('/api/github/')||path==='/api/implementations'||path.startsWith('/api/implementations/'))return implementation.handle(u.id,req);
-  if(['/api/assistant/plan','/api/assistant/transcribe','/api/assistant/verify'].includes(path)&&method==='POST')return json(await assistant.handle(u.id,req));
+  if(['/api/assistant/plan','/api/assistant/transcribe','/api/assistant/verify','/api/assistant/diagnostic'].includes(path)&&method==='POST')return json(await assistant.handle(u.id,req));
   if(path==='/api/workflow-links'&&method==='GET')return json({links:links.list(u.id)});
   if(path==='/api/workflow-links'&&method==='POST'){rateLimit(db,'workflow-publish:'+u.id,5,clock().getTime(),60000);return json({link:links.create(u.id,await body(req))},201);}
   const workflowLink=path.match(/^\/api\/workflow-links\/([a-f0-9-]{36})$/);

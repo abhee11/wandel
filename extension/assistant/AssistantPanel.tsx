@@ -10,7 +10,7 @@ import {prepareMicrophone,openMicrophoneSetup,voiceSharingAllowed,rememberVoiceS
 import {useEffect,useLayoutEffect,useRef,useState} from 'react';
 import type {Bridge} from '../sidepanel/bridge';
 import {uid,type Snapshot,type VisitedScreen,type ConnectionEvent,type ConnectionCondition} from '../shared/model';
-import {planConversation,verifyConversation,transcribeInstruction} from './client';
+import {planConversation,verifyConversation,transcribeInstruction,reportFailure} from './client';
 import {samePage,stateURL} from '../shared/liveNavigation';
 import {PushToTalk} from './voice';
 import type {PageContext,AssistantPlan} from './schema';
@@ -23,7 +23,9 @@ export function AssistantPanel({bridge,snapshot,onSave,onBusyChange}:{bridge:Bri
  const [toolsOpen,setToolsOpen]=useState(false);
  const [visualContext,setVisualContext]=useState('Viewport capture pending.');
  async function capture(c:PageContext){if(!bridge.capturePage){setVisualContext('DOM context only: this browser connection has no screenshot capture.');return undefined;}try{const image=await bridge.capturePage(c);setVisualContext('Redacted viewport screenshot and DOM context.');return image;}catch(error){setVisualContext('DOM context only. Capture diagnostic: '+(error instanceof Error?error.message:'Viewport capture was unavailable.'));return undefined;}}
- function recover(detail:string,applied=false){const reply=conversationRecovery(detail,applied);setError('');setMessage(reply.text);say('assistant',reply.text,{status:'failed',error:detail.slice(0,300)});}
+ // The last plan's steps, for failure reports.
+ const lastPlan=useRef('');
+ function recover(detail:string,applied=false){const asked=[...conversation.current].reverse().find(turn=>turn.role==='user')?.text||'';reportFailure({detail:detail.slice(0,600),instruction:asked.slice(0,400),plan:lastPlan.current.slice(0,400),page:(snapshot.workflow.route||'').slice(0,300),applied});const reply=conversationRecovery(detail,applied);setError('');setMessage(reply.text);say('assistant',reply.text,{status:'failed',error:detail.slice(0,300)});}
 
  const clarificationRequest=useRef<{text:string;id:string;scope:string}|null>(null);
  const pendingCopy=useRef<{selection:string;workflow:string;state:string}|null>(null);
@@ -80,6 +82,7 @@ export function AssistantPanel({bridge,snapshot,onSave,onBusyChange}:{bridge:Bri
    // Selection is optional; the collector recovers or drops expired handles.
    let verificationNote='',reviewIssue='';const combined=followUp&&recordTurn&&followUp.scope===origin?'Continue this request: '+followUp.text+'\nUser clarification: '+value:value;const image=referenceRef.current;setMessage('Looking at the page…');let pageScreenshot=await capture(c);
    setMessage(c.workspace?.goal?'Continuing our design…':'Thinking…');
+   lastPlan.current='';
    let plan=await planConversation(combined,c,controller.signal,conversation.current.filter(turn=>turn.id!==userId),image,pageScreenshot,userId);
    for(let expanded=0;plan.status==='inspect'&&expanded<6;expanded++){if(request!==epoch.current)return;
     // The thing the user means may be on another screen of this prototype: open it when it is on this page, otherwise say where it is.
@@ -130,6 +133,7 @@ export function AssistantPanel({bridge,snapshot,onSave,onBusyChange}:{bridge:Bri
       if(verdict?.status==='uncertain')verificationNote='Visual review could not confirm: '+verdict.message;
      }else if(!kept&&requiresVisualReview(proposed,!!image))verificationNote='The edit passed DOM checks; viewport capture was unavailable.';
     },refresh:async()=>{const fresh=await context(undefined,combined);pageScreenshot=await capture(fresh);return fresh;},inspect:(refs)=>context(refs,combined),replan:(feedback,current)=>planConversation(combined,current,controller.signal,[...conversation.current.filter(turn=>turn.id!==userId),{role:'assistant',text:'The last proposed edit was not applied or its preview was fully rolled back. Repair only the current request; inspect or ask a concise clarification when the target is genuinely ambiguous. '+feedback,status:'failed'}],image,pageScreenshot,userId),active:()=>request===epoch.current&&origin===scopeRef.current&&!controller.signal.aborted,repairing:()=>setMessage('Checking a safer way to apply your request…')});}
+   lastPlan.current=plan.status+': '+plan.actions.map(action=>action.kind+(action.element?' '+action.element:'')+(action.position?' '+action.position:'')).join(', ');
    if(plan.status==='clarify'||plan.status==='unsupported'||plan.status==='inspect'){setClarification(plan);if(plan.status!=='unsupported'){waiting=true;clarificationRequest.current={text:combined,id:userId,scope:origin};}if(plan.candidates.length)await bridge.send({type:'assistantCandidates',refs:plan.candidates});answer(plan.message);return;}
    if(request===epoch.current){await remember(plan);answer(plan.status==='edit'?(plan.reply||'Applied: '+plan.actions.map(action=>action.kind==='create'?'added '+(action.text||action.element):action.kind==='duplicate'?'duplicated '+(action.text||'the referenced element'):action.kind==='theme'?'updated the theme':action.kind==='layout'?'updated the layout':action.kind==='text'?'updated the text':action.kind==='remove'?'removed the element':action.kind==='connect'?'connected the views':'updated the element').join('; ')+'. Undo is available.')+(reviewIssue?' I left it on the page, but a check noticed: '+reviewIssue.replace(/\s*\([^)]*\)/g,'')+' Should I fix that, or keep it as it is?':verificationNote?' '+verificationNote:''):plan.message,plan.status==='edit',plan.status==='edit'?reviewIssue:'');}
   }catch(e){if(request===epoch.current){failed=true;void bridge.send({type:'assistantRemember',memory:{...emptyAssistantMemory(),...snapshot.workflow.assistantMemory,pending:value.slice(0,300)}}).catch(()=>{});const detail=e instanceof Error?e.message:'Could not get a reply.',applyingNow=!!activeRequest.current?.applying;

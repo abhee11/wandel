@@ -79,6 +79,11 @@ export function assistantService(db:DB,entitlements:Entitlements,provider:Assist
   }
   const raw=await req.text();if(Buffer.byteLength(raw)>1200000)throw new APIError(413,'CONTEXT_LIMIT','Select a smaller section before asking for a change.');
   let decoded:unknown;try{decoded=JSON.parse(raw);}catch{throw new APIError(400,'INVALID_JSON','Invalid assistant request.');}
+  // A failed edit's exact reason, for diagnosis from the server log: the request, the planned steps and the error, never page content.
+  if(path.endsWith('/diagnostic')){
+   const input=z.object({detail:z.string().max(600),instruction:z.string().max(400).optional(),plan:z.string().max(400).optional(),page:z.string().max(300).optional(),applied:z.boolean().optional()}).strict().parse(decoded);
+   console.warn(JSON.stringify({event:'edit_failed',user:userId.slice(0,8),...input}));return {ok:true};
+  }
   if(path.endsWith('/verify')){
    const input=z.object({instruction:z.string().trim().min(1).max(1600),plan:AssistantPlanSchema,before:ReferenceImageSchema,after:ReferenceImageSchema,reference:ReferenceImageSchema.optional(),requestId:z.string().uuid(),turnId:z.string().uuid().optional()}).strict().parse(decoded);
    if(!provider.verify)return {verdict:{status:'uncertain',message:'Visual review is unavailable for this provider.'}};
