@@ -44,7 +44,7 @@ export function namedIcon(name:string):z.infer<typeof CopyIconSchema>{
   play:'M8 5v14l11-7z',calendar:'M4 6h16v14H4z M4 10h16 M8 3v4 M16 3v4',sparkle:'M12 3l2 6 6 2-6 2-2 6-2-6-6-2 6-2z',
   list:'M9 6h11 M9 12h11 M9 18h11 M4 6h.5 M4 12h.5 M4 18h.5',quote:'M5 17c2 0 4-2 4-5V7H4v5h4 M15 17c2 0 4-2 4-5V7h-5v5h4',
   mic:'M9 5a3 3 0 0 1 6 0v6a3 3 0 0 1-6 0z M5 11a7 7 0 0 0 14 0 M12 18v3',image:'M4 5h16v14H4z M4 16l5-5 4 4 3-3 4 4 M15 8.5a1.5 1.5 0 1 0 .01 0',
-  edit:'M4 20h4L19 9l-4-4L4 16z M14 6l4 4',star:'M12 3l2.8 5.7 6.2.9-4.5 4.4 1 6.2-5.5-2.9-5.5 2.9 1-6.2L3 9.6l6.2-.9z',
+  edit:'M4 20h4L19 9l-4-4L4 16z M14 6l4 4',search:'M11 4a7 7 0 1 0 .01 0 M16 16l4.5 4.5',star:'M12 3l2.8 5.7 6.2.9-4.5 4.4 1 6.2-5.5-2.9-5.5 2.9 1-6.2L3 9.6l6.2-.9z',
   users:'M9 11a3.5 3.5 0 1 0 0-7a3.5 3.5 0 1 0 0 7 M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6 M16 4.5a3.5 3.5 0 0 1 0 6.5 M18 14c2 .7 3 2.8 3 6',
   close:'M6 6l12 12 M18 6L6 18',more:'M12 5h.01 M12 12h.01 M12 19h.01',
   feedback:'M4 4h10v8H8l-4 3z M14 9h6v8l-3-2h-6v-3 M7 8h4'
@@ -54,4 +54,4 @@ export function namedIcon(name:string):z.infer<typeof CopyIconSchema>{
  return {viewBox:name.trim().toLowerCase().match(/^(gear|settings|cog)$/)?'0 0 26 28':'0 0 24 24',shapes:[{tag:'path',attrs:{d,fill:'none',stroke:'currentColor','stroke-width':'2','stroke-linecap':'round','stroke-linejoin':'round'}}]};
 }
 
-export const iconNames=['gear','flask','gauge','check','chart','shield','mail','user','users','tokens','trend-up','trend-down','clock','document','video','chat','feedback','info','chevron-down','chevron-right','chevron-up','chevron-left','plus','arrow-up-right','arrow-right','copy','bell','help','grid','book','play','calendar','sparkle','list','quote','mic','image','edit','star','close','more'];
+export const iconNames=['gear','flask','gauge','check','chart','shield','mail','user','users','tokens','trend-up','trend-down','clock','document','video','chat','feedback','info','chevron-down','chevron-right','chevron-up','chevron-left','plus','arrow-up-right','arrow-right','copy','bell','help','grid','book','play','calendar','sparkle','list','quote','mic','image','edit','star','search','close','more'];

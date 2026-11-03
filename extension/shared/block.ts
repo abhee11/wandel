@@ -1,6 +1,6 @@
 import {z} from 'zod';
 /** A composed section described as data. The renderer owns all markup; text is set with textContent only. */
-export const blockTypes=['card','stack','row','grid','heading','text','eyebrow','link','button','icon','stat','tile','field','choice','select','crumbs','list','quote','image','disclosure','divider'] as const;
+export const blockTypes=['card','stack','row','grid','heading','text','eyebrow','link','button','icon','stat','tile','field','choice','select','crumbs','input','textarea','tabs','badge','avatar','list','quote','image','disclosure','divider'] as const;
 export const blockContainers=['card','stack','row','grid','disclosure'] as const;
 export const blockTones=['none','pink','peach','yellow','lime','mint','sky','lilac','gray'] as const;
 const httpImage=z.string().max(2048).refine(value=>{try{const url=new URL(value);return ['https:','http:'].includes(url.protocol)&&!url.username&&!url.password;}catch{return false;}},'Use an HTTP(S) image link.');
@@ -33,6 +33,10 @@ export const BlockSchema=z.object({
   if(['heading','text','eyebrow','link','button','quote','tile','field','stat'].includes(node.type)&&!node.text?.trim())issue(`A ${node.type} needs text.`);
   if((node.type==='choice'||node.type==='select')&&(node.options?.length||0)<2)issue(`A ${node.type} needs at least two options.`);
   if(node.type==='list'&&!node.items?.length)issue('A list needs items.');
+  if((node.type==='input'||node.type==='textarea')&&!node.text?.trim()&&!node.detail?.trim())issue(`${node.type==='input'?'An input':'A textarea'} needs a label (text) or a placeholder (detail).`);
+  if(node.type==='tabs'&&(node.options?.length||0)<2)issue('Tabs need at least two options.');
+  if(node.type==='badge'&&!node.text?.trim())issue('A badge needs text.');
+  if(node.type==='avatar'&&!node.text?.trim()&&!node.items?.length)issue('An avatar needs a name (text) or several names (items).');
   if(node.type==='crumbs'&&(node.items?.length||0)<2)issue('A crumbs part needs at least two items.');
   if(node.type==='crumbs'&&node.options&&node.options.length<2)issue('A crumbs switcher needs at least two options.');
   if(node.type==='icon'&&!node.icon)issue('An icon part needs an icon name.');

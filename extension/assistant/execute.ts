@@ -134,12 +134,13 @@ export function compileAssistant(workflow:Workflow,stateId:string,planInput:unkn
    if(!action.block||targets.length!==1)throw new Error('A block needs its parts and one target to sit in, before or after.');
    const position=action.position==='beside'?'after':action.position||'after',block=withIds(action.block),id=uid();let {node:anchor,locator:anchorLocator}=targets[0];
    if(position==='inside'&&anchor.matches('button,a,input,textarea,select,img'))throw new Error('Place a block inside a container, not a control.');
-   // A top bar (a breadcrumb root) needs its own line: placed beside an item of a horizontal row, it would squeeze into that row and shift its title, so it moves up to the row itself.
-   if(block.nodes[0].type==='crumbs'&&position!=='inside'){const horizontal=(el:HTMLElement)=>{const css=getComputedStyle(el);return /flex/.test(css.display)&&/^row/.test(css.flexDirection);};for(let depth=0;depth<4&&anchor.parentElement&&!anchor.parentElement.matches('body')&&horizontal(anchor.parentElement);depth++){anchor=anchor.parentElement;anchorLocator=locatorOf(anchor);}}
+   // A section placed before or after an item of a horizontal row would squeeze into that row and shift its title, so it moves up to the row itself and gets its own line. Only beside keeps it in the row.
+   let lifted=false;
+   if(position!=='inside'&&(action.position!=='beside'||block.nodes[0].type==='crumbs')){const horizontal=(el:HTMLElement)=>{const css=getComputedStyle(el);return /flex/.test(css.display)&&/^row/.test(css.flexDirection);};for(let depth=0;depth<4&&anchor.parentElement&&!anchor.parentElement.matches('body')&&horizontal(anchor.parentElement);depth++){anchor=anchor.parentElement;anchorLocator=locatorOf(anchor);lifted=true;}}
    // Content that grows a card must also grow the slot the host page sized for it.
    if(position!=='before')releaseFixedHeights(anchor);
-   // The bar lines up with the row it sits beside, so its text starts where that row's content does.
-   const inset=block.nodes[0].type==='crumbs'&&position!=='inside'?(()=>{const css=getComputedStyle(anchor);return `0 ${css.paddingRight} 0 ${css.paddingLeft}`;})():'0';
+   // A bar or lifted section lines up with the row it sits next to, so its content starts where that row's content does.
+   const inset=(lifted||block.nodes[0].type==='crumbs')&&position!=='inside'?(()=>{const css=getComputedStyle(anchor);return `0 ${css.paddingRight} 0 ${css.paddingLeft}`;})():'0';
    add({id:uid(),kind:'insert',target:anchorLocator,position,node:{id,kind:'panel',text:block.nodes.find(part=>part.type==='heading')?.text||'Section',block,appearance:{display:'block','box-sizing':'border-box',width:'100%','max-width':'100%','min-width':'0',height:'auto',padding:inset,'border-radius':'0',margin:position==='before'?'0 0 24px':'24px 0 0','font-family':'inherit',color:'inherit'}}});created.push(id);group=id;
    const parts=block.nodes.length;
    checks.push(()=>{const host=collector.ownedNode(id);if(!host)throw new Error('The new block is missing.');const rendered=host.querySelectorAll('[data-dx-owned]').length;if(rendered!==parts)throw new Error(`The block rendered ${rendered} of its ${parts} parts.`);verifyContent(host);verifyNoOverlap(position==='inside'?(targets[0].id&&collector.ownedNode(targets[0].id))||anchor:host);});
