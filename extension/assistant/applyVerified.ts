@@ -3,6 +3,8 @@ import type {AssistantPlan,PageContext} from './schema';
 export const rolledBackPreview='Preview rolled back: ';
 /** A built change that failed a check but was left on the page for the user to judge. */
 export const keptPreview='Preview kept: ';
+/** A new item that does not look like the items around it is rolled back and planned again, never kept. */
+export const neighbourMismatch='Does not match its neighbours: ';
 /** Retry only a confirmed preflight rejection or fully restored preview, and only with a changed plan. */
 export async function applyVerifiedPlan(instruction:string,initial:AssistantPlan,context:PageContext,options:{apply:(plan:AssistantPlan,c:PageContext)=>Promise<void>;refresh:()=>Promise<PageContext>;inspect?:(refs:string[])=>Promise<PageContext>;replan:(feedback:string,c:PageContext)=>Promise<AssistantPlan>;active:()=>boolean;repairing:()=>void}){
  let plan=initial,current=context;

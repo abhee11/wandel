@@ -23,7 +23,10 @@ export function designScope(target:HTMLElement){
 }
 export function captureDesign(target:HTMLElement):NativeDesign{
  const scope=designScope(target);
- const find=(selector:string)=>[scope,...scope.querySelectorAll<HTMLElement>(selector)].find(el=>el.matches(selector)&&visible(el)&&!el.closest('[data-dx-ignore]'))||null;
+ // The nearest matching element to the target sets the style, not the first in the scope: a new button beside a card's buttons looks like them, not like the page header's.
+ const at=target.getBoundingClientRect(),distance=(el:HTMLElement)=>{const r=el.getBoundingClientRect();return Math.hypot(Math.max(r.left-at.right,at.left-r.right,0),Math.max(r.top-at.bottom,at.top-r.bottom,0));};
+ const nearest=(list:HTMLElement[])=>list.reduce<HTMLElement|null>((best,el)=>!best||distance(el)<distance(best)?el:best,null);
+ const find=(selector:string)=>nearest([scope,...scope.querySelectorAll<HTMLElement>(selector)].filter(el=>el.matches(selector)&&visible(el)&&!el.closest('[data-dx-ignore]')));
  const surface=readStyle(scope);
  // Transparent local sections inherit the enclosing app surface, not generic white.
  if(!surface['background-color']||surface['background-color']==='rgba(0, 0, 0, 0)'){
@@ -31,7 +34,7 @@ export function captureDesign(target:HTMLElement):NativeDesign{
  }
  const inherited={'font-family':surface['font-family']||'inherit',color:surface.color||'inherit'};
  const fallbackButton:CopyNode['style']={display:'inline-flex','align-items':'center','justify-content':'center',padding:'10px 16px',margin:'8px 0',border:'1px solid #5856c4','border-radius':'8px','background-color':'#625fd4',color:'#fff','font-family':'system-ui, sans-serif','font-size':'14px','font-weight':'600','line-height':'1.4'};
- return {surface,heading:{...inherited,...readStyle(find('h2,h3,h1,[role="heading"]'))},text:{...inherited,...readStyle(find('p'))},button:{...fallbackButton,...readStyle(target.matches('button,[role="button"]')?target:[...scope.querySelectorAll<HTMLElement>('button:not([aria-pressed]),[role="button"]')].find(el=>visible(el)&&! /^(close|cancel|delete|remove)$/i.test(el.getAttribute('aria-label')||el.textContent?.trim()||''))||null)},field:readStyle(find('input:not([type="hidden"]):not([type="password"]),textarea,select')),table:readStyle(find('table,[role="table"]')),tableHeader:readStyle(find('th,[role="columnheader"]')),card:{...inherited,'background-color':surface['background-color']||'transparent',...readStyle(find('article,[data-card],.card'))}};
+ return {surface,heading:{...inherited,...readStyle(find('h2,h3,h1,[role="heading"]'))},text:{...inherited,...readStyle(find('p'))},button:{...fallbackButton,...readStyle(target.matches('button,[role="button"]')?target:nearest([...scope.querySelectorAll<HTMLElement>('button:not([aria-pressed]),[role="button"]')].filter(el=>visible(el)&&el.getBoundingClientRect().width>24&&el.getBoundingClientRect().width<400&&el.getBoundingClientRect().height<64&&!el.closest('[data-dx-ignore]')&&! /^(close|cancel|delete|remove)$/i.test(el.getAttribute('aria-label')||el.textContent?.trim()||''))))},field:readStyle(find('input:not([type="hidden"]):not([type="password"]),textarea,select')),table:readStyle(find('table,[role="table"]')),tableHeader:readStyle(find('th,[role="columnheader"]')),card:{...inherited,'background-color':surface['background-color']||'transparent',...readStyle(find('article,[data-card],.card'))}};
 }
 /** Preserve a visible control even when the reference is a text-only/reset button. */
 export function buttonAppearance(reference:CopyNode['style']={}):CopyNode['style']{

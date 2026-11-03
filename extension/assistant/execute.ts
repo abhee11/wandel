@@ -10,6 +10,7 @@ import {captureCopy} from '../content/duplicate';
 import {watched} from '../content/watch';
 import {safeDeclarations} from '../content/behavior';
 import {structureAround,structureOf} from './layoutMap';
+import {neighbourMismatch} from './applyVerified';
 import {renameCopyHeading} from '../content/duplicateHeading';
 import {sensitive} from './privacy';
 import {clone,uid,OperationSchema,type Workflow,type Locator,type Operation,type CopyNode} from '../shared/model';
@@ -53,6 +54,9 @@ export function compileAssistant(workflow:Workflow,stateId:string,planInput:unkn
  const rowFill=new Map<HTMLElement,number>();
  for(const action of plan.actions)if(action.position==='row-below'&&action.targets[0]&&!action.targets[0].startsWith('new:')){try{const node=collector.get(action.targets[0]),key=structureAround(node)?.container||node;rowFill.set(key,(rowFill.get(key)||0)+1);}catch{/* an unknown target fails when the action runs */}}
  const rows=new Map<HTMLElement,string>(),appended=new Map<HTMLElement,string>();
+ // How many items each structure gets at its end in this plan: only the new last item keeps the end-of-list margin the old last item had.
+ const endFill=new Map<HTMLElement,number>(),endDone=new Map<HTMLElement,number>();
+ for(const action of plan.actions)if(action.position==='end'&&action.targets[0]&&!action.targets[0].startsWith('new:')){try{const node=collector.get(action.targets[0]),key=structureAround(node)?.container||node;endFill.set(key,(endFill.get(key)||0)+1);}catch{/* checked when it runs */}}
  const placeAt=(node:HTMLElement,where:'end'|'row-below')=>{
   const structure=structureAround(node),key=structure?.container||node;
   if(where==='row-below'){
@@ -64,6 +68,19 @@ export function compileAssistant(workflow:Workflow,stateId:string,planInput:unkn
   }
   const previous=appended.get(key);if(previous)return {locator:owned(previous),position:'after' as const,key};
   const last=structure?.items[structure.items.length-1]||node;releaseFixedHeights(last);return {locator:locatorOf(last),position:'after' as const,key};
+ };
+ // The one place every insert gets its anchor: structure positions (end, row-below), a copy beside its card in the next grid cell,
+ // a section lifted out of a horizontal row onto its own line, a row for copies widened out of narrow columns, and fixed-height
+ // layers released wherever the insert can grow them.
+ type Placement={anchor:HTMLElement;locator:Locator;position:'before'|'after'|'inside'|'below';lifted:boolean};
+ const resolvePlacement=(kind:'copy'|'section'|'element',node:HTMLElement,locator:Locator,position:AssistantPlan['actions'][number]['position'],id:string,options:{crumbs?:boolean;rowForCopies?:boolean;header?:boolean}={}):Placement=>{
+  if(position==='end'||position==='row-below'){const placed=placeAt(node,position);if(position==='end')appended.set(placed.key,id);return {anchor:node,locator:placed.locator,position:placed.position,lifted:false};}
+  let anchor=node,at=locator,lifted=false;const where:Placement['position']=position==='beside'?'after':position==='over'?'inside':position||'after';
+  if(kind==='copy'&&position==='beside'){let cell:HTMLElement=node;while(cell.parentElement&&!cell.parentElement.matches('body,main')&&cell.parentElement.children.length===1)cell=cell.parentElement;const row=cell.parentElement,css=row&&getComputedStyle(row);if(cell!==node&&css&&(css.display.includes('grid')||css.display.includes('flex')&&!css.flexDirection.startsWith('column')))at=locatorOf(cell);}
+  if(kind==='section'&&where!=='inside'&&(position!=='beside'||options.crumbs)){const horizontal=(el:HTMLElement)=>{const css=getComputedStyle(el);return /flex/.test(css.display)&&/^row/.test(css.flexDirection);};for(let depth=0;depth<4&&anchor.parentElement&&!anchor.parentElement.matches('body')&&horizontal(anchor.parentElement);depth++){anchor=anchor.parentElement;at=locatorOf(anchor);lifted=true;}}
+  if(kind==='element'&&options.rowForCopies&&(where==='after'||where==='before')){const row=wideAnchor(node);if(row!==node){anchor=row;at=locatorOf(row);}}
+  if(where!=='before'&&where!=='below'&&!options.header)releaseFixedHeights(anchor);
+  return {anchor,locator:at,position:where,lifted};
  };
  // One more item in an existing list, menu or option group is a copy of an item there, renamed, never a new control styled from elsewhere:
  // it keeps the list's own look, spacing and direction. Several new items follow each other in the order given.
@@ -153,10 +170,10 @@ export function compileAssistant(workflow:Workflow,stateId:string,planInput:unkn
    const sourceBounds=source.getBoundingClientRect();
    const id=uid(),insertParts=copy,sourceParts=new Map<string,HTMLElement>();for(const [part,index] of identities)if(part instanceof HTMLElement)sourceParts.set(index===0?id:copy[index].id,part);
    // Beside: a card alone in a grid or row cell gets the next cell; inserting after the card itself would stack it inside its own cell.
-   let besideAnchor=sourceLocator;if(action.position==='beside'){let cell:HTMLElement=source;while(cell.parentElement&&!cell.parentElement.matches('body,main')&&cell.parentElement.children.length===1)cell=cell.parentElement;const row=cell.parentElement,css=row&&getComputedStyle(row);if(cell!==source&&css&&(css.display.includes('grid')||css.display.includes('flex')&&!css.flexDirection.startsWith('column')))besideAnchor=locatorOf(cell);}
-   if(placed&&action.position==='end')appended.set(placed.key,id);
-   // A copy beside its original may grow a fixed-height layer the app sized for one card.
-   if(!placed&&!destination&&action.position!=='below')releaseFixedHeights(source);
+   const besideAnchor=placed||destination?sourceLocator:resolvePlacement('copy',source,sourceLocator,action.position,id).locator;
+   if(placed&&action.position==='end'){appended.set(placed.key,id);
+    const done=(endDone.get(placed.key)||0)+1;endDone.set(placed.key,done);
+    if(done<(endFill.get(placed.key)||1)){const items=structureAround(source)?.items||[],earlier=items.length>=2?items[items.length-2]:null,margin=getComputedStyle(source);copy[0].style.margin=`${margin.marginTop} ${margin.marginRight} ${earlier?getComputedStyle(earlier).marginBottom:'0px'} ${margin.marginLeft}`;}}
    add({id:uid(),kind:'insert',target:placed?placed.locator:destination?destination.locator:besideAnchor,position:placed?placed.position:destination?((action.position==='over'?'inside':action.position)==='before'?'before':(action.position==='over'?'inside':action.position)==='after'?'after':'inside'):action.position==='beside'?'after':(action.position==='over'?'inside':action.position) as 'before'|'after'|'inside'|'below'||'after',node:{id,kind:'panel',text:action.text||'Card copy',copy}});created.push(id);cardId=id;checks.push(()=>{const copy=collector.ownedNode(id);if(!copy)throw new Error('The copied component is missing.');const copyBaseline=(node:HTMLElement)=>{const part=sourceParts.get(node===copy?id:node.dataset.dxOwned||'');return part&&sourceIssues.get(part);};verifyContent(copy,copyBaseline);const original=(targets[0].id&&collector.ownedNode(targets[0].id))||source;if(!destination&&action.position==='below')verifyBelow(copy,original,sourceBounds,node=>sourceIssues.get(node),copyBaseline);if(!destination&&action.position==='beside')verifyBeside(copy,original,sourceBounds);const label=(index:number|undefined)=>{if(index!==undefined&&insertParts[index]?.tag==='#text')index=insertParts[index].parent;return index===undefined||index<0?null:index===0?copy:collector.ownedNode(insertParts[index].id);};if(action.text&&label(headingIndex)?.textContent?.replace(/\s+/g,' ').trim()!==action.text.replace(/\s+/g,' ').trim())throw new Error('The copied heading did not match the request.');if(action.description&&label(descriptionIndex)?.textContent?.replace(/\s+/g,' ').trim()!==action.description.replace(/\s+/g,' ').trim())throw new Error('The copied description did not match the request.');});
    if(action.resultRef){outputs.set(action.resultRef,{node:source,id,locator:owned(id)});for(const [part,index] of identities)if(part instanceof HTMLElement)outputs.set(action.resultRef+'/'+collector.ref(part),{node:part,id:index===0?id:copy[index].id,locator:owned(index===0?id:copy[index].id)});const controls=[...source.querySelectorAll<HTMLElement>('button,a,[role=button],[role=link]')];if(controls.length===1){const part=identities.get(controls[0]);if(part!==undefined)outputs.set(action.resultRef+':button',{node:controls[0],id:copy[part].id,locator:owned(copy[part].id)});}}
   }else if(action.kind==='reorder'){
@@ -205,10 +222,8 @@ export function compileAssistant(workflow:Workflow,stateId:string,planInput:unkn
    if(over&&getComputedStyle(anchor).position==='static')add({id:uid(),kind:'style',target:anchorLocator,style:{position:'relative'}});
    if(position==='inside'&&anchor.matches('button,a,input,textarea,select,img'))throw new Error('Place a block inside a container, not a control.');
    // A section placed before or after an item of a horizontal row would squeeze into that row and shift its title, so it moves up to the row itself and gets its own line. Only beside keeps it in the row.
-   let lifted=false;
-   if(!placedBlock&&position!=='inside'&&(action.position!=='beside'||block.nodes[0].type==='crumbs')){const horizontal=(el:HTMLElement)=>{const css=getComputedStyle(el);return /flex/.test(css.display)&&/^row/.test(css.flexDirection);};for(let depth=0;depth<4&&anchor.parentElement&&!anchor.parentElement.matches('body')&&horizontal(anchor.parentElement);depth++){anchor=anchor.parentElement;anchorLocator=locatorOf(anchor);lifted=true;}}
-   // Content that grows a card must also grow the slot the host page sized for it.
-   if(position!=='before')releaseFixedHeights(anchor);
+   const resolvedBlock=placedBlock?null:resolvePlacement('section',anchor,anchorLocator,action.position,id,{crumbs:block.nodes[0].type==='crumbs'}),lifted=!!resolvedBlock?.lifted;
+   if(resolvedBlock){anchor=resolvedBlock.anchor;anchorLocator=resolvedBlock.locator;}
    // A bar or lifted section lines up with the row it sits next to, so its content starts where that row's content does.
    const inset=!placedBlock&&(lifted||block.nodes[0].type==='crumbs')&&position!=='inside'?(()=>{const css=getComputedStyle(anchor);return `0 ${css.paddingRight} 0 ${css.paddingLeft}`;})():'0';
    const offset=(value:unknown)=>typeof value==='number'?value+'px':typeof value==='string'&&/^-?\d+(\.\d+)?(px|%)$/.test(value)?value:undefined,spot=action.style as Record<string,unknown>|null;
@@ -221,19 +236,14 @@ export function compileAssistant(workflow:Workflow,stateId:string,planInput:unkn
   }else if(action.kind==='create'){
    if(!action.element||action.element==='chart'||action.element==='block'||(!action.text?.trim()&&!['panel','header'].includes(action.element))||targets.length!==1)throw new Error('Specify one insertion target, an element type, and its label.');
    const {node}=targets[0],id=uid(),anchorBounds=node.getBoundingClientRect(),anchorIssues=contentBaseline(node);let position:'before'|'after'|'inside'|'below'=action.position==='beside'?'after':(action.position==='over'||action.position==='end'||action.position==='row-below'?'inside':action.position)||'after',locator=targets[0].locator;
-   if(action.position==='end'||action.position==='row-below'){const placedHere=placeAt(node,action.position);position=placedHere.position;locator=placedHere.locator;if(action.position==='end')appended.set(placedHere.key,id);}
+   {const resolved=resolvePlacement('element',node,locator,action.position,id,{header:action.element==='header',rowForCopies:action.element==='panel'&&!!action.resultRef&&plan.actions.some(other=>other.kind==='duplicate'&&other.relativeTo===action.resultRef)});position=resolved.position;locator=resolved.locator;}
    if(action.element==='header'){const content=node===collector.rootNode?(node.matches('main,[role=main]')?node:node.querySelector<HTMLElement>('main,[role=main]')||node):node;const first=[...content.children].find((child):child is HTMLElement=>child instanceof HTMLElement&&!sensitive(child)&&visible(child));locator=first?describe(first,collector.ownedId(first)).locator:describe(content,collector.ownedId(content)).locator;position=first?'before':'inside';}
-   // A row that will hold copies needs the page's content width: placed after a card inside a narrow column it would squeeze them, so it moves after the widest layout container around that card.
-   if(action.element==='panel'&&(position==='after'||position==='before')&&action.resultRef&&plan.actions.some(other=>other.kind==='duplicate'&&other.relativeTo===action.resultRef)){
-    const row=wideAnchor(node);if(row!==node)locator=locatorOf(row);
-   }
    if(action.element==='link'&&!action.href)throw new Error('A link needs a destination route.');
    const section=node.parentElement;if(action.element==='panel'&&position==='after'&&node.matches('h1,h2,h3,h4,[role=heading]')&&section&&!section.matches('body,main,[role=dialog]')&&section.querySelectorAll('h1,h2,h3,h4,[role=heading]').length===1&&section.querySelector('button,[role=button],[role=radio]'))locator=describe(section).locator;
    if(position==='inside'&&node.matches('button,a,input,textarea,select,img,br'))throw new Error('Select a container to add UI inside.');
    const design=captureDesign(node),style=action.element==='field'?design.text:appearance||(action.element==='header'?{...design.text,display:'flex','flex-direction':'row','flex-wrap':'wrap','align-items':'center',gap:'20px',padding:'16px 0',margin:'0'}:action.element==='link'?{...design.text,display:'inline-flex',padding:'4px 0',margin:'0','text-decoration-line':'underline'}:(action.element==='panel'?{display:'block',margin:'16px 0',padding:'0',border:'0','box-shadow':'none','background-color':'transparent',...design.text}:action.element==='button'?design.button:design.text));
    if(position==='after'&&afterAnchors.has(action.targets[0]))locator=owned(afterAnchors.get(action.targets[0])!);
    // As for blocks: a card in a fixed-height layer must grow, not spill over the cards below.
-   if(position!=='before'&&action.element!=='header')releaseFixedHeights(node);
    add({id:uid(),kind:'insert',target:locator,position,node:{id,kind:action.element==='header'?'panel':action.element==='link'?'text':action.element,text:action.text||'',appearance:action.element==='button'?buttonAppearance(style):style,...(action.element==='field'?{inputType:action.inputType||'text',required:action.required||false,inputAppearance:appearance||design.field,...(action.options?{options:action.options}:{}),...(action.radioGroup?{radioGroup:action.radioGroup}:{})}:{}),...(action.element==='header'?{semanticTag:'header' as const}:action.element==='link'?{semanticTag:'a' as const,href:action.href!}:{})}});created.push(id);checks.push(()=>{const created=collector.ownedNode(id);if(!created)throw new Error('The new element is missing.');verifyContent(created);if(action.element==='button')verifyNewButton(created);if(position==='below')verifyBelow(created,node,anchorBounds,item=>anchorIssues.get(item));});if(action.element==='field')checks.push(()=>{const field=collector.ownedNode(id+':input');if(!(field instanceof HTMLInputElement||field instanceof HTMLTextAreaElement||field instanceof HTMLSelectElement)||field.required!==!!action.required||(field instanceof HTMLInputElement&&field.type!==(action.inputType||'text')))throw new Error('The requested field type or validation did not apply.');});if(action.element==='header')checks.push(()=>{const header=collector.ownedNode(id);if(!header||header.tagName!=='HEADER'||header.parentElement?.firstElementChild!==header)throw new Error('The new header was not placed above the content.');});if(action.element==='link')checks.push(()=>{const link=collector.ownedNode(id);if(!(link instanceof HTMLAnchorElement)||link.getAttribute('href')!==action.href)throw new Error('The new link does not have its requested destination.');});if(position==='after')afterAnchors.set(action.targets[0],id);if(action.element==='panel')group=id;if(action.resultRef){const representative=document.createElement(action.element==='header'?'header':action.element==='link'?'a':action.element==='button'?'button':'div');representative.textContent=action.text;outputs.set(action.resultRef,{node:representative,id,locator:owned(id)});}
   }else if(action.kind==='choices'||action.kind==='default'){
    if(targets.length!==1)throw new Error('Select a single prototype option group.');const id=targets[0].id;
@@ -376,5 +386,21 @@ export function compileAssistant(workflow:Workflow,stateId:string,planInput:unkn
   }
  }
  arrangements.forEach(add);
+ // Anything new that lands in a list, row or grid must look like the items already there; a mismatch rolls the edit back so the assistant plans again with the reason.
+ checks.push(()=>{
+  const ours=new Set(created);
+  for(const id of created){
+   const node=collector.ownedNode(id);if(!node||!node.isConnected)continue;
+   const structure=structureAround(node);if(!structure||!structure.items.includes(node))continue;
+   const others=structure.items.filter(item=>!ours.has(item.dataset.dxOwned||'')),rect=node.getBoundingClientRect();if(others.length<2||!rect.width)continue;
+   const boxes=others.map(item=>item.getBoundingClientRect()),median=(values:number[])=>values.sort((a,b)=>a-b)[Math.floor(values.length/2)];
+   const width=median(boxes.map(b=>b.width)),height=median(boxes.map(b=>b.height)),name=structure.name.split(':')[0];
+   if(rect.width<width*0.5||rect.width>width*2.2)throw new Error(neighbourMismatch+`The new item is ${Math.round(rect.width)}px wide but the other items in the ${name} are about ${Math.round(width)}px; match their width.`);
+   if(rect.height<height*0.4||rect.height>height*2.5)throw new Error(neighbourMismatch+`The new item is ${Math.round(rect.height)}px tall but the other items in the ${name} are about ${Math.round(height)}px; match their size.`);
+   if(structure.kind==='list'&&Math.abs(rect.left-median(boxes.map(b=>b.left)))>12)throw new Error(neighbourMismatch+`The new item is not aligned with the other items in the ${name}; place it at the end of the list instead.`);
+   if(structure.kind==='row'&&Math.abs(rect.top-median(boxes.map(b=>b.top)))>8)throw new Error(neighbourMismatch+`The new item is not on the same line as the other items in the ${name}.`);
+  }
+  for(const id of created){const node=collector.ownedNode(id),text=node?.textContent?.trim()||'';if(node&&text.length>24&&node.getBoundingClientRect().width>0&&node.getBoundingClientRect().width<90)throw new Error(neighbourMismatch+`The new "${text.slice(0,30)}" is squeezed into ${Math.round(node.getBoundingClientRect().width)}px; give it a wider place.`);}
+ });
  return {workflow:validateWorkflow(next),stateId:nextState,created,group,view,cardId,verify:()=>checks.forEach(check=>check())};
 }

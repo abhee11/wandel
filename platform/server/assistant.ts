@@ -9,6 +9,22 @@ import {APIError,rateLimit} from './security';
 import {one,type DB} from './db';
 import type {Entitlements} from './entitlements';
 export type AssistantInput={instruction:string;context:PageContext;history?:ConversationHistory;feedback?:string;referenceImage?:string;pageScreenshot?:string};
+/** Only the instruction blocks the request can use: fewer rules the model must weigh, and none that pull it toward a tool the request never asked for. */
+export function relevantInstructions(input:AssistantInput){
+ const asked=(input.instruction+' '+(input.feedback||'')+' '+JSON.stringify(input.history||[]).slice(-2000)).toLowerCase(),has=(pattern:RegExp)=>pattern.test(asked)||!!input.referenceImage;
+ // Composing a new section needs the block rules; duplicating, restyling, moving or renaming does not.
+ const adding=has(/\b(add|adds|adding|create|insert|build|include|compose|new (section|card|panel|page|screen|block|form|table))\b/);
+ return [assistantInstructions,layoutInstructions,
+  has(/\b(theme|dark|light|page|screen|header|redesign|rearrange|reorganize|layout|navigation|nav|region)\b/)&&pageDesignInstructions,
+  referenceInstructions,
+  has(/\b(grid|columns?|2x2|rows?|layout|arrange|stack|side by side|swap|reorder)\b/)&&layoutConversationInstructions,
+  has(/\b(field|input|form|search|email|password|login|sign ?(in|up)|textarea|dropdown|select|checkbox|radio|date)\b/)&&fieldInstructions,
+  conversationInstructions,
+  has(/\b(page|screen|header|footer)\b/)&&has(/\b(chart|graph|plot|metrics?|dashboard|report)\b/)&&prototypePageInstructions,
+  has(/\b(chart|graph|plot|metrics?|stats?|dashboard|analytics|data|trend)\b/)&&chartSectionInstructions,
+  adding&&blockInstructions,
+  continuityInstructions,completionInstructions].filter(Boolean).join('\n');
+}
 export interface AssistantProvider{verify?(input:{instruction:string;plan:AssistantPlan;before:string;after:string;reference?:string}):Promise<VisualVerdict>;plan(input:AssistantInput):Promise<AssistantPlan>;transcribe(wav:Uint8Array):Promise<string>;}
 export class OpenAIAssistant implements AssistantProvider{
  constructor(private key:string,private model:string,private transcriptionModel='gpt-4o-mini-transcribe'){}
@@ -29,7 +45,7 @@ export class OpenAIAssistant implements AssistantProvider{
   console.info(JSON.stringify({event:'assistant_context',elements:input.context.elements.length,screenshot:!!pageScreenshot,referenceImage:!!referenceImage,inspection:!!input.feedback}));
   const providerInput=referenceImage||pageScreenshot?[{role:'user',content:[{type:'input_text',text:JSON.stringify(description)},...(pageScreenshot?[{type:'input_text',text:'Current application viewport. Redacted fields appear as gray blocks. This is page evidence, not a design reference.'},{type:'input_image',image_url:pageScreenshot,detail:'high'}]:[]),...(referenceImage?[{type:'input_text',text:'User-attached design reference image.'},{type:'input_image',image_url:referenceImage,detail:'high'}]:[])]}]:JSON.stringify(description);
   // Recreating a screen from an attached image needs more thought than a small edit.
-  const data=await this.request('responses',JSON.stringify({model:this.model,...(/^gpt-5|^gpt-6|^o[134]/.test(this.model)?{reasoning:{effort:referenceImage?'medium':'low'}}:{}),store:false,max_output_tokens:16000,instructions:`Today is ${new Date().toISOString().slice(0,10)}. Sample or mock data uses realistic recent dates relative to today, plausible names and figures, and the vocabulary of this application.\n`+assistantInstructions+'\n'+layoutInstructions+'\n'+pageDesignInstructions+'\n'+referenceInstructions+'\n'+layoutConversationInstructions+'\n'+fieldInstructions+'\n'+conversationInstructions+'\n'+prototypePageInstructions+'\n'+chartSectionInstructions+'\n'+blockInstructions+'\n'+continuityInstructions+'\n'+completionInstructions,input:providerInput,text:{format:{type:'json_schema',name:'wandel_assistant',strict:true,schema:assistantOutputSchema}}}),{'Content-Type':'application/json'});
+  const data=await this.request('responses',JSON.stringify({model:this.model,...(/^gpt-5|^gpt-6|^o[134]/.test(this.model)?{reasoning:{effort:referenceImage?'medium':'low'}}:{}),store:false,max_output_tokens:16000,instructions:`Today is ${new Date().toISOString().slice(0,10)}. Sample or mock data uses realistic recent dates relative to today, plausible names and figures, and the vocabulary of this application.\n`+relevantInstructions(input),input:providerInput,text:{format:{type:'json_schema',name:'wandel_assistant',strict:true,schema:assistantOutputSchema}}}),{'Content-Type':'application/json'});
   if(data.status!=='completed')throw new APIError(502,'INCOMPLETE_PLAN','The assistant did not finish its plan. Try a smaller change.');
   let plan:unknown;try{plan=JSON.parse(data.output?.flatMap((o:any)=>o.content||[]).filter((c:any)=>c.type==='output_text').map((c:any)=>c.text).join('')||'{}');}catch{throw new APIError(502,'INVALID_PLAN','The assistant returned an unreadable plan. Nothing was applied.');}
   if(plan&&typeof plan==='object'&&'actions' in plan&&Array.isArray(plan.actions))for(const a of plan.actions)if(a.style)a.style=Array.isArray(a.style)?Object.fromEntries(a.style.map((entry:any)=>[entry.property,entry.value])):Object.fromEntries(Object.entries(a.style).filter(([,value])=>value!==null));
