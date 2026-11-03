@@ -83,6 +83,16 @@ export function AssistantPanel({bridge,snapshot,onSave,onBusyChange}:{bridge:Bri
     const screen=plan.candidates.map(ref=>ref.startsWith('view:')?c.views.find(view=>view.id===ref.slice(5)):undefined).find(Boolean);
     if(screen&&screen.id!==c.stateId){if(!samePage(stateURL(snapshot.workflow,screen.id),stateURL(snapshot.workflow,c.stateId))){answer(`That’s on the “${screen.title}” screen. Open it from Your flow, then ask me again.`);return;}setMessage(`Opening “${screen.title}”…`);reopen.current={text:value,id:userId};await bridge.send({type:'state',id:screen.id});return;}
     else{setMessage('Inspecting the relevant layout…');c=await context(plan.candidates.filter(ref=>!ref.startsWith('view:')),combined);}plan=await planConversation(combined,c,controller.signal,conversation.current.filter(turn=>turn.id!==userId),image,pageScreenshot,userId);}
+   // One level deep: the thing the user means only appears once a control of the app is opened. Wandel opens it once, then plans again on what it shows.
+   if(plan.status==='open'&&plan.candidates[0]){
+    const opener=c.elements.find(element=>element.ref===plan.candidates[0]),name=(opener?.name||opener?.text||'it').slice(0,60);
+    setMessage(`Opening “${name}”…`);try{await bridge.send({type:'openControl',ref:plan.candidates[0]});}catch(error){answer(error instanceof Error?error.message:'I couldn’t open that.');return;}
+    if(request!==epoch.current)return;
+    c=await context(undefined,combined);pageScreenshot=await capture(c);setMessage('Looking at what opened…');
+    plan=await planConversation(combined+`\n(Wandel opened “${name}” so you can see what it shows. Continue the request on this screen; do not open anything else.)`,c,controller.signal,conversation.current.filter(turn=>turn.id!==userId),image,pageScreenshot,userId);
+    for(let expanded=0;plan.status==='inspect'&&expanded<4;expanded++){if(request!==epoch.current)return;c=await context(plan.candidates.filter(ref=>!ref.startsWith('view:')),combined);plan=await planConversation(combined,c,controller.signal,conversation.current.filter(turn=>turn.id!==userId),image,pageScreenshot,userId);}
+    if(plan.status==='open'||plan.status==='inspect'){answer(plan.question||'I opened it but still couldn’t find what you mean. Which part is it?');return;}
+   }
    if(plan.status==='watch'){if(plan.candidates.length)await bridge.send({type:'assistantCandidates',refs:plan.candidates});watchRequest.current={text:value,id:userId};await bridge.send({type:'watch'});answer(plan.question||'Click it once in the page and I’ll watch what opens, then build it.');return;}
    if(plan.status==='inspect'){answer(plan.question||'I couldn’t find what you mean on this screen. Which card or section is it? If it’s on another screen, open that screen first.');return;}
    if(request!==epoch.current||origin!==scopeRef.current)return;
