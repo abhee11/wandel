@@ -39,6 +39,22 @@ export function compileAssistant(workflow:Workflow,stateId:string,planInput:unkn
  const releaseFixedHeights=(start:HTMLElement)=>{let layers:HTMLElement[]=[];for(let node:HTMLElement|null=start,depth=0;node&&depth<8&&!node.matches('html,body');node=node.parentElement,depth++){const css=getComputedStyle(node);if(css.position==='fixed')return;if(css.position==='absolute')layers.push(node);if(layers.length&&/px$/.test(node.style.height)){for(const layer of layers)add({id:uid(),kind:'style',target:locatorOf(layer),style:{position:'relative'}});add({id:uid(),kind:'style',target:locatorOf(node),style:{blockSize:'auto'}});layers=[];}}};
  const resolveLayoutSource=(locator:Locator)=>locator.owned?collector.ownedNode(locator.owned):resolve(locator,collector.rootNode,new Map());
  const locate=(ref:string)=>{if(outputs.has(ref))return outputs.get(ref)!;const node=collector.get(ref),id=collector.ownedId(node);const locator=id?owned(id):describe(node).locator;if(!id){locator.structure=structuralIdentity(node);const classes=node.getAttribute('class');if(classes)locator.attrs.class=classes;}return {node,id,locator};};
+ // One more item in an existing list, menu or option group is a copy of an item there, renamed, never a new control styled from elsewhere:
+ // it keeps the list's own look, spacing and direction. Several new items follow each other in the order given.
+ const listItem=(node:HTMLElement,inside:boolean)=>{
+  const item='li,[role=option],[role=menuitem],[role=menuitemradio],[role=menuitemcheckbox],[role=radio],[role=tab],[role=listitem],button,a';
+  const small=(el:Element)=>{const r=el.getBoundingClientRect();return r.height>0&&r.height<140;};
+  if(inside){const kids=[...node.children].filter((kid):kid is HTMLElement=>kid instanceof HTMLElement&&kid.matches(item)&&small(kid));return kids.length?kids[kids.length-1]:null;}
+  const found=node.closest<HTMLElement>(item);return found&&(found===node||found.contains(node))&&small(found)&&!found.closest('nav,header')?found:null;
+ };
+ const lastCopy=new Map<HTMLElement,string>();let listCount=0;
+ plan.actions=plan.actions.map(action=>{
+  if(action.kind!=='create'||!['button','link','text'].includes(action.element||'')||action.targets.length!==1||!action.text?.trim()||action.targets[0].startsWith('new:')||!['after','before','beside','inside',null,undefined].includes(action.position))return action;
+  let node:HTMLElement;try{node=collector.get(action.targets[0]);}catch{return action;}
+  const item=listItem(node,action.position==='inside');if(!item||(action.element==='text'&&!item.matches('li,[role=option],[role=menuitem],[role=listitem]')))return action;
+  const ref=collector.ref(item),resultRef=action.resultRef||'new:list-'+(++listCount),previous=lastCopy.get(item);lastCopy.set(item,resultRef);
+  return {...action,kind:'duplicate' as const,element:null,targets:[ref],relativeTo:previous||ref,position:'after' as const,description:null,labels:[],styleRef:null,style:null,resultRef};
+ });
  for(const action of plan.actions){
   const targets=action.targets.map(locate),styleReference=action.styleRef?collector.get(action.styleRef,true):null;
   const appearance=styleReference?readStyle(styleReference):undefined;
@@ -77,6 +93,7 @@ export function compileAssistant(workflow:Workflow,stateId:string,planInput:unkn
    let source=targets[0].node,sourceLocator=targets[0].locator;{const item=source.parentElement;if(!targets[0].id&&item?.matches('li')&&![...item.children].some(child=>child!==source&&child instanceof HTMLElement&&visible(child))){source=item;sourceLocator=locatorOf(item);}}
    if(source.matches('html,body'))throw new Error('Select an element inside the page to copy.');
    if(sensitive(source)||source.querySelector('[data-private],[data-sensitive]'))throw new Error('This card includes private content and cannot be duplicated by the assistant.');
+   const selectedSource=source.matches('[aria-selected=true],[aria-checked=true],[aria-current]:not([aria-current=false])')||/\bselected\b/i.test(source.getAttribute('aria-label')||'');
    const identities=new Map<Node,number>(),copy=captureCopy(source,identities);if(findCard(source)?.controls.length===0)copy[0].style.width='auto';
    // A grid or row can stretch the original past its content; the copy keeps that rendered height as its minimum.
    {const height=Math.round(source.getBoundingClientRect().height);if(height>0)copy[0].style['min-height']=height+'px';}
@@ -93,6 +110,8 @@ export function compileAssistant(workflow:Workflow,stateId:string,planInput:unkn
    if(action.labels.length){const buttons=[...(source.matches('button,a,[role=button],[role=link]')?[source]:source.querySelectorAll<HTMLElement>('button,a,[role=button],[role=link]'))].map(node=>identities.get(node)).filter((index):index is number=>index!==undefined);if(buttons.length!==action.labels.length)throw new Error('Specify one label per button on the copied card.');buttons.forEach((index,i)=>rename(index,action.labels[i]));}
    // Visual copies are local prototypes, not production actions or navigations.
    for(const item of copy)delete item.href;
+   // A copy of the selected item is another option, not a second selection: its checkmark stays behind.
+   if(selectedSource)for(const item of copy)if(item.icon)item.style.display='none';
    // A destination (relativeTo) places the copy there, such as inside a new row; otherwise it sits beside or after its original.
    const destination=action.relativeTo?locate(action.relativeTo):null;
    if(destination){copy[0].style.width='auto';copy[0].style['min-width']='0';copy[0].style['max-width']='100%';}
@@ -165,6 +184,12 @@ export function compileAssistant(workflow:Workflow,stateId:string,planInput:unkn
    if(!action.element||action.element==='chart'||action.element==='block'||(!action.text?.trim()&&!['panel','header'].includes(action.element))||targets.length!==1)throw new Error('Specify one insertion target, an element type, and its label.');
    const {node}=targets[0],id=uid(),anchorBounds=node.getBoundingClientRect(),anchorIssues=contentBaseline(node);let position=action.position==='beside'?'after':(action.position==='over'?'inside':action.position)||'after',locator=targets[0].locator;
    if(action.element==='header'){const content=node===collector.rootNode?(node.matches('main,[role=main]')?node:node.querySelector<HTMLElement>('main,[role=main]')||node):node;const first=[...content.children].find((child):child is HTMLElement=>child instanceof HTMLElement&&!sensitive(child)&&visible(child));locator=first?describe(first,collector.ownedId(first)).locator:describe(content,collector.ownedId(content)).locator;position=first?'before':'inside';}
+   // A row that will hold copies needs the page's content width: placed after a card inside a narrow column it would squeeze them, so it moves after the widest layout container around that card.
+   if(action.element==='panel'&&(position==='after'||position==='before')&&action.resultRef&&plan.actions.some(other=>other.kind==='duplicate'&&other.relativeTo===action.resultRef)){
+    const content=(node.closest<HTMLElement>('main,[role=main]')||collector.rootNode).getBoundingClientRect().width;let row:HTMLElement=node;
+    for(let depth=0;depth<8&&row.parentElement&&row.parentElement!==collector.rootNode&&row.getBoundingClientRect().width<content*0.8;depth++)row=row.parentElement;
+    if(row!==node)locator=locatorOf(row);
+   }
    if(action.element==='link'&&!action.href)throw new Error('A link needs a destination route.');
    const section=node.parentElement;if(action.element==='panel'&&position==='after'&&node.matches('h1,h2,h3,h4,[role=heading]')&&section&&!section.matches('body,main,[role=dialog]')&&section.querySelectorAll('h1,h2,h3,h4,[role=heading]').length===1&&section.querySelector('button,[role=button],[role=radio]'))locator=describe(section).locator;
    if(position==='inside'&&node.matches('button,a,input,textarea,select,img,br'))throw new Error('Select a container to add UI inside.');
