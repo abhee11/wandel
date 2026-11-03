@@ -8,6 +8,7 @@ import {validateTheme,verifyTheme} from '../content/theme';
 import {findCard} from './card';
 import {captureCopy} from '../content/duplicate';
 import {watched} from '../content/watch';
+import {safeDeclarations} from '../content/behavior';
 import {renameCopyHeading} from '../content/duplicateHeading';
 import {sensitive} from './privacy';
 import {clone,uid,OperationSchema,type Workflow,type Locator,type Operation,type CopyNode} from '../shared/model';
@@ -182,6 +183,15 @@ export function compileAssistant(workflow:Workflow,stateId:string,planInput:unkn
     insert.node.choices={options:action.labels,selected:0,headingTag:'h3',headingStyle:heading?readStyle(heading):design.heading,buttonStyle:appearance||insert.node.choices!.buttonStyle,sectionStyle:{display:'block',margin:'20px 0',padding:'0',border:'0','box-shadow':'none','background-color':'transparent'}};
     created.push(...action.labels.map((_,i)=>id+':choice:'+i));group=id;
    }
+  }else if(action.kind==='css'){
+   // Any style on any element, as plain CSS declarations.
+   if(!action.css||!safeDeclarations(action.css).length)throw new Error('Give the CSS declarations to apply, such as "display:none" or "gap:12px".');
+   for(const target of targets)add({id:uid(),kind:'css',target:target.locator,css:action.css});
+  }else if(action.kind==='behavior'){
+   // When the target is clicked, hovered or the screen loads, the effects change other elements: expand, collapse, reveal, relabel, restyle.
+   if(!action.effects?.length)throw new Error('Say what the behavior changes: show, hide, toggle, text or style, and on which elements.');
+   const effects=action.effects.flatMap(effect=>effect.targets.map(ref=>({action:effect.action,target:locate(ref).locator,...(effect.value!=null?{value:effect.value}:{})})));
+   for(const target of targets)add({id:uid(),kind:'behavior',target:target.locator,event:action.event||'click',effects});
   }else if(action.kind==='connect'&&action.destination&&/^e_/.test(action.destination)){
    // An existing application control as the destination: clicks on the trigger are forwarded to it, so its real modal, menu or action runs.
    if(targets.length!==1)throw new Error('Choose one trigger.');const host=locate(action.destination);

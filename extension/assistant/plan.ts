@@ -22,7 +22,10 @@ export function normalizePlan(input:unknown):AssistantPlan{
   href:a.kind==='create'&&a.element==='link'?a.href:undefined,
   layout:a.kind==='layout'?a.layout:undefined,
   columns:a.kind==='layout'&&a.layout==='grid'?a.columns:undefined,
-  theme:a.kind==='theme'?a.theme:undefined
+  theme:a.kind==='theme'?a.theme:undefined,
+  css:a.kind==='css'?a.css:null,
+  event:a.kind==='behavior'?a.event||'click':null,
+  effects:a.kind==='behavior'?a.effects:null
  }))};
 }
 /** A step can reference captured elements or results of earlier steps only. */
@@ -30,7 +33,7 @@ export function validatePlanReferences(plan:AssistantPlan,refs:Iterable<string>)
  const captured=[...refs],available=new Set(captured);
  for(const ref of plan.candidates)if(!available.has(ref))throw new Error('The response referenced an unknown element.');
  for(const a of plan.actions){
-  for(const ref of [...a.targets,...a.styleRef?[a.styleRef]:[],...a.relativeTo?[a.relativeTo]:[]])if(!available.has(ref))throw new Error('The plan referenced an unknown element or a result that has not been created.');
+  for(const ref of [...a.targets,...a.styleRef?[a.styleRef]:[],...a.relativeTo?[a.relativeTo]:[],...(a.effects||[]).flatMap(e=>e.targets)])if(!available.has(ref))throw new Error('The plan referenced an unknown element or a result that has not been created.');
   if(a.resultRef){if(!(['create','duplicate'].includes(a.kind)||a.kind==='connect'&&a.newViewTitle)||!/^new:[a-zA-Z0-9_-]{1,60}$/.test(a.resultRef)||available.has(a.resultRef))throw new Error('A created result needs a unique new: reference.');available.add(a.resultRef);if(a.kind==='duplicate'){available.add(a.resultRef+':button');for(const ref of captured)available.add(a.resultRef+'/'+ref);}}
  }
 }

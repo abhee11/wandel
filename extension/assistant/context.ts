@@ -5,7 +5,7 @@ import {cardGroups,pageRegions} from './scene';
 import {findCard,copiedHeading} from './card';
 import {uid,type Locator,type Workflow,type Selection} from '../shared/model';
 import {describe,resolve,nameOf} from '../content/locator';
-import {visible,readStyle} from '../content/nativeDesign';
+import {visible,shownOnScreen,readStyle} from '../content/nativeDesign';
 import {cleanText,sensitive,contextName} from './privacy';
 import {deepElements,inScope,parentOf} from './dom';
 import {PageContextSchema,type PageContext} from './schema';
@@ -17,7 +17,7 @@ export class ContextCollector{
  recent:string[]=[];lastGroup:string|null=null;styleReference:string|null=null;lastView:string|null=null;
  constructor(private root:HTMLElement,private owned:Map<string,HTMLElement>){}
  reset(){this.cardMemory=null;this.handles.clear();this.identities=new WeakMap();this.recent=[];this.lastGroup=null;this.styleReference=null;this.lastView=null;this.token='';}
- private available(el:HTMLElement){if(!inScope(this.root,el)||!el.isConnected||sensitive(el))return false;for(let node:HTMLElement|null=el;node;node=parentOf(node)){if(!visible(node)||node.matches('[disabled],[aria-disabled=true]'))return false;}return true;}
+ private available(el:HTMLElement){if(!inScope(this.root,el)||!el.isConnected||sensitive(el))return false;for(let node:HTMLElement|null=el;node;node=parentOf(node)){if(!shownOnScreen(node)||node.matches('[disabled],[aria-disabled=true]'))return false;}return true;}
  ref(el:HTMLElement){let id=this.identities.get(el);if(!id||!this.handles.has(id)){const owned=[...this.owned].find(([,n])=>n===el)?.[0];id='e_'+uid();this.identities.set(el,id);this.handles.set(id,{node:el,locator:describe(el,owned).locator,name:contextName(el),tag:el.tagName,style:JSON.stringify(readStyle(el))});}return id;}
  get(ref:string,checkStyle=false):HTMLElement{
   const handle=this.handles.get(ref);if(!handle)throw new Error('That reference expired. Select the element again.');
@@ -56,7 +56,14 @@ export class ContextCollector{
   const request=instruction.toLowerCase().replace(/\s+/g,' ');
   const mentioned=request?deepElements(surface,'button,a,h1,h2,h3,h4,h5,h6,[role=heading],span,p,label').filter(node=>{if(!this.available(node))return false;const name=contextName(node).toLowerCase();return name.length>=4&&name.length<=100&&request.includes(name);}).slice(0,6):[];
   const layoutItem=(node:HTMLElement)=>{let item=node;for(let depth=0;depth<5;depth++){const parent=parentOf(item);if(!parent||parent===this.root)return item;const css=getComputedStyle(parent);if(['grid','flex','inline-grid','inline-flex'].includes(css.display))return item;if(parent.querySelectorAll('h1,h2,h3,h4,h5,h6,[role=heading]').length>1)return item;item=parent;}return item;};
-  const requested=mentioned.flatMap(node=>{const card=findCard(node),parent=parentOf(node),unit=card?layoutItem(card.root):null,layoutParent=unit?parentOf(unit):null;return [...(unit?[unit,...layoutParent?[layoutParent,...[...layoutParent.children].filter((n):n is HTMLElement=>n instanceof HTMLElement)]:[]]:[]),node,...(card?[card.root,card.heading,...card.description?[card.description]:[]]:[]),...(parent?[parent,...[...parent.children].filter((n):n is HTMLElement=>n instanceof HTMLElement)]:[])];});
+  // A card the request names comes with its inner structure (lists, checkbox rows, tables, forms), so the assistant can act on what is inside it, even below the fold.
+  const inner=(root:HTMLElement)=>{
+   // Lists, rows and forms first, then the card's own containers a few levels deep, whatever their tags: real apps build rows from plain divs.
+   const marked=deepElements(root,'ul,ol,li,[role=list],[role=listitem],[role=group],table,tr,form,fieldset,details,label,[role=checkbox],input[type=checkbox]').filter(node=>this.available(node));
+   const layers:HTMLElement[]=[];let level=[root];for(let depth=0;depth<4&&layers.length<40;depth++){level=level.flatMap(node=>[...node.children].filter((child):child is HTMLElement=>child instanceof HTMLElement&&this.available(child)&&child.getBoundingClientRect().height>=8));layers.push(...level);}
+   return [...new Set([...marked,...layers])].slice(0,40);
+  };
+  const requested=mentioned.flatMap(node=>{const card=findCard(node),parent=parentOf(node),unit=card?layoutItem(card.root):null,layoutParent=unit?parentOf(unit):null;return [...(unit?[unit,...layoutParent?[layoutParent,...[...layoutParent.children].filter((n):n is HTMLElement=>n instanceof HTMLElement)]:[]]:[]),node,...(card?[card.root,card.heading,...card.description?[card.description]:[],...inner(card.root)]:[]),...(parent?[parent,...[...parent.children].filter((n):n is HTMLElement=>n instanceof HTMLElement)]:[])];});
   const sourceSide=request.match(/\b(left|right)[ -]+(?:navigation|nav|panel|sidebar)\b/i)?.[1];
   const regional=/\b(?:header|sidebar|navigation|nav|footer)\b/i.test(request)?regions.filter(region=>sourceSide?region.position===sourceSide:/footer/i.test(request)?region.kind==='footer':['header','sidebar','navigation'].includes(region.kind)):[];
   const regionNodes=regional.slice(0,3).flatMap(region=>{const node=region.node,parent=parentOf(node);return [node,...(parent?[parent]:[]),...[...node.children].filter((child):child is HTMLElement=>child instanceof HTMLElement),...deepElements(node,'header,nav,ul,ol,[role=navigation]')];});

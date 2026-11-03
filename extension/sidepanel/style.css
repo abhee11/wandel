@@ -143,3 +143,6 @@
 .dx-resume-banner{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;margin:6px 14px;padding:8px 10px;border:1px solid #d9d3f7;border-radius:10px;background:#f4f2ff;font-size:12px;color:#433b78;flex-shrink:0}.dx-resume-banner p{margin:0;min-width:0}.dx-resume-banner>div{display:flex;gap:6px}.dx-app.dx-panel .dx-resume-banner button{min-height:30px;padding:0 10px}
 .dx-version-row.dx-confirm{background:#fff5f4;border-radius:8px;padding:8px}.dx-danger-text{color:#b3261e!important}
 .dx-conflict{display:grid;gap:6px;margin:8px 0}
+
+/* A compact notice for changes that can't be shown on this page; details stay folded. */
+.dx-unresolved{display:flex;flex-direction:column;gap:6px;margin:8px 0;padding:10px 12px;border:1px solid #f1d9a8;border-radius:12px;background:#fff8ec;font-size:13px;line-height:1.45;color:#5b4a2a}.dx-unresolved p{margin:0}.dx-unresolved details{font-size:12px}.dx-unresolved summary{cursor:pointer;color:#8a6a2f}.dx-unresolved ul{margin:4px 0 0;padding-left:18px;max-height:96px;overflow:auto}.dx-unresolved .dx-row{display:flex;gap:8px}

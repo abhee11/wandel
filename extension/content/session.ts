@@ -302,6 +302,8 @@ export class Session {
       // Cancel, Close, Done or Stop inside a modal returns to the page it opened from.
       const closer=target.closest<HTMLElement>('button,a,[role=button]'),modal=closer?.closest<HTMLElement>('[data-dx-owned^="view:"][role=dialog]'),modalId=modal?.dataset.dxOwned?.slice(5);
       if(closer&&modalId&&/^(cancel|close|done|dismiss|not now|stop|×|✕|✖|x)$/i.test((closer.getAttribute('aria-label')||closer.textContent||'').trim())&&this.workflow.edges.some(edge=>edge.from===this.stateId&&edge.source==='modal:'+modalId+':close')){event.preventDefault();event.stopImmediatePropagation();this.click('modal:'+modalId+':close');return;}
+      // A prototype behavior on the clicked element (expand, collapse, reveal, relabel) runs in place of the page's own click.
+      const behaviors=this.renderer.behaviors.forClick(event.composedPath()[0] instanceof Element?event.composedPath()[0] as Element:target);if(behaviors){event.preventDefault();event.stopImmediatePropagation();for(const b of behaviors)this.renderer.behaviors.run(b.effects,b.key);return;}
       const option=this.optionSource(target,'click',event);if(option){event.preventDefault();event.stopImmediatePropagation();this.click(option);return;}
       // A part with no connection of its own uses the nearest enclosing element that has one, such as the section it sits in.
       // A click inside a custom part's shadow root starts from the part itself, since parent links stop at the shadow boundary.

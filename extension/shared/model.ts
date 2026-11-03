@@ -69,7 +69,11 @@ export const OperationSchema = z.discriminatedUnion('kind', [
   z.object({id,kind:z.literal('trigger'),target:LocatorSchema,source:id}).strict(),
   z.object({ id, kind: z.literal('text'), target: LocatorSchema, text: z.string().max(300) }).strict(),
   z.object({id,kind:z.literal('style'),target:LocatorSchema,style:StyleSchema,arrangement:z.object({direction:z.enum(['horizontal','vertical','grid']),columns:z.number().int().min(1).max(6),gap:z.number().min(0).max(200)}).strict().optional(),layoutChange:LayoutChangeSchema.optional()}).strict(),
-  z.object({id,kind:z.literal('remove'),target:LocatorSchema}).strict()
+  z.object({id,kind:z.literal('remove'),target:LocatorSchema}).strict(),
+  // Free-form CSS declarations on any element, real or prototype; checked for safe values when applied.
+  z.object({id,kind:z.literal('css'),target:LocatorSchema,css:z.string().min(1).max(3000)}).strict(),
+  // When something happens on the target, change other elements: the general way to make anything expand, toggle, reveal or switch.
+  z.object({id,kind:z.literal('behavior'),target:LocatorSchema,event:z.enum(['click','hover','load']),effects:z.array(z.object({action:z.enum(['show','hide','toggle','text','style']),target:LocatorSchema,value:z.string().max(600).optional()}).strict()).min(1).max(10)}).strict()
 ]);
 export type Operation = z.infer<typeof OperationSchema>;
 export const NativeDesignSchema=z.object({surface:CopyNodeSchema.shape.style,heading:CopyNodeSchema.shape.style,text:CopyNodeSchema.shape.style,button:CopyNodeSchema.shape.style,field:CopyNodeSchema.shape.style,card:CopyNodeSchema.shape.style,table:CopyNodeSchema.shape.style.optional(),tableHeader:CopyNodeSchema.shape.style.optional()}).strict();

@@ -25,11 +25,23 @@ export function generationPrompt(prompt:string,intent:'feature'|'edit'){
   const inlineSection=/\b(?:add|insert)\b[\s\S]*?\b(?:section|category|categories|dropdown|menu|tabs?|switch|toggles?|pills?|options?|choices?|field|card)\b/i.test(prompt)&&!/\b(?:workflow|journey|screens|multi.step)\b/i.test(prompt);
   return intent==='feature'&&!inlineSection?`Create a connected workflow: ${prompt}`:prompt;
 }
+/** Changes that could not be shown on this page: one plain line, details on request, and a way out. */
+function UnresolvedNotice({issues,busy,onUndo,onHide}:{issues:string[];busy:boolean;onUndo:()=>void;onHide:()=>void}){
+  const kinds=new Map<string,number>();for(const issue of issues){const kind=issue.split(':')[0].trim()||'change';kinds.set(kind,(kinds.get(kind)||0)+1);}
+  const words:Record<string,string>={style:'style',reorder:'move',remove:'hide',text:'text',insert:'added element',Section:'added section',css:'style',behavior:'behavior'};
+  return <section className="dx-unresolved" role="status">
+    <p><strong>{issues.length} change{issues.length>1?'s':''} can’t be shown here.</strong> The parts of the page they changed aren’t on this screen right now, so they’re kept but not applied.</p>
+    <details><summary>Details</summary><ul>{[...kinds].map(([kind,count])=><li key={kind}>{count} × {words[kind]||kind}</li>)}</ul></details>
+    <div className="dx-row"><button className="dx-small" disabled={busy} onClick={onUndo}>Undo last change</button><button className="dx-small" onClick={onHide}>Hide</button></div>
+  </section>;
+}
 export function App({bridge,demo=false}:{bridge:Bridge;demo?:boolean}) {
   const [intent,setIntent]=useState<'feature'|'edit'>('feature'),[auth,setAuth]=useState<AuthStatus>(demo?'guest':'checking');
   const [saving,setSaving]=useState(false),[advanced,setAdvanced]=useState(false),[assistantOpen,setAssistantOpen]=useState(true);
   useEffect(()=>{if(demo)return;const listener=(message:any,sender:chrome.runtime.MessageSender)=>{if(message?.type!=='WANDEL_SAVE_REQUEST')return;const owner=new URL(location.href).searchParams.get('tabId');if(owner&&String(sender.tab?.id)!==owner)return;setSaving(true);};chrome.runtime.onMessage.addListener(listener);return()=>chrome.runtime.onMessage.removeListener(listener);},[demo]);
   const [assistantBusy,setAssistantBusy]=useState(false);
+  // Unresolved changes the user hid stay hidden until the set changes.
+  const [hiddenIssues,setHiddenIssues]=useState('');
   const [s,setS]=useState<Snapshot|null>(null),[error,setError]=useState(''),[notice,setNotice]=useState(''),[busy,setBusy]=useState(false);
   const pageEpoch=useRef(0);
   const [prompt,setPrompt]=useState(''),[name,setName]=useState('');
@@ -152,7 +164,7 @@ export function App({bridge,demo=false}:{bridge:Bridge;demo?:boolean}) {
           </>}
           {!s.replay?<details className="dx-flow-disclosure"><summary>Your flow <span>{s.workflow.states.length} {s.workflow.states.length===1?'screen':'screens'} · {s.workflow.edges.length} connections</span></summary><FlowNavigation snapshot={s} busy={busy} onNavigate={id=>void run({type:'state',id})}/></details>:<FlowNavigation snapshot={s} busy={busy} onNavigate={id=>void run({type:'state',id})}/>}
 
-          {s.unresolved.length>0&&<section className="dx-alert error"><strong>{s.unresolved.length} unresolved changes</strong>{s.unresolved.map((e,i)=><p key={i}>{e}</p>)}<small>Missing targets were not modified. Check layout warnings, resize the section, or undo and choose a clearer target.</small></section>}
+          {s.unresolved.length>0&&s.unresolved.join('|')!==hiddenIssues&&<UnresolvedNotice issues={s.unresolved} busy={busy} onUndo={()=>void run({type:'undo'},'Undid the last change.')} onHide={()=>setHiddenIssues(s.unresolved.join('|'))}/>}
         </>}
       </main><footer className="dx-footer"><details className="dx-secondary-actions"><summary>Workflow tools</summary><label className="dx-enable"><input aria-label="Enable prototype" type="checkbox" checked={s.enabled} onChange={e=>void run({type:'enabled',value:e.target.checked})}/> On</label><button className="dx-secondary" disabled={busy} onClick={()=>{setTab('build');setAssistantOpen(false);setIntent('feature');}}>Create a connected flow</button><button className="dx-small" title="Undo last change" disabled={!s.canUndo||s.replay||busy} onClick={()=>void run({type:'undo'})}>Undo</button><button className="dx-small" title="Redo last change" disabled={!s.canRedo||s.replay||busy} onClick={()=>void run({type:'redo'})}>Redo</button><button className="dx-restore" disabled={busy} onClick={()=>{if(confirm('Restore the original page? All states and edits in this draft will be cleared. Saved versions are kept, and Undo can recover this draft.'))void run({type:'reset'},'Original page restored. Saved versions are still available.');}}>Restore original page</button></details><div className="dx-row dx-flow-actions"><button className="dx-secondary" disabled={busy||!s.enabled} onClick={()=>{setTab('build');void run({type:s.replay?'edit':'replay'});}}>{s.replay?'Back to editing':'Play flow'}</button><button className="dx-secondary" aria-pressed={tab==='share'} disabled={busy} onClick={()=>setTab(tab==='share'?'build':'share')}>Share &amp; playback</button></div><div className="dx-row"><button title="Undo" aria-label="Undo" className="dx-icon-button" disabled={!s.canUndo||s.replay||busy} onClick={()=>void run({type:'undo'})}>↶</button><button title="Redo" aria-label="Redo" className="dx-icon-button" disabled={!s.canRedo||s.replay||busy} onClick={()=>void run({type:'redo'})}>↷</button><button className="dx-primary dx-save" disabled={busy} onClick={()=>{if(demo)void run({type:'save'},'Saved in this demo browser.');else setSaving(true);}}>Save {s.versions.length?'new version':'workflow'} <span>↗</span></button></div><small><span>●</span> {demo?'Demo · saved in this browser':s.liveSession?'Live app · original controls perform real actions':s.workflow.states.some(st=>st.operations.some(op=>op.kind==='mirror'))?'Mirrored controls can run live app actions':'Local prototype · no backend changes'}</small></footer>
     </>}

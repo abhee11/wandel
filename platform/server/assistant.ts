@@ -4,6 +4,7 @@ import {z} from 'zod';
 import {AssistantPlanSchema,PageContextSchema,ConversationHistorySchema,ReferenceImageSchema,VisualVerdictSchema,type VisualVerdict,response,type AssistantPlan,type PageContext,type ConversationHistory} from '../../extension/assistant/schema';
 import {assistantOutputSchema,assistantInstructions,layoutInstructions,pageDesignInstructions,referenceInstructions,layoutConversationInstructions,fieldInstructions,conversationInstructions,prototypePageInstructions,chartSectionInstructions,blockInstructions,continuityInstructions,completionInstructions} from '../../extension/assistant/providerSchema';
 import {cleanText} from '../../extension/assistant/privacy';
+import {StyleSchema} from '../../extension/shared/model';
 import {APIError,rateLimit} from './security';
 import {one,type DB} from './db';
 import type {Entitlements} from './entitlements';
@@ -33,6 +34,8 @@ export class OpenAIAssistant implements AssistantProvider{
   let plan:unknown;try{plan=JSON.parse(data.output?.flatMap((o:any)=>o.content||[]).filter((c:any)=>c.type==='output_text').map((c:any)=>c.text).join('')||'{}');}catch{throw new APIError(502,'INVALID_PLAN','The assistant returned an unreadable plan. Nothing was applied.');}
   if(plan&&typeof plan==='object'&&'actions' in plan&&Array.isArray(plan.actions))for(const a of plan.actions)if(a.style)a.style=Array.isArray(a.style)?Object.fromEntries(a.style.map((entry:any)=>[entry.property,entry.value])):Object.fromEntries(Object.entries(a.style).filter(([,value])=>value!==null));
   // Models often give line height in pixels; Wandel stores a multiplier, so convert rather than rejecting the plan.
+  // A style value in the wrong shape ("24px" for a number, "auto" for a size) is corrected or carried as plain CSS on the same elements, never a reason to reject the plan.
+  if(plan&&typeof plan==='object'&&'actions' in plan&&Array.isArray(plan.actions)){const extra:unknown[]=[];for(const a of plan.actions as any[]){if(!a?.style||typeof a.style!=='object')continue;const loose:string[]=[];for(const [key,value] of Object.entries(a.style)){const shape=(StyleSchema.shape as Record<string,z.ZodTypeAny>)[key];if(!shape){delete a.style[key];continue;}if(shape.safeParse(value).success)continue;const number=typeof value==='string'&&/^-?\d+(\.\d+)?(px)?$/.test(value.trim())?parseFloat(value):undefined;if(number!==undefined&&shape.safeParse(number).success){a.style[key]=number;continue;}if(value!==null&&value!==undefined&&String(value).trim())loose.push(key.replace(/[A-Z]/g,m=>'-'+m.toLowerCase())+':'+String(value));delete a.style[key];}if(loose.length&&a.kind==='style'&&Array.isArray(a.targets)&&a.targets.length)extra.push({...a,kind:'css',css:loose.join(';'),style:null,resultRef:null});}plan.actions.push(...extra);}
   if(plan&&typeof plan==='object'&&'actions' in plan&&Array.isArray(plan.actions))for(const a of plan.actions){const style=a.style;if(style&&typeof style.lineHeight==='number'&&style.lineHeight>4){const size=typeof style.fontSize==='number'&&style.fontSize>0?style.fontSize:16;style.lineHeight=Math.min(4,Math.max(0.8,Math.round(style.lineHeight/size*100)/100));}}
   return AssistantPlanSchema.parse(plan);
  }

@@ -1,5 +1,6 @@
 import {mountPrototypePage,mountChartSection} from './prototypePage';
 import {mountBlock,blockInteract} from './block';
+import {Behaviors,safeDeclarations} from './behavior';
 import {applyArrangement} from './arrangement';
 import {placeBelow,restoreInsertionStyles,type InsertionStyle} from './insertionPlacement';
 import {applyTheme,restoreTheme,type ThemeStyle} from './theme';
@@ -84,7 +85,9 @@ export class Renderer {
     if(!this.idFor(target)||target.tagName!=='LABEL')return;
     const input=target.querySelector<HTMLInputElement|HTMLTextAreaElement|HTMLSelectElement>('input,textarea,select');if(input){if(!(input instanceof HTMLSelectElement))input.placeholder=text;input.setAttribute('aria-label',text);}
   }
+  readonly behaviors=new Behaviors();
   reset() {
+    this.behaviors.reset();
     for(const cleanup of this.widgetCleanup.values())cleanup();this.widgetCleanup.clear();
     for(const record of [...this.applied.values()].reverse()) {
       if(record.insertionStyles)restoreInsertionStyles(record.insertionStyles);
@@ -233,6 +236,14 @@ export class Renderer {
       const icons=target.querySelectorAll('svg');if(icons.length!==1)throw new Error('The badge icon is missing or ambiguous.');const svg=icons[0],box=svg.getBoundingClientRect();if(box.width>64||box.height>64)throw new Error('Only small UI icons can be replaced.');
       const before=[...svg.childNodes],viewBox=svg.getAttribute('viewBox'),replacement=renderIcon(op.icon),after=[...replacement.childNodes];svg.setAttribute('viewBox',op.icon.viewBox);svg.replaceChildren(...after);this.applied.set(op.id,{target,icon:{svg,before,after,viewBox}});return;
     }
+    if(op.kind==='css'){
+      const styles=safeDeclarations(op.css).map(([key,value])=>{const before=target.style.getPropertyValue(key),priority=target.style.getPropertyPriority(key);target.style.setProperty(key,value,'important');return {key,before,priority,after:target.style.getPropertyValue(key)};});
+      if(!styles.length)throw new Error('The style change had no usable CSS.');this.applied.set(op.id,{target,styles});return;
+    }
+    if(op.kind==='behavior'){
+      const effects=op.effects.map(effect=>{const el=resolve(effect.target,this.root,this.owned);if(!el)throw new Error('An element this behavior changes is missing.');return {action:effect.action,el,...(effect.value!==undefined?{value:effect.value}:{})};});
+      this.behaviors.add(target,op.event,effects,op.id);this.applied.set(op.id,{target});return;
+    }
     // A connected page element shows the pointer a link would; the reset restores its own cursor.
     if(op.kind==='trigger'){this.triggers.set(target,op.source);const before=target.style.getPropertyValue('cursor'),priority=target.style.getPropertyPriority('cursor');target.style.setProperty('cursor','pointer');this.applied.set(op.id,{target,styles:[{key:'cursor',before,priority,after:target.style.getPropertyValue('cursor')}]});return;}
     if(op.kind==='style'||op.kind==='remove'||op.kind==='appearance'){
@@ -293,6 +304,7 @@ export class Renderer {
   }
   captureClick=(event:MouseEvent)=>{
     // Tiles, choices and disclosures inside composed blocks keep local prototype state.
+    const behaviors=this.behaviors.forClick(event.composedPath()[0] instanceof Element?event.composedPath()[0] as Element:event.target as Element);if(behaviors){event.preventDefault();event.stopImmediatePropagation();for(const b of behaviors)this.behaviors.run(b.effects,b.key);return;}
     // A tab or menu item also follows its connection, if it has one, after showing its new state.
     if(blockInteract(event.target)&&!(event.target instanceof Element&&event.target.closest('[data-dx-tab],[data-dx-menu-item]'))){event.preventDefault();event.stopImmediatePropagation();return;}
     // One tab or menu item of a composed part is its own source; the session falls back to the whole part.
