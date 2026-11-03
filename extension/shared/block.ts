@@ -1,6 +1,6 @@
 import {z} from 'zod';
 /** A composed section described as data. The renderer owns all markup; text is set with textContent only. */
-export const blockTypes=['card','stack','row','grid','heading','text','eyebrow','link','button','icon','stat','tile','field','choice','select','crumbs','input','textarea','tabs','badge','avatar','progress','stream','toggle','checkbox','table','alert','menu','list','quote','image','disclosure','divider'] as const;
+export const blockTypes=['card','stack','row','grid','heading','text','eyebrow','link','button','icon','stat','tile','field','choice','select','crumbs','input','textarea','tabs','badge','avatar','progress','stream','toggle','checkbox','table','alert','menu','custom','list','quote','image','disclosure','divider'] as const;
 export const blockContainers=['card','stack','row','grid','disclosure'] as const;
 export const blockTones=['none','pink','peach','yellow','lime','mint','sky','lilac','gray'] as const;
 const httpImage=z.string().max(2048).refine(value=>{try{const url=new URL(value);return ['https:','http:'].includes(url.protocol)&&!url.username&&!url.password;}catch{return false;}},'Use an HTTP(S) image link.');
@@ -24,7 +24,9 @@ export const BlockNodeSchema=z.object({
  value:z.number().min(0).max(100).nullable().optional(),
  min:z.number().min(-1e6).max(1e6).nullable().optional(),
  max:z.number().min(-1e6).max(1e6).nullable().optional(),
- seconds:z.number().min(0.5).max(60).nullable().optional()
+ seconds:z.number().min(0.5).max(60).nullable().optional(),
+ html:z.string().max(20000).nullable().optional(),
+ css:z.string().max(12000).nullable().optional()
 }).strict();
 export const BlockSchema=z.object({
  accent:z.string().regex(/^#[0-9a-fA-F]{6}$/).nullable().optional(),
@@ -44,6 +46,7 @@ export const BlockSchema=z.object({
   if(['progress','stream','toggle','checkbox','alert'].includes(node.type)&&!node.text?.trim())issue(`A ${node.type} needs text.`);
   if(node.type==='stream'&&!(typeof node.min==='number'&&typeof node.max==='number'&&node.min<node.max))issue('A stream needs a min below its max.');
   if(node.type==='table'&&(!node.options?.length||!node.items?.length))issue('A table needs column headings (options) and rows (items).');
+  if(node.type==='custom'&&!node.html?.trim())issue('A custom part needs its html.');
   if(node.type==='menu'&&!node.options?.length)issue('A menu needs its options.');
   if(node.type==='crumbs'&&(node.items?.length||0)<2)issue('A crumbs part needs at least two items.');
   if(node.type==='crumbs'&&node.options&&node.options.length<2)issue('A crumbs switcher needs at least two options.');

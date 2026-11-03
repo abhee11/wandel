@@ -18,7 +18,7 @@ header.top{display:flex;align-items:center;justify-content:space-between;width:1
 .CardButton{position:absolute;inset:0;width:100%;height:100%;padding:0;border:0;border-radius:32px;background:transparent;cursor:pointer}
 .Message{margin:0;font:400 16px/24px Inter,sans-serif;color:#6e6c7f}
 </style></head><body><main id="page">
-<header class="top"><span>General ▾</span><span>ⓘ</span></header>
+<header class="top"><span>General ▾</span><span><button class="Bell" type="button" aria-label="Notifications" onclick="openDrawer()">🔔</button> ⓘ</span></header>
 <div class="Wrapper">
  <div class="Grid"><div class="GridItem span2"><div class="AnimatedWrap" style="height: 175px;">
   <div class="Layer"><article class="Card record"><div class="ContentWrapper"><div class="TitleWrapper"><div class="TitleLeft"><h4 class="Title">My Record</h4></div><div class="TitleRight"><a class="SquareButton" aria-label="About My Record"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg></a></div></div>
@@ -26,8 +26,24 @@ header.top{display:flex;align-items:center;justify-content:space-between;width:1
   <div class="Layer"></div>
  </div></div></div>
  <div class="Grid two">
-  <div class="GridItem"><article class="Card plan"><button class="CardButton" type="button" aria-label="Open Plan and Setup modal" onclick="window.planModal=(window.planModal||0)+1"></button><div class="TitleWrapper"><h4 class="Title">Plan and Setup</h4></div><p class="Message">Customize your Activity and make your next class great.</p></article></div>
+  <div class="GridItem"><article class="Card plan"><button class="CardButton" type="button" aria-label="Open Plan and Setup modal" onclick="window.planModal=(window.planModal||0)+1;openPlanModal()"></button><div class="TitleWrapper"><h4 class="Title">Plan and Setup</h4></div><p class="Message">Customize your Activity and make your next class great.</p></article></div>
   <div class="GridItem"><article class="Card assign"><div class="TitleWrapper"><h4 class="Title">Assign Participant Reflection</h4></div><p class="Message">Get insights and scores on your group's understanding of today's activity.</p></article></div>
  </div>
 </div></main>
+<script>
+/* Like the live app: Plan and Setup opens a portal modal over a dimmed backdrop, and the bell opens a side drawer. */
+function close(el){el.remove();}
+function openPlanModal(){const o=document.createElement('div');o.className='Overlay';o.innerHTML='<div class="Dialog" role="dialog" aria-modal="true" aria-labelledby="pmTitle"><div class="DialogHead"><h3 id="pmTitle">Plan and Setup</h3><button type="button" aria-label="Close" class="X">✕</button></div><p class="Message">Set up today\'s activity.</p><label class="F">Activity name<input value="Activity 2"></label><label class="F">Lesson plan<textarea placeholder="Paste your lesson plan for AI context"></textarea></label><div class="Actions"><button type="button" class="Ghost">Cancel</button><button type="button" class="Primary">Save</button></div></div>';o.addEventListener('click',e=>{if(e.target===o||e.target.closest('.X,.Ghost'))close(o);});document.body.append(o);}
+function openDrawer(){const d=document.createElement('aside');d.className='Drawer';d.setAttribute('aria-label','Notifications');d.innerHTML='<div class="DialogHead"><h3>Notifications</h3><button type="button" aria-label="Close" class="X">✕</button></div><ul><li><strong>Maya Chen</strong> submitted a reflection<small>2m ago</small></li><li><strong>Ethan Brooks</strong> joined the group<small>1h ago</small></li><li><strong>Weekly summary</strong> is ready<small>Yesterday</small></li></ul>';d.addEventListener('click',e=>{if(e.target.closest('.X'))close(d);});document.body.append(d);}
+</script>
+<style>
+.Bell{border:0;background:transparent;font-size:18px;cursor:pointer}
+.Overlay{position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;background:rgba(20,19,27,.45)}
+.Dialog{width:520px;box-sizing:border-box;padding:28px;border-radius:24px;background:#fff;font-family:Inter,sans-serif;box-shadow:0 24px 64px rgba(20,19,27,.25)}
+.DialogHead{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}.DialogHead h3{margin:0;font:700 20px/1.3 Inter,sans-serif;color:#14131b}.X{border:0;background:transparent;font-size:18px;cursor:pointer}
+.F{display:flex;flex-direction:column;gap:6px;margin-top:16px;font:600 14px Inter,sans-serif;color:#14131b}.F input,.F textarea{padding:10px 12px;border:1px solid #d9d5ea;border-radius:12px;font:400 15px Inter,sans-serif}.F textarea{min-height:90px}
+.Actions{display:flex;justify-content:flex-end;gap:12px;margin-top:24px}.Ghost,.Primary{padding:10px 22px;border-radius:999px;font:600 15px Inter,sans-serif;cursor:pointer}.Ghost{border:1.5px solid #14131b;background:#fff}.Primary{border:0;background:#7b29ff;color:#fff}
+.Drawer{position:fixed;top:0;right:0;z-index:1000;width:380px;height:100vh;box-sizing:border-box;padding:24px;background:#fff;box-shadow:-12px 0 40px rgba(20,19,27,.18);font-family:Inter,sans-serif}
+.Drawer ul{list-style:none;margin:16px 0 0;padding:0;display:flex;flex-direction:column;gap:14px}.Drawer li{display:flex;flex-direction:column;gap:2px;font-size:15px;color:#14131b}.Drawer small{color:#6e6c7f;font-size:13px}
+</style>
 <script type="module" src="./mirrortalkGroup.ts"></script></body></html>

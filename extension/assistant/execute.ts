@@ -7,6 +7,7 @@ import {layoutOperations} from './layout';
 import {validateTheme,verifyTheme} from '../content/theme';
 import {findCard} from './card';
 import {captureCopy} from '../content/duplicate';
+import {watched} from '../content/watch';
 import {renameCopyHeading} from '../content/duplicateHeading';
 import {sensitive} from './privacy';
 import {clone,uid,OperationSchema,type Workflow,type Locator,type Operation,type CopyNode} from '../shared/model';
@@ -23,10 +24,13 @@ export function compileAssistant(workflow:Workflow,stateId:string,planInput:unkn
  const plan=normalizePlan(planInput);if(plan.status!=='edit')throw new Error('This response needs a clarification, not execution.');
  const next=clone(workflow),state=next.states.find(s=>s.id===stateId)!;let nextState=stateId;const afterAnchors=new Map<string,string>();const created:string[]=[];const checks:(()=>void)[]=[];let group:string|undefined,view:string|undefined,cardId:string|undefined;
  const arrangements:Operation[]=[];
- const add=(op:Operation)=>state.operations.push(OperationSchema.parse(op));
+ // Steps go to the current screen until a plan opens a variant of this page; later steps then design that variant.
+ let opsState=state;const add=(op:Operation)=>opsState.operations.push(OperationSchema.parse(op));
  const outputs=new Map<string,{node:HTMLElement;id:string;locator:Locator}>();
  // Screens created in this plan whose timed progress bar can start a finish connection.
  const timedViews=new Map<string,{view:string;back:string}>();
+ // Blocks created earlier in this plan, by host id: their options are known from the plan before the page shows them.
+ const plannedBlocks=new Map<string,NonNullable<AssistantPlan['actions'][number]['block']>>();
  const withIds=(block:NonNullable<AssistantPlan['actions'][number]['block']>)=>({...block,nodes:block.nodes.map(part=>({...part,id:uid()}))});
  const locatorOf=(node:HTMLElement)=>{const locator=describe(node,collector.ownedId(node)).locator;if(!locator.owned&&!locator.name&&!locator.text)locator.structure=structuralIdentity(node);return locator;};
  // A host page may hold a card in an absolutely positioned layer inside a slot whose
@@ -93,12 +97,12 @@ export function compileAssistant(workflow:Workflow,stateId:string,planInput:unkn
    const id=uid(),insertParts=copy,sourceParts=new Map<string,HTMLElement>();for(const [part,index] of identities)if(part instanceof HTMLElement)sourceParts.set(index===0?id:copy[index].id,part);
    // Beside: a card alone in a grid or row cell gets the next cell; inserting after the card itself would stack it inside its own cell.
    let besideAnchor=sourceLocator;if(action.position==='beside'){let cell:HTMLElement=source;while(cell.parentElement&&!cell.parentElement.matches('body,main')&&cell.parentElement.children.length===1)cell=cell.parentElement;const row=cell.parentElement,css=row&&getComputedStyle(row);if(cell!==source&&css&&(css.display.includes('grid')||css.display.includes('flex')&&!css.flexDirection.startsWith('column')))besideAnchor=locatorOf(cell);}
-   add({id:uid(),kind:'insert',target:besideAnchor,position:action.position==='beside'?'after':action.position||'after',node:{id,kind:'panel',text:action.text||'Card copy',copy}});created.push(id);cardId=id;checks.push(()=>{const copy=collector.ownedNode(id);if(!copy)throw new Error('The copied component is missing.');const copyBaseline=(node:HTMLElement)=>{const part=sourceParts.get(node===copy?id:node.dataset.dxOwned||'');return part&&sourceIssues.get(part);};verifyContent(copy,copyBaseline);const original=(targets[0].id&&collector.ownedNode(targets[0].id))||source;if(action.position==='below')verifyBelow(copy,original,sourceBounds,node=>sourceIssues.get(node),copyBaseline);if(action.position==='beside')verifyBeside(copy,original,sourceBounds);const label=(index:number|undefined)=>index===undefined?null:index===0?copy:collector.ownedNode(insertParts[index].id);if(action.text&&label(headingIndex)?.textContent?.replace(/\s+/g,' ').trim()!==action.text.replace(/\s+/g,' ').trim())throw new Error('The copied heading did not match the request.');if(action.description&&label(descriptionIndex)?.textContent?.replace(/\s+/g,' ').trim()!==action.description.replace(/\s+/g,' ').trim())throw new Error('The copied description did not match the request.');});
+   add({id:uid(),kind:'insert',target:besideAnchor,position:action.position==='beside'?'after':(action.position==='over'?'inside':action.position)||'after',node:{id,kind:'panel',text:action.text||'Card copy',copy}});created.push(id);cardId=id;checks.push(()=>{const copy=collector.ownedNode(id);if(!copy)throw new Error('The copied component is missing.');const copyBaseline=(node:HTMLElement)=>{const part=sourceParts.get(node===copy?id:node.dataset.dxOwned||'');return part&&sourceIssues.get(part);};verifyContent(copy,copyBaseline);const original=(targets[0].id&&collector.ownedNode(targets[0].id))||source;if(action.position==='below')verifyBelow(copy,original,sourceBounds,node=>sourceIssues.get(node),copyBaseline);if(action.position==='beside')verifyBeside(copy,original,sourceBounds);const label=(index:number|undefined)=>index===undefined?null:index===0?copy:collector.ownedNode(insertParts[index].id);if(action.text&&label(headingIndex)?.textContent?.replace(/\s+/g,' ').trim()!==action.text.replace(/\s+/g,' ').trim())throw new Error('The copied heading did not match the request.');if(action.description&&label(descriptionIndex)?.textContent?.replace(/\s+/g,' ').trim()!==action.description.replace(/\s+/g,' ').trim())throw new Error('The copied description did not match the request.');});
    if(action.resultRef){outputs.set(action.resultRef,{node:source,id,locator:owned(id)});for(const [part,index] of identities)if(part instanceof HTMLElement)outputs.set(action.resultRef+'/'+collector.ref(part),{node:part,id:index===0?id:copy[index].id,locator:owned(index===0?id:copy[index].id)});const controls=[...source.querySelectorAll<HTMLElement>('button,a,[role=button],[role=link]')];if(controls.length===1){const part=identities.get(controls[0]);if(part!==undefined)outputs.set(action.resultRef+':button',{node:controls[0],id:copy[part].id,locator:owned(copy[part].id)});}}
   }else if(action.kind==='reorder'){
    if(targets.length!==1||!action.relativeTo||!['before','after','inside'].includes(action.position||''))throw new Error('Choose an element and where it should move.');
    const anchor=locate(action.relativeTo);if(targets[0].node===anchor.node||targets[0].node.contains(anchor.node))throw new Error('An element cannot be moved into itself or its descendants. Inspect the surrounding layout container.');add({id:uid(),kind:'reorder',target:targets[0].locator,anchor:anchor.locator,position:action.position as 'before'|'after'|'inside'});
-   const targetLocator=targets[0].locator,anchorLocator=anchor.locator,position=action.position,before=new ContentIssues([...contentBaseline(targets[0].node),...contentBaseline(anchor.node)]);
+   const targetLocator=targets[0].locator,anchorLocator=anchor.locator,position=(action.position==='over'?'inside':action.position),before=new ContentIssues([...contentBaseline(targets[0].node),...contentBaseline(anchor.node)]);
    checks.push(()=>{const moved=targets[0].node.isConnected&&collector.rootNode.contains(targets[0].node)?targets[0].node:resolveLayoutSource(targetLocator),relative=anchor.node.isConnected&&collector.rootNode.contains(anchor.node)?anchor.node:resolveLayoutSource(anchorLocator);if(!moved||!relative)throw new Error('The moved element or its destination is missing.');const shared=moved.parentElement===relative.parentElement,cssOrder=shared&&moved.parentElement&&['flex','inline-flex','grid','inline-grid'].includes(getComputedStyle(moved.parentElement).display),ordered=cssOrder&&Number(getComputedStyle(moved).order)!==Number(getComputedStyle(relative).order)?(position==='before'?Number(getComputedStyle(moved).order)<Number(getComputedStyle(relative).order):Number(getComputedStyle(moved).order)>Number(getComputedStyle(relative).order)):!!(moved.compareDocumentPosition(relative)&(position==='before'?Node.DOCUMENT_POSITION_FOLLOWING:Node.DOCUMENT_POSITION_PRECEDING));if(position==='inside'?!relative.contains(moved):!shared||!ordered)throw new Error('The requested element order was not rendered.');
     for(const unit of [moved,relative]){verifyContent(unit,node=>before.get(node));const box=unit.getBoundingClientRect();if(!visible(unit)||!box.width||!box.height)throw new Error('A reordered element is no longer visible.');for(const chart of unit.querySelectorAll('svg')){const rect=chart.getBoundingClientRect();if(rect.width&&rect.height&&(rect.left<box.left-4||rect.right>box.right+4||rect.top<box.top-4||rect.bottom>box.bottom+4))throw new Error('A reordered chart or icon escaped its card. Move the complete layout wrapper.');}}
    });
@@ -134,7 +138,10 @@ export function compileAssistant(workflow:Workflow,stateId:string,planInput:unkn
    if(action.resultRef){const representative=document.createElement('section');representative.textContent=chart?.title||action.text||'';outputs.set(action.resultRef,{node:representative,id,locator:owned(id)});}
   }else if(action.kind==='create'&&action.element==='block'){
    if(!action.block||targets.length!==1)throw new Error('A block needs its parts and one target to sit in, before or after.');
-   const position=action.position==='beside'?'after':action.position||'after',block=withIds(action.block),id=uid();let {node:anchor,locator:anchorLocator}=targets[0];
+   // over floats the block at an exact spot on its target, without moving anything around it.
+   const over=action.position==='over',position:'before'|'after'|'inside'|'below'=action.position==='over'?'inside':action.position==='beside'?'after':action.position||'after',block=withIds(action.block),id=uid();let {node:anchor,locator:anchorLocator}=targets[0];
+   if(over&&anchor.matches('button,a,input,textarea,select,img,svg')&&anchor.parentElement){anchor=anchor.parentElement;anchorLocator=locatorOf(anchor);}
+   if(over&&getComputedStyle(anchor).position==='static')add({id:uid(),kind:'style',target:anchorLocator,style:{position:'relative'}});
    if(position==='inside'&&anchor.matches('button,a,input,textarea,select,img'))throw new Error('Place a block inside a container, not a control.');
    // A section placed before or after an item of a horizontal row would squeeze into that row and shift its title, so it moves up to the row itself and gets its own line. Only beside keeps it in the row.
    let lifted=false;
@@ -143,13 +150,16 @@ export function compileAssistant(workflow:Workflow,stateId:string,planInput:unkn
    if(position!=='before')releaseFixedHeights(anchor);
    // A bar or lifted section lines up with the row it sits next to, so its content starts where that row's content does.
    const inset=(lifted||block.nodes[0].type==='crumbs')&&position!=='inside'?(()=>{const css=getComputedStyle(anchor);return `0 ${css.paddingRight} 0 ${css.paddingLeft}`;})():'0';
-   add({id:uid(),kind:'insert',target:anchorLocator,position,node:{id,kind:'panel',text:block.nodes.find(part=>part.type==='heading')?.text||'Section',block,appearance:{display:'block','box-sizing':'border-box',width:'100%','max-width':'100%','min-width':'0',height:'auto',padding:inset,'border-radius':'0',margin:position==='before'?'0 0 24px':'24px 0 0','font-family':'inherit',color:'inherit'}}});created.push(id);group=id;
+   const offset=(value:unknown)=>typeof value==='number'?value+'px':typeof value==='string'&&/^-?\d+(\.\d+)?(px|%)$/.test(value)?value:undefined,spot=action.style as Record<string,unknown>|null;
+   const floating=over?{position:'absolute','z-index':'20',width:'max-content','max-width':'100%',...Object.fromEntries((['top','right','bottom','left'] as const).map(side=>[side,offset(spot?.[side])]).filter(([,value])=>value)),...(!['top','bottom'].some(side=>offset(spot?.[side]))?{top:'0'}:{}),...(!['left','right'].some(side=>offset(spot?.[side]))?{left:'0'}:{})}:{};
+   add({id:uid(),kind:'insert',target:anchorLocator,position,node:{id,kind:'panel',text:block.nodes.find(part=>part.type==='heading')?.text||'Section',block,appearance:{display:'block','box-sizing':'border-box',width:'100%','max-width':'100%','min-width':'0',height:'auto',padding:inset,'border-radius':'0',margin:over?'0':position==='before'?'0 0 24px':'24px 0 0','font-family':'inherit',color:'inherit',...floating}}});created.push(id);group=id;
    const parts=block.nodes.length;
-   checks.push(()=>{const host=collector.ownedNode(id);if(!host)throw new Error('The new block is missing.');const rendered=host.querySelectorAll('[data-dx-owned]').length;if(rendered!==parts)throw new Error(`The block rendered ${rendered} of its ${parts} parts.`);verifyContent(host);verifyNoOverlap(position==='inside'?(targets[0].id&&collector.ownedNode(targets[0].id))||anchor:host);});
+   checks.push(()=>{const host=collector.ownedNode(id);if(!host)throw new Error('The new block is missing.');const rendered=host.querySelectorAll('[data-dx-owned]').length;if(rendered!==parts)throw new Error(`The block rendered ${rendered} of its ${parts} parts.`);verifyContent(host);if(!over)verifyNoOverlap(position==='inside'?(targets[0].id&&collector.ownedNode(targets[0].id))||anchor:host);});
+   plannedBlocks.set(id,block);
    if(action.resultRef)outputs.set(action.resultRef,{node:anchor,id,locator:owned(id)});
   }else if(action.kind==='create'){
    if(!action.element||action.element==='chart'||action.element==='block'||(!action.text?.trim()&&!['panel','header'].includes(action.element))||targets.length!==1)throw new Error('Specify one insertion target, an element type, and its label.');
-   const {node}=targets[0],id=uid(),anchorBounds=node.getBoundingClientRect(),anchorIssues=contentBaseline(node);let position=action.position==='beside'?'after':action.position||'after',locator=targets[0].locator;
+   const {node}=targets[0],id=uid(),anchorBounds=node.getBoundingClientRect(),anchorIssues=contentBaseline(node);let position=action.position==='beside'?'after':(action.position==='over'?'inside':action.position)||'after',locator=targets[0].locator;
    if(action.element==='header'){const content=node===collector.rootNode?(node.matches('main,[role=main]')?node:node.querySelector<HTMLElement>('main,[role=main]')||node):node;const first=[...content.children].find((child):child is HTMLElement=>child instanceof HTMLElement&&!sensitive(child)&&visible(child));locator=first?describe(first,collector.ownedId(first)).locator:describe(content,collector.ownedId(content)).locator;position=first?'before':'inside';}
    if(action.element==='link'&&!action.href)throw new Error('A link needs a destination route.');
    const section=node.parentElement;if(action.element==='panel'&&position==='after'&&node.matches('h1,h2,h3,h4,[role=heading]')&&section&&!section.matches('body,main,[role=dialog]')&&section.querySelectorAll('h1,h2,h3,h4,[role=heading]').length===1&&section.querySelector('button,[role=button],[role=radio]'))locator=describe(section).locator;
@@ -182,7 +192,19 @@ export function compileAssistant(workflow:Workflow,stateId:string,planInput:unkn
   }else if(action.kind==='connect'){
    if(targets.length!==1)throw new Error('Choose one trigger.');const target=targets[0];let source=target.id;
    // A screen made earlier in this plan whose progress bar fills by itself moves on when it finishes; its next screen closes back to where that one would.
-   const timed=timedViews.get(action.targets[0]),from=timed?.view||stateId,back=timed?.back||stateId,event=timed?'finish' as const:'click' as const;
+   const timed=timedViews.get(action.targets[0]),from=timed?.view||stateId,back=timed?.back||stateId;let event:'click'|'change'|'finish'=timed?'finish':'click';
+   // Naming one option of a composed switcher, dropdown, tab row or menu connects just that option.
+   const part=target.node.closest<HTMLElement>('[data-dx-block] [data-dx-owned]')||target.node.querySelector<HTMLElement>('select,[data-dx-tab],[data-dx-menu-item],[data-dx-custom]')?.closest<HTMLElement>('[data-dx-block] [data-dx-owned]')||null;
+   const planned=target.id?plannedBlocks.get(target.id):undefined;
+   if(action.text?.trim()&&planned){
+    const wanted=action.text.trim().toLowerCase(),labels=(node:typeof planned.nodes[number])=>node.type==='custom'?[...(node.html||'').matchAll(/data-option\s*=\s*["']([^"']*)["']/g)].map(match=>match[1]):node.options||[];
+    const match=planned.nodes.map(node=>({node,index:labels(node).findIndex(label=>label.trim().toLowerCase()===wanted)})).find(found=>found.index>=0);
+    if(!match){const all=planned.nodes.flatMap(labels);if(all.length)throw new Error(`"${action.text}" is not one of this block's options (${[...new Set(all)].join(', ')}).`);}
+    else{source=match.node.id+'#'+match.index;event=['select','crumbs'].includes(match.node.type)?'change':'click';}
+   }else if(action.text?.trim()&&part?.dataset.dxOwned){
+    const select=part.querySelector('select'),options=select?[...select.options].map(o=>o.text):[...(part.shadowRoot||part).querySelectorAll(part.shadowRoot?'[data-option]':'[data-dx-tab],[data-dx-menu-item]')].map(o=>o.getAttribute('data-option')||o.textContent||'');
+    if(options.length){const index=options.findIndex(o=>o.trim().toLowerCase()===action.text!.trim().toLowerCase());if(index<0)throw new Error(`"${action.text}" is not one of this control's options (${options.join(', ')}).`);source=part.dataset.dxOwned+'#'+index;event=select?'change':'click';}
+   }
    if(action.targets[0].startsWith('new:')&&outputs.get(action.targets[0])?.locator.owned?.startsWith('view:')&&!timed)throw new Error('A screen moves on by itself only when it has a progress bar with seconds; connect one of its buttons instead.');
    if(!source){source=uid();add({id:uid(),kind:'trigger',target:target.locator,source});}
    let destination=action.destination;
@@ -192,10 +214,26 @@ export function compileAssistant(workflow:Workflow,stateId:string,planInput:unkn
     const existing=next.states.find(s=>s.liveURL===url||s.id===next.entry&&next.origin+next.route===url);
     if(existing)destination=existing.id;else{if(next.states.length>=next.maxStates)throw new Error('The workflow reached its screen limit.');destination=uid();next.states.push({id:destination,title:new URL(url).pathname.slice(0,120)||'Page',parent:stateId,view:'base',liveURL:url,operations:[]});}
    }
-   if(!destination){if(!action.newViewTitle?.trim())throw new Error('Choose a destination or name a new prototype view.');if(next.states.length>=next.maxStates)throw new Error('The workflow reached its screen limit.');destination=uid();const modal=action.presentation==='modal'&&!action.pageContent;
+   // What a watched click opened becomes a new screen holding its exact copy, shown the way it appeared: centred, or along an edge.
+   if(destination?.startsWith('watched:')){
+    const capture=watched();if(!capture||'watched:'+capture.id!==destination)throw new Error('Watch the click again: the captured result is no longer available.');
+    if(capture.kind!=='modal'&&capture.kind!=='drawer')throw new Error(`Recreating a ${capture.kind==='toast'?'toast message':'menu or popover'} is not supported yet; modals and side panels are.`);
+    if(next.states.length>=next.maxStates)throw new Error('The workflow reached its screen limit.');
+    const view=uid(),title=action.newViewTitle?.trim()||capture.title;destination=view;
+    let under=back;while(next.states.find(s=>s.id===under)?.presentation&&['modal','drawer'].includes(next.states.find(s=>s.id===under)!.presentation!)){const parent=next.states.find(s=>s.id===under)?.parent;if(!parent)break;under=parent;}
+    next.states.push({id:view,title,parent:under,view:'panel',operations:[OperationSchema.parse({id:uid(),kind:'insert',target:owned('view:'+view),position:'inside',node:{id:uid(),kind:'panel',text:title,copy:capture.copy.map(part=>({...part,id:uid()}))}})],presentation:capture.kind,copied:{closes:capture.closes,...(capture.side?{side:capture.side}:{}),...(/^[\d.\spx%]+$/.test(capture.copy[0].style['border-radius']||'')?{radius:capture.copy[0].style['border-radius']}:{})}});
+    next.edges.push({id:uid(),from:view,source:'modal:'+view+':close',to:back,event:'click'});
+   }
+   // A variant of this page: the same page as a new screen, with the changes the rest of the plan makes.
+   if(!destination&&action.presentation==='page'){
+    if(!action.newViewTitle?.trim())throw new Error('Name the new page.');if(next.states.length>=next.maxStates)throw new Error('The workflow reached its screen limit.');
+    let base=stateId;while(next.states.find(s=>s.id===base)?.view==='panel'){const parent=next.states.find(s=>s.id===base)?.parent;if(!parent)break;base=parent;}
+    destination=uid();next.states.push({id:destination,title:action.newViewTitle,parent:base,view:'base',variant:true,operations:[]});opsState=next.states.find(s=>s.id===destination)!;
+   }
+   if(!destination){if(!action.newViewTitle?.trim())throw new Error('Choose a destination or name a new prototype view.');if(next.states.length>=next.maxStates)throw new Error('The workflow reached its screen limit.');destination=uid();const modal=(action.presentation==='modal'||action.presentation==='drawer')&&!action.pageContent;
     // A modal opened from inside another modal takes its place instead of stacking on it; closing still returns to it.
-    let under=back;while(modal&&next.states.find(s=>s.id===under)?.presentation==='modal'){const parent=next.states.find(s=>s.id===under)?.parent;if(!parent)break;under=parent;}
-    next.states.push({id:destination,title:action.newViewTitle,parent:under,view:'panel',design:captureDesign(target.node),operations:[],...(modal?{presentation:'modal' as const}:{}),...(action.pageContent?{presentation:'screen' as const,pageContent:action.pageContent,...(action.pageContent.route?{virtualRoute:action.pageContent.route}:{})}:{})});if(action.pageContent)next.edges.push({id:uid(),from:destination,source:'page:'+destination+':back',to:back,event:'click'});
+    let under=back;while(modal&&['modal','drawer'].includes(next.states.find(s=>s.id===under)?.presentation||'')){const parent=next.states.find(s=>s.id===under)?.parent;if(!parent)break;under=parent;}
+    next.states.push({id:destination,title:action.newViewTitle,parent:under,view:'panel',design:captureDesign(target.node),operations:[],...(modal?{presentation:action.presentation as 'modal'|'drawer'}:{}),...(action.pageContent?{presentation:'screen' as const,pageContent:action.pageContent,...(action.pageContent.route?{virtualRoute:action.pageContent.route}:{})}:{})});if(action.pageContent)next.edges.push({id:uid(),from:destination,source:'page:'+destination+':back',to:back,event:'click'});
     // A modal closes back to the page it opened from, and its contents are built with it.
     if(modal){next.edges.push({id:uid(),from:destination,source:'modal:'+destination+':close',to:back,event:'click'});if(action.block){const block=withIds(action.block),modalState=next.states.find(s=>s.id===destination)!;const timer=block.nodes.find(part=>part.type==='progress'&&part.seconds);if(action.resultRef){outputs.set(action.resultRef,{node:target.node,id:timer?.id||'view:'+destination,locator:owned(timer?.id||'view:'+destination)});if(timer)timedViews.set(action.resultRef,{view:destination,back});}modalState.operations.push(OperationSchema.parse({id:uid(),kind:'insert',target:owned('view:'+destination),position:'inside',node:{id:uid(),kind:'panel',text:action.newViewTitle,block,appearance:{display:'block','box-sizing':'border-box',width:'100%','max-width':'100%','min-width':'0',height:'auto',padding:'0',margin:'0','font-family':'inherit',color:'inherit'}}}));}}}
    if(!next.states.some(s=>s.id===destination))throw new Error('That destination no longer exists.');

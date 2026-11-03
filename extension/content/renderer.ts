@@ -144,14 +144,17 @@ export class Renderer {
         badge.dataset.dxIgnore='true';badge.dataset.dxBadge='true';
         const heading=document.createElement('h1');heading.dataset.dxOwned=`heading:${state.id}`;heading.textContent=state.title;this.owned.set(`heading:${state.id}`,heading);heading.style.cssText='font:600 22px/1.3 system-ui,sans-serif;margin:8px 0 16px;color:#202638;';
         if(state.design)applyAppearance(heading,state.design.heading);
-        if(state.presentation==='modal'){
-          // A modal sits centred over the page it opened from; the outer shadow dims that page.
-          const surface=panel.style.getPropertyValue('background-color');panel.setAttribute('role','dialog');panel.setAttribute('aria-modal','true');panel.setAttribute('aria-label',state.title);
-          panel.style.cssText+=`position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:min(560px,calc(100vw - 32px));max-height:calc(100vh - 64px);overflow:auto;z-index:2147483000;margin:0;padding:28px 28px 24px;box-sizing:border-box;border-radius:${state.design?.surface['border-radius']&&parseFloat(state.design.surface['border-radius'])>0?state.design.surface['border-radius']:'16px'};box-shadow:0 0 0 100vmax rgba(17,16,30,.45),0 24px 64px rgba(17,16,30,.3);`;
-          // A dialog is a plain surface sized to its contents, whatever the card it opened from looked like.
-          for(const [key,value] of [['background-color','#fff'],['background-image','none'],['height','auto'],['min-height','0']])panel.style.setProperty(key,value,'important');void surface;
-          heading.style.margin='0 40px 12px 0';const close=document.createElement('button');close.type='button';close.dataset.dxOwned=`modal:${state.id}:close`;close.setAttribute('aria-label','Close');close.textContent='×';close.style.cssText='position:absolute;top:14px;right:14px;width:32px;height:32px;border:0;border-radius:8px;background:transparent;font:400 24px/1 system-ui;color:#55516a;cursor:pointer;';this.owned.set(`modal:${state.id}:close`,close);
-          panel.append(close,heading);
+        if(state.presentation==='modal'||state.presentation==='drawer'){
+          // A modal sits centred over the page it opened from and a drawer along one edge; the outer shadow dims that page.
+          const drawer=state.presentation==='drawer',side=state.copied?.side||'right',copied=!!state.copied;panel.setAttribute('role','dialog');panel.setAttribute('aria-modal','true');panel.setAttribute('aria-label',state.title);
+          const place=drawer?`top:0;${side}:0;height:100vh;max-height:100vh;width:${copied?'auto':'min(440px,calc(100vw - 32px))'};max-width:calc(100vw - 32px);`:`left:50%;top:50%;transform:translate(-50%,-50%);width:${copied?'auto':'min(560px,calc(100vw - 32px))'};max-width:calc(100vw - 32px);max-height:calc(100vh - 64px);`;
+          panel.style.cssText+=`position:fixed;${place}overflow:auto;z-index:2147483000;margin:0;box-sizing:border-box;${copied?`padding:0;border-radius:${state.copied!.radius||'0'};`:`padding:28px 28px 24px;border-radius:${drawer?'0':state.design?.surface['border-radius']&&parseFloat(state.design.surface['border-radius'])>0?state.design.surface['border-radius']:'16px'};`}box-shadow:0 0 0 100vmax rgba(17,16,30,.45)${copied?'':',0 24px 64px rgba(17,16,30,.3)'};`;
+          // A dialog is a plain surface sized to its contents, whatever the card it opened from looked like; a copied one is the captured surface itself.
+          for(const [key,value] of [['background-color',copied?'transparent':'#fff'],['background-image','none'],['height',drawer?'100vh':'auto'],['min-height','0'],['border',copied?'0':'']].filter(([,value])=>value))panel.style.setProperty(key,value,'important');
+          if(copied&&drawer)panel.style.setProperty('display','flex','important');
+          heading.style.margin='0 40px 12px 0';const close=document.createElement('button');close.type='button';close.dataset.dxOwned=`modal:${state.id}:close`;close.setAttribute('aria-label','Close');close.textContent='×';close.style.cssText='position:absolute;top:14px;right:14px;z-index:1;width:32px;height:32px;border:0;border-radius:8px;background:transparent;font:400 24px/1 system-ui;color:#55516a;cursor:pointer;';this.owned.set(`modal:${state.id}:close`,close);
+          // A copy keeps its own title and close button; Wandel adds a close only when the copy has none.
+          if(copied){if(!state.copied!.closes)panel.append(close);}else panel.append(close,heading);
         }else if(state.pageContent){panel.append(heading);mountPrototypePage(panel,state.id,state.pageContent,heading,(id,node)=>this.owned.set(id,node),this.onClick);}else panel.append(badge,heading);this.root.append(panel);this.views.add(state.id);
       }
       // The placeholder label marks an empty screen only; a designed screen reads as a page.
@@ -292,6 +295,10 @@ export class Renderer {
     // Tiles, choices and disclosures inside composed blocks keep local prototype state.
     // A tab or menu item also follows its connection, if it has one, after showing its new state.
     if(blockInteract(event.target)&&!(event.target instanceof Element&&event.target.closest('[data-dx-tab],[data-dx-menu-item]'))){event.preventDefault();event.stopImmediatePropagation();return;}
+    // One tab or menu item of a composed part is its own source; the session falls back to the whole part.
+    const item=event.target instanceof Element?event.target.closest<HTMLElement>('[data-dx-tab],[data-dx-menu-item]'):null,part=item?.closest<HTMLElement>('[data-dx-block] [data-dx-owned]');
+    const inner=event.composedPath()[0];if(inner instanceof Element&&inner.getRootNode() instanceof ShadowRoot){const root=inner.getRootNode() as ShadowRoot,host=root.host as HTMLElement,option=inner.closest('[data-option]');if(host.dataset.dxCustom&&host.dataset.dxOwned&&option){event.preventDefault();event.stopImmediatePropagation();const label=option.getAttribute('data-option');this.onClick(host.dataset.dxOwned+'#'+[...root.querySelectorAll('[data-option]')].findIndex(o=>o.getAttribute('data-option')===label));return;}}
+    if(item&&part?.dataset.dxOwned){event.preventDefault();event.stopImmediatePropagation();this.onClick(part.dataset.dxOwned+'#'+[...item.parentElement!.children].filter(child=>child.matches('[data-dx-tab],[data-dx-menu-item]')).indexOf(item));return;}
     const target=event.target instanceof Element?this.findOwned(event.target):null;
     if(!target) return;
     const link=event.target instanceof Element?event.target.closest('a[href]'):null;if(link&&this.idFor(link))return;

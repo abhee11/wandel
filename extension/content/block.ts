@@ -1,4 +1,5 @@
 import {namedIcon,renderIcon} from './copyIcon';
+import {sanitizeMarkup,sanitizeCss} from './customMarkup';
 import type {Block,BlockNode} from '../shared/block';
 const tones:Record<string,string>={none:'#ffffff',pink:'#ffebed',peach:'#fff1e3',yellow:'#fff6dc',lime:'#f3ffe0',mint:'#e3fbf5',sky:'#e9f1ff',lilac:'#f1ebff',gray:'#f3f3f6'};
 const ink='#14131b',muted='#6e6c7f',line='#eae6f1';
@@ -154,6 +155,11 @@ function render(node:BlockNode,accent:string,parent?:string):HTMLElement{
    const list=el('div',`position:absolute;top:calc(100% + 6px);right:0;z-index:10;display:none;flex-direction:column;min-width:180px;padding:6px;border:1px solid ${line};border-radius:12px;background:#fff;box-shadow:0 8px 24px rgba(20,19,27,.12);`);list.setAttribute('role','menu');
    for(const option of node.options||[]){const item=el('button',`all:unset;box-sizing:border-box;padding:9px 12px;border-radius:8px;cursor:pointer;font-size:15px;line-height:1.4;font-family:inherit;color:${/^(delete|remove)\b/i.test(option)?toneInk.pink:ink};`,option);item.type='button';item.setAttribute('role','menuitem');item.dataset.dxMenuItem=option;list.append(item);}
    wrap.append(toggle,list);paintMenu(wrap);return wrap;}
+  case 'custom':{
+   // Free-form markup for anything the other parts cannot express. It lives in its own shadow root: the page's styles cannot reach in and its styles cannot leak out.
+   const host=el('div','display:block;min-width:0;');const root=host.attachShadow({mode:'open'}),style=document.createElement('style');
+   style.textContent=`:host{all:initial;display:block;box-sizing:border-box;min-width:0;font-family:inherit;font-size:16px;line-height:1.5;color:${ink};--accent:${accent}}*,*::before,*::after{box-sizing:border-box}[data-option]{cursor:pointer}`+sanitizeCss(node.css||'');
+   root.append(style,sanitizeMarkup(node.html||''));host.dataset.dxCustom='true';return host;}
   case 'list':{const list=el('ol',`margin:0;padding-left:22px;display:flex;flex-direction:column;gap:6px;font-weight:400;font-size:16px;line-height:1.6;font-family:inherit;color:${ink};`);for(const item of node.items||[])list.append(el('li','',item));return list;}
   case 'quote':{const q=el('blockquote',`margin:0;display:flex;gap:12px;font-style:italic;font-weight:500;font-size:16px;line-height:1.6;font-family:inherit;color:${ink};`);q.append(el('span',`font:700 28px/1 Georgia,serif;color:${ink};`,'“'),el('span','',text));return q;}
   case 'image':{

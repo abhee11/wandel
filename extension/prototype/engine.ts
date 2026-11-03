@@ -30,7 +30,7 @@ export function lineage(workflow: Workflow, stateId: string) {
 }
 export function renderLineage(w:Workflow,stateId:string){const chain=lineage(w,stateId);const boundary=chain.reduce((index,s,i)=>s.liveURL?i:index,-1);return boundary<0?chain:chain.slice(boundary);}
 export function visibleNodeIds(workflow: Workflow, stateId: string) {
-  return new Set(renderLineage(workflow, stateId).flatMap(s => [ ...(s.pageContent?prototypePageIds(s.id,s.pageContent.chart.points.length):[]), ...(s.view === 'panel' ? [`view:${s.id}`, `heading:${s.id}`, ...(s.presentation==='modal'?[`modal:${s.id}:close`]:[])] : []), ...s.operations.flatMap(o => o.kind === 'insert' ? [o.node.id,...(o.position==='below'?['wrap:'+o.id]:[]),...(o.node.kind==='field'?[o.node.id+':input']:[]),...(o.node.copy?.map(n=>n.id)||[]),...(o.node.block?.nodes.flatMap(n=>n.id?[n.id]:[])||[]),...(o.node.choices?.options.map((_,i)=>o.node.id+':choice:'+i)||[])] : o.kind==='trigger'?[o.source]:[]) ]));
+  return new Set(renderLineage(workflow, stateId).flatMap(s => [ ...(s.pageContent?prototypePageIds(s.id,s.pageContent.chart.points.length):[]), ...(s.view === 'panel' ? [`view:${s.id}`, `heading:${s.id}`, ...(s.presentation==='modal'||s.presentation==='drawer'?[`modal:${s.id}:close`]:[])] : []), ...s.operations.flatMap(o => o.kind === 'insert' ? [o.node.id,...(o.position==='below'?['wrap:'+o.id]:[]),...(o.node.kind==='field'?[o.node.id+':input']:[]),...(o.node.copy?.map(n=>n.id)||[]),...(o.node.block?.nodes.flatMap(n=>n.id?[n.id,...(n.options||[]).map((_,i)=>n.id+'#'+i),...(n.type==='custom'?Array.from({length:(n.html?.match(/data-option=/g)||[]).length},(_,i)=>n.id+'#'+i):[])]:[])||[]),...(o.node.choices?.options.map((_,i)=>o.node.id+':choice:'+i)||[])] : o.kind==='trigger'?[o.source]:[]) ]));
 }
 export function validateWorkflow(input: unknown): Workflow {
   const w = WorkflowSchema.parse(input);
@@ -46,7 +46,8 @@ export function validateWorkflow(input: unknown): Workflow {
   for (const s of w.states) {
     if (lineage(w, s.id)[0].id !== w.entry) throw new Error('State must descend from entry.');
     if(s.liveURL){const u=new URL(s.liveURL);if(u.origin!==w.origin||!['https:','http:'].includes(u.protocol)||u.username||u.password||s.view!=='base')throw new Error('Invalid live application destination.');}
-    if (s.id !== w.entry && s.view !== 'panel'&&!s.liveURL) throw new Error('Child states need a view.');
+    // A child is a panel, a real page of the app, or a variant of its parent page.
+    if (s.id !== w.entry && s.view !== 'panel'&&!s.liveURL&&!s.variant) throw new Error('Child states need a view.');
     for (const o of s.operations) {
       if (ops.has(o.id)) throw new Error('Duplicate operation.'); ops.add(o.id);
       if(o.kind==='trigger'){if(nodes.has(o.source)||/^(view|heading|wrap):/.test(o.source))throw new Error('Duplicate/reserved trigger ID.');nodes.add(o.source);}

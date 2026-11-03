@@ -1,4 +1,5 @@
 import {AssistantMemorySchema} from '../shared/assistantMemory';
+import {watchNextClick,watched,clearWatched} from './watch';
 import {captureScreen,type CaptureRect} from './screenCapture';
 import {compareScreens} from './comparison';
 import {copyPlacement} from './copyPlacement';
@@ -160,7 +161,7 @@ export class Session {
   suspend(){this.closeComparison?.();this.previewOriginal=false;this.assistant?.reset();this.restoringPanel=false;this.panelMinimized=false;this.styleClipboard=null;this.replayData={};this.replayHistory=[];this.closeLayouts?.();this.resizeHeld=false;this.cancelDrag();this.projectionActive=false;this.picking=false;this.dragging=false;this.replay=false;this.selected=null;this.hovered=null;this.render(true);}
 
   subscribe(listener:(s:Snapshot)=>void) {this.listeners.add(listener);listener(this.snapshot());return()=>{this.listeners.delete(listener);};}
-  snapshot():Snapshot {this.seenViews.add(this.stateId);return clone({previewOriginal:this.previewOriginal,...(this.assistant?{assistant:this.assistant.snapshot()}:{}),navigationError:this.navigationError,...(this.pausedWorkflow?{resumeChoice:{name:this.pausedWorkflow.name,page:new URL(this.pausedWorkflow.url).pathname}}:{}),liveSession:this.liveSession,panelMinimized:this.panelMinimized,panelRestoring:this.restoringPanel,connectionWorkspace:this.connectionWorkspace,visited:[...new Set([...this.seenViews,...this.visits])],mode:this.mode(),styleSource:this.styleClipboard?.selection||null,workflow:this.workflow,stateId:this.stateId,selected:this.selected,picking:this.picking,dragging:this.dragging,replay:this.replay,enabled:this.enabled,dirty:this.dirty,canUndo:!!this.history.past.length,canRedo:!!this.history.future.length,canBack:!!this.visits.length,unresolved:this.unresolved,currentVersion:this.record?.currentVersion||this.record?.versions.at(-1)?.number||0,versions:this.record?.versions.map(({number,savedAt,workflow})=>({number,savedAt,name:workflow.name}))||[],library:[...this.library.map(r=>({id:r.draft.id,name:this.routeDrafts.has(r.draft.id)?this.routeDrafts.get(r.draft.id)!.workflow.name+' (unsaved)':r.draft.name,versions:r.versions.length})),...[...this.routeDrafts.values()].filter(d=>d.workflow.origin===this.url.origin&&d.workflow.route===routeOf(this.url)&&!this.library.some(r=>r.draft.id===d.workflow.id)).map(d=>({id:d.workflow.id,name:d.workflow.name+' (unsaved)',versions:d.record?.versions.length||0}))]});}
+  snapshot():Snapshot {this.seenViews.add(this.stateId);const capture=watched();return clone({watching:this.watching,watched:capture?{id:capture.id,kind:capture.kind,title:capture.title,outline:capture.outline,trigger:capture.trigger}:null,...(this.watchError?{watchError:this.watchError}:{}),previewOriginal:this.previewOriginal,...(this.assistant?{assistant:this.assistant.snapshot()}:{}),navigationError:this.navigationError,...(this.pausedWorkflow?{resumeChoice:{name:this.pausedWorkflow.name,page:new URL(this.pausedWorkflow.url).pathname}}:{}),liveSession:this.liveSession,panelMinimized:this.panelMinimized,panelRestoring:this.restoringPanel,connectionWorkspace:this.connectionWorkspace,visited:[...new Set([...this.seenViews,...this.visits])],mode:this.mode(),styleSource:this.styleClipboard?.selection||null,workflow:this.workflow,stateId:this.stateId,selected:this.selected,picking:this.picking,dragging:this.dragging,replay:this.replay,enabled:this.enabled,dirty:this.dirty,canUndo:!!this.history.past.length,canRedo:!!this.history.future.length,canBack:!!this.visits.length,unresolved:this.unresolved,currentVersion:this.record?.currentVersion||this.record?.versions.at(-1)?.number||0,versions:this.record?.versions.map(({number,savedAt,workflow})=>({number,savedAt,name:workflow.name}))||[],library:[...this.library.map(r=>({id:r.draft.id,name:this.routeDrafts.has(r.draft.id)?this.routeDrafts.get(r.draft.id)!.workflow.name+' (unsaved)':r.draft.name,versions:r.versions.length})),...[...this.routeDrafts.values()].filter(d=>d.workflow.origin===this.url.origin&&d.workflow.route===routeOf(this.url)&&!this.library.some(r=>r.draft.id===d.workflow.id)).map(d=>({id:d.workflow.id,name:d.workflow.name+' (unsaved)',versions:d.record?.versions.length||0}))]});}
   private lastEmission='';
   private emit() {if(this.destroyed)return;this.updateSelection();const s=this.snapshot(),serialized=JSON.stringify(s);if(serialized===this.lastEmission)return;this.lastEmission=serialized;this.listeners.forEach(fn=>fn(s));}
   private updateSelection(){
@@ -300,9 +301,13 @@ export class Session {
       if(trigger){event.preventDefault();event.stopImmediatePropagation();this.click(trigger);return;}
       // Cancel, Close, Done or Stop inside a modal returns to the page it opened from.
       const closer=target.closest<HTMLElement>('button,a,[role=button]'),modal=closer?.closest<HTMLElement>('[data-dx-owned^="view:"][role=dialog]'),modalId=modal?.dataset.dxOwned?.slice(5);
-      if(closer&&modalId&&/^(cancel|close|done|dismiss|not now|stop|×)$/i.test((closer.getAttribute('aria-label')||closer.textContent||'').trim())&&this.workflow.edges.some(edge=>edge.from===this.stateId&&edge.source==='modal:'+modalId+':close')){event.preventDefault();event.stopImmediatePropagation();this.click('modal:'+modalId+':close');return;}
-      const owned=this.renderer.findOwned(target);
-      if(owned&&this.workflow.edges.some(edge=>edge.from===this.stateId&&edge.source===owned.id&&(edge.event||'click')==='click')){event.preventDefault();event.stopImmediatePropagation();this.click(owned.id);return;}
+      if(closer&&modalId&&/^(cancel|close|done|dismiss|not now|stop|×|✕|✖|x)$/i.test((closer.getAttribute('aria-label')||closer.textContent||'').trim())&&this.workflow.edges.some(edge=>edge.from===this.stateId&&edge.source==='modal:'+modalId+':close')){event.preventDefault();event.stopImmediatePropagation();this.click('modal:'+modalId+':close');return;}
+      const option=this.optionSource(target,'click',event);if(option){event.preventDefault();event.stopImmediatePropagation();this.click(option);return;}
+      // A part with no connection of its own uses the nearest enclosing element that has one, such as the section it sits in.
+      // A click inside a custom part's shadow root starts from the part itself, since parent links stop at the shadow boundary.
+      const root=target.getRootNode();let owned=this.renderer.findOwned(root instanceof ShadowRoot?root.host:target);const connected=(id:string)=>this.workflow.edges.some(edge=>edge.from===this.stateId&&edge.source===id&&(edge.event||'click')==='click');
+      for(let depth=0;owned&&!connected(owned.id)&&depth<6;depth++){const outer=owned.node.parentElement;owned=outer?this.renderer.findOwned(outer):null;}
+      if(owned&&connected(owned.id)){event.preventDefault();event.stopImmediatePropagation();this.click(owned.id);return;}
       // A prototype control linked to an app control runs it wherever the page is live: Interact and Play.
       try{if(this.renderer.forwardClick(target)){event.preventDefault();event.stopImmediatePropagation();return;}}catch(error){event.preventDefault();event.stopImmediatePropagation();this.gestureError(error);return;}
       if(target.matches('input,textarea')&&this.renderer.findOwned(target)){event.stopImmediatePropagation();return;}
@@ -312,10 +317,31 @@ export class Session {
   };
   private connectionSource(target:Element,event:ConnectionEvent){return this.renderer.sourcesFor(target).find(source=>this.workflow.edges.some(edge=>edge.from===this.stateId&&edge.source===source&&(edge.event||'click')===event));}
   // A progress bar that finished filling moves its screen on through a finish connection.
+  private watching=false;private watchError='';private stopWatch?:()=>void;
+  private async enterInteract(){
+    if(!this.runningConnections)this.replayData=this.defaults();
+    // Opening Wandel on a page shows its draft: after a browser restart nothing else switches the prototype back on.
+    const inactive=!this.projectionActive;this.authoring=true;this.projectionActive=true;if(inactive)this.render(true);
+    this.cancelDrag();this.interacting=true;this.picking=false;this.replay=false;this.dragging=false;this.selected=null;this.hovered=null;this.styleClipboard=null;this.outline.style.display='none';this.emit();if(this.liveSession)await this.checkpoint();
+  }
   private progressDone=(event:Event)=>{if(!this.runningConnections||!(event.target instanceof HTMLElement))return;const source=event.target.dataset.dxOwned;if(source&&this.workflow.edges.some(edge=>edge.from===this.stateId&&edge.source===source&&edge.event==='finish'))this.click(source,'finish');};
-  private connectionChange=(event:Event)=>{if(!this.runningConnections||!(event.target instanceof Element))return;const source=this.connectionSource(event.target,'change');if(source){event.stopImmediatePropagation();this.click(source,'change');}};
+  /** The connection source for one option of a composed switcher, dropdown, tab row or menu: its part id and the option's position. */
+  private optionSource(target:Element,event:'click'|'change',origin?:Event){
+    // Inside a custom part's shadow root, the clicked element is only visible through the event's path.
+    const inner=origin?.composedPath()[0];if(event==='click'&&inner instanceof Element&&inner.getRootNode() instanceof ShadowRoot){const root=inner.getRootNode() as ShadowRoot,host=root.host as HTMLElement,option=inner.closest('[data-option]');if(host.dataset.dxCustom&&option&&host.dataset.dxOwned){const label=option.getAttribute('data-option'),source=host.dataset.dxOwned+'#'+[...root.querySelectorAll('[data-option]')].findIndex(o=>o.getAttribute('data-option')===label);return this.workflow.edges.some(edge=>edge.from===this.stateId&&edge.source===source&&(edge.event||'click')==='click')?source:null;}}
+    const select=event==='change'&&target instanceof HTMLSelectElement?target:null,item=event==='click'?target.closest<HTMLElement>('[data-dx-tab],[data-dx-menu-item]'):null;if(!select&&!item)return null;
+    const part=(select||item)!.closest<HTMLElement>('[data-dx-block] [data-dx-owned]');if(!part?.dataset.dxOwned)return null;
+    const index=select?select.selectedIndex:[...item!.parentElement!.children].filter(child=>child.matches('[data-dx-tab],[data-dx-menu-item]')).indexOf(item!);
+    const source=part.dataset.dxOwned+'#'+index;return this.workflow.edges.some(edge=>edge.from===this.stateId&&edge.source===source&&(edge.event||'click')===event)?source:null;
+  }
+  private connectionChange=(event:Event)=>{if(!this.runningConnections||!(event.target instanceof Element))return;const option=this.optionSource(event.target,'change');if(option){event.stopImmediatePropagation();this.click(option,'change');return;}const source=this.connectionSource(event.target,'change');if(source){event.stopImmediatePropagation();this.click(source,'change');}};
   private connectionEnter=(event:KeyboardEvent)=>{if(!this.runningConnections||event.key!=='Enter'||event.shiftKey||event.isComposing||event.repeat||!(event.target instanceof Element)||event.target.closest('[data-dx-ignore]'))return;const source=this.connectionSource(event.target,'enter');if(source){event.preventDefault();event.stopImmediatePropagation();this.click(source,'enter');}};
   private click(source:string,event:ConnectionEvent='click') {
+    // An option with no connection of its own uses its whole part's.
+    if(source.includes('#')&&!this.workflow.edges.some(edge=>edge.from===this.stateId&&edge.source===source))source=source.slice(0,source.indexOf('#'));
+    // A part with no connection of its own uses the nearest enclosing element that has one.
+    const wired=(id:string)=>this.workflow.edges.some(edge=>edge.from===this.stateId&&edge.source===id&&(edge.event||'click')===event);
+    if(!wired(source))for(let node=this.renderer.owned.get(source)?.parentElement,depth=0;node&&depth<6;depth++){const outer=this.renderer.findOwned(node);if(!outer)break;if(wired(outer.id)){source=outer.id;break;}node=outer.node.parentElement;}
     const edge=this.workflow.edges.find(edge=>edge.from===this.stateId&&edge.source===source&&(edge.event||'click')===event);
     if(edge?.conditions?.some(condition=>!fieldFor(resolve(condition.target,this.root,this.renderer.owned)))){this.pageEditor.notify('A connection field is missing. Return to Edit and reconnect it.');return;}
     const passes=!!edge&&(edge.conditions||[]).every(condition=>conditionPasses(condition,fieldFor(resolve(condition.target,this.root,this.renderer.owned))));
@@ -465,10 +491,13 @@ export class Session {
         let flagged='';
         const result=await this.assistant.apply(c.plan,c.token,this.workflow,this.stateId,async(next,stateId,verify)=>{
           const previous=this.workflow,previousState=this.stateId,dirty=this.dirty,past=[...this.history.past],future=[...this.history.future];
-          try{this.commit(next,stateId);if(this.unresolved.length)throw new Error('Preview could not be applied: '+this.unresolved[0]);await new Promise<void>(resolve=>{const fallback=setTimeout(resolve,300);requestAnimationFrame(()=>requestAnimationFrame(()=>{clearTimeout(fallback);resolve();}));});}
+          // Cosmetic layout issues (clipping, spilling past a container, overlap) keep the change and flag it; only a change that did not render rolls back.
+          let cosmetic='';
+          try{this.commit(next,stateId);const fatal=this.unresolved.filter(issue=>!/clipped|beyond a clipping container|overlap/i.test(issue));if(fatal.length)throw new Error('Preview could not be applied: '+fatal[0]);cosmetic=this.unresolved[0]||'';await new Promise<void>(resolve=>{const fallback=setTimeout(resolve,300);requestAnimationFrame(()=>requestAnimationFrame(()=>{clearTimeout(fallback);resolve();}));});}
           catch(error){this.workflow=previous;this.stateId=previousState;this.dirty=dirty;this.history.past=past;this.history.future=future;this.render(true);throw new Error(rolledBackPreview+(error instanceof Error?error.message:'The preview did not pass verification.'));}
           // A change that rendered but fails a layout check stays visible; the user decides to keep, fix or undo it.
           try{verify();}catch(error){flagged=error instanceof Error?error.message:'A layout check did not pass.';}
+          if(!flagged&&cosmetic)flagged=cosmetic;
         });
         this.assistantCheckpoint={...checkpoint,after:JSON.stringify(this.workflow)};
         if(result.view){const heading=this.renderer.owned.get('heading:'+result.view);if(heading)this.select(heading);}
@@ -487,12 +516,14 @@ export class Session {
     if(c.type==='restorePanel'){
       this.restoringPanel=true;try{await this.options.requestConnections?.();}catch(error){this.restoringPanel=false;throw error;}this.panelMinimized=false;this.emit();return this.snapshot();
     }
-    if(c.type==='interact'){
-      if(!this.runningConnections)this.replayData=this.defaults();
-      // Opening Wandel on a page shows its draft: after a browser restart nothing else switches the prototype back on.
-      const inactive=!this.projectionActive;this.authoring=true;this.projectionActive=true;if(inactive)this.render(true);
-      this.cancelDrag();this.interacting=true;this.picking=false;this.replay=false;this.dragging=false;this.selected=null;this.hovered=null;this.styleClipboard=null;this.outline.style.display='none';this.emit();if(this.liveSession)await this.checkpoint();return this.snapshot();
+    if(c.type==='interact'){await this.enterInteract();return this.snapshot();}
+    if(c.type==='watch'){
+      // The next real click opens something in the app; Wandel captures what appeared so a prototype can recreate it.
+      this.stopWatch?.();await this.enterInteract();this.watching=true;this.watchError='';
+      this.stopWatch=watchNextClick(result=>{this.watching=false;this.stopWatch=undefined;if('error' in result)this.watchError=result.error;else{this.watchError='';this.pageEditor.notify(`Captured: ${result.title}`);}this.emit();});
+      this.pageEditor.notify('Click the control once in the page. Wandel is watching what opens.');this.emit();return this.snapshot();
     }
+    if(c.type==='watchClear'){this.stopWatch?.();this.stopWatch=undefined;this.watching=false;this.watchError='';clearWatched();this.emit();return this.snapshot();}
     if(c.type==='closeEditor'){
       await this.checkpoint();await this.options.liveNavigation?.clear();this.liveSession=false;if(this.options.requestClose)await this.options.requestClose();this.authoring=false;this.suspend();this.emit();return this.snapshot();
     }
@@ -742,5 +773,5 @@ export class Session {
     if(editing.includes(c.type)&&!['copyPrompt','duplicateElement'].includes(c.type)&&this.assistant){const selected=this.findSelected();this.assistant.recordExternal('Manual '+c.type+' applied',selected?[selected]:[]);}
     this.emit();return this.snapshot();
   }
-  destroy(){if(this.destroyed)return;this.destroyed=true;this.assistant?.reset();this.closeComparison?.();this.closeLayouts?.();clearTimeout(this.draftTimer);window.removeEventListener('change',this.connectionChange,true);window.removeEventListener('keydown',this.connectionEnter,true);window.removeEventListener('dx-progress-done',this.progressDone,true);window.removeEventListener('input',this.inputMirror,true);window.removeEventListener('change',this.inputMirror,true);if(this.selectionFrame!==undefined)window.cancelAnimationFrame(this.selectionFrame);this.selectionFrame=undefined;window.removeEventListener('scroll',this.paintSelection,true);window.removeEventListener('resize',this.paintSelection);this.selectionOutline.remove();this.pageEditor.destroy();this.cancelDrag();window.removeEventListener('dragstart',this.nativeDrag,true);window.removeEventListener('pointerdown',this.dragStart,true);window.removeEventListener('pointermove',this.dragMove,true);window.removeEventListener('pointerup',this.dragEnd,true);window.removeEventListener('pointercancel',this.cancelDrag,true);window.removeEventListener('blur',this.blur);this.observer.disconnect();clearTimeout(this.timer);window.removeEventListener('click',this.handleClick,true);window.removeEventListener('pointermove',this.hover,true);window.removeEventListener('keydown',this.escape,true);window.removeEventListener('keyup',this.keyup,true);this.renderer.reset();this.outline.remove();this.listeners.clear();}
+  destroy(){if(this.destroyed)return;this.destroyed=true;this.stopWatch?.();this.assistant?.reset();this.closeComparison?.();this.closeLayouts?.();clearTimeout(this.draftTimer);window.removeEventListener('change',this.connectionChange,true);window.removeEventListener('keydown',this.connectionEnter,true);window.removeEventListener('dx-progress-done',this.progressDone,true);window.removeEventListener('input',this.inputMirror,true);window.removeEventListener('change',this.inputMirror,true);if(this.selectionFrame!==undefined)window.cancelAnimationFrame(this.selectionFrame);this.selectionFrame=undefined;window.removeEventListener('scroll',this.paintSelection,true);window.removeEventListener('resize',this.paintSelection);this.selectionOutline.remove();this.pageEditor.destroy();this.cancelDrag();window.removeEventListener('dragstart',this.nativeDrag,true);window.removeEventListener('pointerdown',this.dragStart,true);window.removeEventListener('pointermove',this.dragMove,true);window.removeEventListener('pointerup',this.dragEnd,true);window.removeEventListener('pointercancel',this.cancelDrag,true);window.removeEventListener('blur',this.blur);this.observer.disconnect();clearTimeout(this.timer);window.removeEventListener('click',this.handleClick,true);window.removeEventListener('pointermove',this.hover,true);window.removeEventListener('keydown',this.escape,true);window.removeEventListener('keyup',this.keyup,true);this.renderer.reset();this.outline.remove();this.listeners.clear();}
 }
