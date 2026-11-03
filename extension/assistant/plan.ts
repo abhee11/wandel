@@ -12,7 +12,7 @@ export function normalizePlan(input:unknown):AssistantPlan{
   text:['create','duplicate','text','default','icon','tooltip','iconOnly','connect'].includes(a.kind)?a.text:null,
   description:a.kind==='duplicate'?a.description:null,
   labels:['duplicate','choices'].includes(a.kind)?a.labels:[],
-  relativeTo:['reorder','layout'].includes(a.kind)&&a.relativeTo?canonical(a.relativeTo):null,
+  relativeTo:['reorder','layout','duplicate'].includes(a.kind)&&a.relativeTo?canonical(a.relativeTo):null,
   resultRef:['create','duplicate'].includes(a.kind)||a.kind==='connect'&&a.newViewTitle?a.resultRef:null,
   newViewTitle:a.kind==='connect'?a.newViewTitle:null,
   pageContent:a.kind==='connect'?a.pageContent:undefined,
@@ -47,7 +47,7 @@ export function planContractIssues(plan:AssistantPlan):string[]{
    else if(a.element==='chart'){if(!a.chart)issues.push(`${at} needs chart data.`);if(a.targets.length>6)issues.push(`${at} can span at most six cards.`);}
    else if(a.element==='panel'&&a.targets.length>1){if(a.targets.length>6)issues.push(`${at} can span at most six cards.`);}
    else if(a.element==='block'){if(!a.block)issues.push(`${at} needs block parts.`);if(a.targets.length>6)issues.push(`${at} can span at most six cards.`);if(a.targets.length>1&&a.position!=='below')issues.push(`${at} spans several cards only with position below.`);}
-   else{one(a.element==='panel'?'To add a section spanning several cards, use element panel (or chart) with those cards as targets and position below.':'Target the one container or element it belongs in or beside.');if(!a.text?.trim()&&a.element!=='header')issues.push(`${at} needs its visible label in text.`);if(a.element==='link'&&!a.href)issues.push(`${at} needs href.`);}
+   else{one(a.element==='panel'?'To add a section spanning several cards, use element panel (or chart) with those cards as targets and position below.':'Target the one container or element it belongs in or beside.');if(!a.text?.trim()&&a.element!=='header'&&a.element!=='panel')issues.push(`${at} needs its visible label in text.`);if(a.element==='link'&&!a.href)issues.push(`${at} needs href.`);}
   }else if(a.kind==='duplicate')one('Duplicate each card in its own action.');
   else if(a.kind==='reorder'){one('Move each element in its own action.');if(!a.relativeTo||!['before','after','inside'].includes(a.position||''))issues.push(`${at} needs relativeTo and position before, after or inside.`);}
   else if(a.kind==='layout'){one('Target the shared container of the items to arrange.');if(!a.layout)issues.push(`${at} needs layout.`);}
