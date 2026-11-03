@@ -13,7 +13,7 @@ export function normalizePlan(input:unknown):AssistantPlan{
   description:a.kind==='duplicate'?a.description:null,
   labels:['duplicate','choices'].includes(a.kind)?a.labels:[],
   relativeTo:['reorder','layout'].includes(a.kind)&&a.relativeTo?canonical(a.relativeTo):null,
-  resultRef:['create','duplicate'].includes(a.kind)?a.resultRef:null,
+  resultRef:['create','duplicate'].includes(a.kind)||a.kind==='connect'&&a.newViewTitle?a.resultRef:null,
   newViewTitle:a.kind==='connect'?a.newViewTitle:null,
   pageContent:a.kind==='connect'?a.pageContent:undefined,
   chart:a.kind==='create'&&a.element==='chart'?a.chart:undefined,
@@ -31,7 +31,7 @@ export function validatePlanReferences(plan:AssistantPlan,refs:Iterable<string>)
  for(const ref of plan.candidates)if(!available.has(ref))throw new Error('The response referenced an unknown element.');
  for(const a of plan.actions){
   for(const ref of [...a.targets,...a.styleRef?[a.styleRef]:[],...a.relativeTo?[a.relativeTo]:[]])if(!available.has(ref))throw new Error('The plan referenced an unknown element or a result that has not been created.');
-  if(a.resultRef){if(!['create','duplicate'].includes(a.kind)||!/^new:[a-zA-Z0-9_-]{1,60}$/.test(a.resultRef)||available.has(a.resultRef))throw new Error('A created result needs a unique new: reference.');available.add(a.resultRef);if(a.kind==='duplicate'){available.add(a.resultRef+':button');for(const ref of captured)available.add(a.resultRef+'/'+ref);}}
+  if(a.resultRef){if(!(['create','duplicate'].includes(a.kind)||a.kind==='connect'&&a.newViewTitle)||!/^new:[a-zA-Z0-9_-]{1,60}$/.test(a.resultRef)||available.has(a.resultRef))throw new Error('A created result needs a unique new: reference.');available.add(a.resultRef);if(a.kind==='duplicate'){available.add(a.resultRef+':button');for(const ref of captured)available.add(a.resultRef+'/'+ref);}}
  }
 }
 /** Shapes the executor accepts, checked before a plan reaches the page so a rejection names the action and its fix. */

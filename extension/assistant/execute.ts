@@ -25,6 +25,8 @@ export function compileAssistant(workflow:Workflow,stateId:string,planInput:unkn
  const arrangements:Operation[]=[];
  const add=(op:Operation)=>state.operations.push(OperationSchema.parse(op));
  const outputs=new Map<string,{node:HTMLElement;id:string;locator:Locator}>();
+ // Screens created in this plan whose timed progress bar can start a finish connection.
+ const timedViews=new Map<string,{view:string;back:string}>();
  const withIds=(block:NonNullable<AssistantPlan['actions'][number]['block']>)=>({...block,nodes:block.nodes.map(part=>({...part,id:uid()}))});
  const locatorOf=(node:HTMLElement)=>{const locator=describe(node,collector.ownedId(node)).locator;if(!locator.owned&&!locator.name&&!locator.text)locator.structure=structuralIdentity(node);return locator;};
  // A host page may hold a card in an absolutely positioned layer inside a slot whose
@@ -179,6 +181,9 @@ export function compileAssistant(workflow:Workflow,stateId:string,planInput:unkn
    add({id:uid(),kind:'mirror',target:targets[0].locator,source:host.locator});
   }else if(action.kind==='connect'){
    if(targets.length!==1)throw new Error('Choose one trigger.');const target=targets[0];let source=target.id;
+   // A screen made earlier in this plan whose progress bar fills by itself moves on when it finishes; its next screen closes back to where that one would.
+   const timed=timedViews.get(action.targets[0]),from=timed?.view||stateId,back=timed?.back||stateId,event=timed?'finish' as const:'click' as const;
+   if(action.targets[0].startsWith('new:')&&outputs.get(action.targets[0])?.locator.owned?.startsWith('view:')&&!timed)throw new Error('A screen moves on by itself only when it has a progress bar with seconds; connect one of its buttons instead.');
    if(!source){source=uid();add({id:uid(),kind:'trigger',target:target.locator,source});}
    let destination=action.destination;
    // A page of this application becomes a live screen of the workflow; clicking opens the real page.
@@ -187,11 +192,14 @@ export function compileAssistant(workflow:Workflow,stateId:string,planInput:unkn
     const existing=next.states.find(s=>s.liveURL===url||s.id===next.entry&&next.origin+next.route===url);
     if(existing)destination=existing.id;else{if(next.states.length>=next.maxStates)throw new Error('The workflow reached its screen limit.');destination=uid();next.states.push({id:destination,title:new URL(url).pathname.slice(0,120)||'Page',parent:stateId,view:'base',liveURL:url,operations:[]});}
    }
-   if(!destination){if(!action.newViewTitle?.trim())throw new Error('Choose a destination or name a new prototype view.');if(next.states.length>=next.maxStates)throw new Error('The workflow reached its screen limit.');destination=uid();const modal=action.presentation==='modal'&&!action.pageContent;next.states.push({id:destination,title:action.newViewTitle,parent:stateId,view:'panel',design:captureDesign(target.node),operations:[],...(modal?{presentation:'modal' as const}:{}),...(action.pageContent?{presentation:'screen' as const,pageContent:action.pageContent,...(action.pageContent.route?{virtualRoute:action.pageContent.route}:{})}:{})});if(action.pageContent)next.edges.push({id:uid(),from:destination,source:'page:'+destination+':back',to:stateId,event:'click'});
+   if(!destination){if(!action.newViewTitle?.trim())throw new Error('Choose a destination or name a new prototype view.');if(next.states.length>=next.maxStates)throw new Error('The workflow reached its screen limit.');destination=uid();const modal=action.presentation==='modal'&&!action.pageContent;
+    // A modal opened from inside another modal takes its place instead of stacking on it; closing still returns to it.
+    let under=back;while(modal&&next.states.find(s=>s.id===under)?.presentation==='modal'){const parent=next.states.find(s=>s.id===under)?.parent;if(!parent)break;under=parent;}
+    next.states.push({id:destination,title:action.newViewTitle,parent:under,view:'panel',design:captureDesign(target.node),operations:[],...(modal?{presentation:'modal' as const}:{}),...(action.pageContent?{presentation:'screen' as const,pageContent:action.pageContent,...(action.pageContent.route?{virtualRoute:action.pageContent.route}:{})}:{})});if(action.pageContent)next.edges.push({id:uid(),from:destination,source:'page:'+destination+':back',to:back,event:'click'});
     // A modal closes back to the page it opened from, and its contents are built with it.
-    if(modal){next.edges.push({id:uid(),from:destination,source:'modal:'+destination+':close',to:stateId,event:'click'});if(action.block){const block=withIds(action.block),modalState=next.states.find(s=>s.id===destination)!;modalState.operations.push(OperationSchema.parse({id:uid(),kind:'insert',target:owned('view:'+destination),position:'inside',node:{id:uid(),kind:'panel',text:action.newViewTitle,block,appearance:{display:'block','box-sizing':'border-box',width:'100%','max-width':'100%','min-width':'0',height:'auto',padding:'0',margin:'0','font-family':'inherit',color:'inherit'}}}));}}}
+    if(modal){next.edges.push({id:uid(),from:destination,source:'modal:'+destination+':close',to:back,event:'click'});if(action.block){const block=withIds(action.block),modalState=next.states.find(s=>s.id===destination)!;const timer=block.nodes.find(part=>part.type==='progress'&&part.seconds);if(action.resultRef){outputs.set(action.resultRef,{node:target.node,id:timer?.id||'view:'+destination,locator:owned(timer?.id||'view:'+destination)});if(timer)timedViews.set(action.resultRef,{view:destination,back});}modalState.operations.push(OperationSchema.parse({id:uid(),kind:'insert',target:owned('view:'+destination),position:'inside',node:{id:uid(),kind:'panel',text:action.newViewTitle,block,appearance:{display:'block','box-sizing':'border-box',width:'100%','max-width':'100%','min-width':'0',height:'auto',padding:'0',margin:'0','font-family':'inherit',color:'inherit'}}}));}}}
    if(!next.states.some(s=>s.id===destination))throw new Error('That destination no longer exists.');
-   next.edges=next.edges.filter(e=>e.from!==stateId||e.source!==source);next.edges.push({id:uid(),from:stateId,source,to:destination,event:'click'});
+   next.edges=next.edges.filter(e=>e.from!==from||e.source!==source);next.edges.push({id:uid(),from,source,to:destination,event});
    // A real application page opens when the connection is used; editing stays on the current page.
    if(!next.states.find(s=>s.id===destination)?.liveURL){view=destination;nextState=destination;}
   }else{

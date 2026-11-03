@@ -290,8 +290,8 @@ export class Renderer {
   }
   captureClick=(event:MouseEvent)=>{
     // Tiles, choices and disclosures inside composed blocks keep local prototype state.
-    // A tab also follows its connection, if it has one, after showing itself selected.
-    if(blockInteract(event.target)&&!(event.target instanceof Element&&event.target.closest('[data-dx-tab]'))){event.preventDefault();event.stopImmediatePropagation();return;}
+    // A tab or menu item also follows its connection, if it has one, after showing its new state.
+    if(blockInteract(event.target)&&!(event.target instanceof Element&&event.target.closest('[data-dx-tab],[data-dx-menu-item]'))){event.preventDefault();event.stopImmediatePropagation();return;}
     const target=event.target instanceof Element?this.findOwned(event.target):null;
     if(!target) return;
     const link=event.target instanceof Element?event.target.closest('a[href]'):null;if(link&&this.idFor(link))return;

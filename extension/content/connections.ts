@@ -5,6 +5,8 @@ export function fieldFor(el:Element|null):FormControl|null{
   return field instanceof HTMLInputElement||field instanceof HTMLTextAreaElement||field instanceof HTMLSelectElement?field:null;
 }
 export function eventsFor(el:HTMLElement):ConnectionEvent[]{
+  // A timed progress bar moves on by itself when it fills.
+  if(el.matches('[data-dx-live="progress"]'))return ['finish'];
   if(el.matches('button,a,[role="button"],[role="link"]'))return ['click'];
   const field=fieldFor(el);if(field)return field.matches('select,input[type=checkbox],input[type=radio]')?['change']:['enter','change'];
   // Any other element, such as a card or section, can open a screen when clicked.

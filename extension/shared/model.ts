@@ -78,7 +78,7 @@ export type VisitedScreen=z.infer<typeof VisitedScreenSchema>;
 export type ScreenLibrary={screens:VisitedScreen[];candidate:VisitedScreen|null;browsing:boolean;error:string};
 export const StateSchema = z.object({ pageContent:PrototypePageSchema.optional(),virtualRoute:z.string().max(200).regex(/^\/(?!\/)[a-zA-Z0-9/_-]*$/).optional(),tagged:z.boolean().optional(),liveURL:LinkURLSchema.refine(v=>/^https?:/.test(v)).optional(),id, title: label, parent: id.nullable(), view: z.enum(['base','panel']), presentation:z.enum(['screen','modal']).optional(),screen:z.object({id,url:LinkURLSchema,title:label,thumbnail:VisitedScreenSchema.shape.thumbnail,capturedAt:z.string().max(50)}).strict().optional(),design:NativeDesignSchema.optional(), operations: z.array(OperationSchema).max(200) }).strict();
 export const ConnectionConditionSchema=z.object({target:LocatorSchema,test:z.enum(['checked','unchecked','filled','valid','equals']),value:z.string().max(300).optional()}).strict().refine(c=>c.test!=='equals'||c.value!==undefined,'Enter a comparison value.');
-export const ConnectionEventSchema=z.enum(['click','change','enter']);
+export const ConnectionEventSchema=z.enum(['click','change','enter','finish']);
 export const ConnectionSpecSchema=z.object({to:id.optional(),newTitle:label.optional(),screen:VisitedScreenSchema.optional(),event:ConnectionEventSchema,conditions:z.array(ConnectionConditionSchema).max(8),otherwise:id.optional()}).strict().refine(c=>[c.to,c.newTitle,c.screen].filter(Boolean).length===1,'Choose one existing view, capture a screen or create a new view.');
 export type ConnectionCondition=z.infer<typeof ConnectionConditionSchema>;
 export type ConnectionEvent=z.infer<typeof ConnectionEventSchema>;
