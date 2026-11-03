@@ -523,8 +523,10 @@ export class Session {
       // One level deep: opens a card, modal, menu, tab or expander of the app so the assistant can see and change what it shows. Never anything that changes data or leaves the page.
       const el=this.assistant?.collector.get(c.ref);if(!el)throw new Error('That control is no longer on the page.');
       const control=el.closest<HTMLElement>('button,summary,[role=button],[role=tab],[role=menuitem],[aria-haspopup],[aria-expanded],a')||el,label=(control.getAttribute('aria-label')||control.textContent||'').replace(/\s+/g,' ').trim();
-      if(/\b(delete|remove|send|submit|save|pay|purchase|buy|checkout|publish|archive|log ?out|sign ?out|unsubscribe|cancel subscription|confirm|approve|reject)\b/i.test(label))throw new Error(`I won’t click “${label.slice(0,60)}”, because it may change real data. Open it yourself, then ask again.`);
-      const link=control.closest('a[href]');if(link&&!/^#|^javascript:void/.test(link.getAttribute('href')||''))throw new Error('That opens another page. Go there first, then ask again.');
+      // A control that changes real data is clicked only after the user confirms that one click; the panel asks.
+      if(!c.confirmed&&/\b(delete|remove|send|submit|save|pay|purchase|buy|checkout|publish|archive|log ?out|sign ?out|unsubscribe|cancel subscription|confirm|approve|reject)\b/i.test(label))throw new Error('CONFIRM:'+label.slice(0,80));
+      // Links may open other pages of this app, never other sites.
+      const link=control.closest<HTMLAnchorElement>('a[href]');if(link){const href=link.getAttribute('href')||'';if(!/^#|^javascript:void/.test(href)){let target:URL;try{target=new URL(href,location.href);}catch{throw new Error('That link can’t be opened.');}if(target.origin!==location.origin)throw new Error('That link goes to another site, so Wandel won’t follow it.');}}
       // The click reaches the app's own handler; Wandel's selection is bypassed as it is for forwarded clicks.
       this.renderer.forwarding=true;try{control.click();}finally{this.renderer.forwarding=false;}
       await new Promise<void>(resolve=>{let quiet:ReturnType<typeof setTimeout>;const done=()=>{watcher.disconnect();clearTimeout(limit);resolve();};const watcher=new MutationObserver(()=>{clearTimeout(quiet);quiet=setTimeout(done,450);});watcher.observe(document.documentElement,{subtree:true,childList:true,attributes:true});quiet=setTimeout(done,700);const limit=setTimeout(done,3500);});

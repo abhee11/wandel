@@ -62,6 +62,9 @@ export function AssistantPanel({bridge,snapshot,onSave,onBusyChange}:{bridge:Bri
   if(interrupted&&!moved)updateTurn(interrupted.id,{status:'stopped',error:'The screen changed before this finished.',retryable:true});
   if(moved)setTimeout(()=>void submit(moved.text,undefined,false,undefined,moved.id),0);
   activeRequest.current=null;sending.current=false;epoch.current++;abort.current?.abort();stopPreview.current?.();stopPreview.current=null;voice.current?.cancel();voiceHeld.current=false;setBusy(false);setListening(false);setStartingVoice(false);setClarification(null);clarificationRequest.current=null;pending.current='';setInstruction('');setError('');setMessage('Ask about the layout, or select an element for focused feedback.');},[scope]);
+ // A request that opened a link carries on here, on the page it opened, once.
+ useEffect(()=>{const store=typeof chrome!=='undefined'?chrome.storage?.session:undefined,key='wandel:crawl:'+(new URL(location.href).searchParams.get('tabId')||'');if(!store)return;
+  void store.get(key).then(saved=>{const pending=saved[key] as {text:string;name:string;at:number}|undefined;if(!pending)return;void store.remove(key);if(Date.now()-pending.at>90000)return;setTimeout(()=>void submit(pending.text+`\n(Wandel opened “${pending.name}” to continue this request. Continue it on this page; do not open anything else.)`),1500);});},[]);
  // A watched click: its result is the design reference, taken while it is still open, and a request waiting on it resumes.
  const watchedId=snapshot.watched?.id;
  useEffect(()=>{if(!watchedId)return;const waiting=watchRequest.current;watchRequest.current=null;void (async()=>{try{const shot=await capture(await context());if(shot){referenceRef.current=shot;setReferenceImage(shot);}}catch{/* the capture still works without a screenshot */}if(waiting)setTimeout(()=>void submit(waiting.text,undefined,false,undefined,waiting.id),0);})();},[watchedId]);
@@ -86,7 +89,21 @@ export function AssistantPanel({bridge,snapshot,onSave,onBusyChange}:{bridge:Bri
    // One level deep: the thing the user means only appears once a control of the app is opened. Wandel opens it once, then plans again on what it shows.
    if(plan.status==='open'&&plan.candidates[0]){
     const opener=c.elements.find(element=>element.ref===plan.candidates[0]),name=(opener?.name||opener?.text||'it').slice(0,60);
-    setMessage(`Opening “${name}”…`);try{await bridge.send({type:'openControl',ref:plan.candidates[0]});}catch(error){answer(error instanceof Error?error.message:'I couldn’t open that.');return;}
+    // A link may reload the page: the request is kept for this tab so the panel on the next page carries it on.
+    const crawlKey='wandel:crawl:'+(new URL(location.href).searchParams.get('tabId')||''),store=typeof chrome!=='undefined'?chrome.storage?.session:undefined;
+    if(opener?.tag==='a')await store?.set({[crawlKey]:{text:value,name,at:Date.now()}});
+    setMessage(`Opening “${name}”…`);
+    const open=async(confirmed:boolean)=>bridge.send({type:'openControl',ref:plan.candidates[0],...(confirmed?{confirmed:true}:{})});
+    try{await open(false);}catch(error){
+     const message=error instanceof Error?error.message:'';
+     // A control that changes real data needs the user's yes for this one click.
+     if(message.startsWith('CONFIRM:')){const label=message.slice(8);if(!confirm(`This will really click “${label}” in the app. It may change real data, and Wandel can’t undo it. Click it?`)){await store?.remove(crawlKey);answer('Okay, I didn’t click it. I can prototype it instead, so nothing real changes.');return;}
+      try{await open(true);}catch(again){await store?.remove(crawlKey);answer(again instanceof Error?again.message:'I couldn’t click that.');return;}}
+     // A link that reloads the page cuts this panel off mid-step: the kept request continues on the next page.
+     else if(opener?.tag==='a'&&!/another site|can’t be opened|no longer on the page/.test(message)){setMessage(`Opening “${name}”… I’ll continue there.`);return;}
+     else{await store?.remove(crawlKey);answer(message||'I couldn’t open that.');return;}
+    }
+    await store?.remove(crawlKey);
     if(request!==epoch.current)return;
     c=await context(undefined,combined);pageScreenshot=await capture(c);setMessage('Looking at what opened…');
     plan=await planConversation(combined+`\n(Wandel opened “${name}” so you can see what it shows. Continue the request on this screen; do not open anything else.)`,c,controller.signal,conversation.current.filter(turn=>turn.id!==userId),image,pageScreenshot,userId);

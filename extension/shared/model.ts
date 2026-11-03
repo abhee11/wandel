@@ -118,7 +118,7 @@ export type Command =
  | { type: 'resumeWorkflow' | 'continueWorkflowHere' | 'dismissResumeChoice' | 'validateSelection' | 'snapshot' | 'pick' | 'undo' | 'redo' | 'replay' | 'edit' | 'back' | 'save' | 'saveTemporary' | 'duplicate' | 'delete' | 'remove' | 'reset' | 'drag' | 'pause' | 'duplicateElement' | 'escape' | 'mirror' | 'selectSection' | 'selectParent' | 'signIn' }
  | {type:'new';discard?:boolean}
  | {type:'revealChange'}
- | {type:'openControl';ref:string}
+ | {type:'openControl';ref:string;confirmed?:boolean}
  | {type:'watch'}
  | {type:'watchClear'}
  | {type:'copyPrompt';prompt:string;context?:{workflowId:string;stateId:string;selection:string}}
