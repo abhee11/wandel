@@ -11,7 +11,7 @@ import {stateURL,sameApplicationURL,samePage,type LiveNavigation,type LiveContex
 import {isTextEntry,shortcutKey} from '../shared/keyboard';
 import {fieldFor,eventsFor,conditionPasses} from './connections';
 import {choicePlan} from '../ai/choicePlan';
-import {captureDesign,nativeOperations,inferDestination,readStyle} from './nativeDesign';
+import {captureDesign,nativeOperations,inferDestination,readStyle,inspectLayout} from './nativeDesign';
 import {nativeChoices} from './nativeChoices';
 import {advancedTarget,isSettingsRequest} from './settingsFeature';
 import {chooseLayout} from './layouts';
@@ -495,7 +495,9 @@ export class Session {
           const previous=this.workflow,previousState=this.stateId,dirty=this.dirty,past=[...this.history.past],future=[...this.history.future];
           // Cosmetic layout issues (clipping, spilling past a container, overlap) keep the change and flag it; only a change that did not render rolls back.
           let cosmetic='';
-          try{this.commit(next,stateId);const fatal=this.unresolved.filter(issue=>!/clipped|beyond a clipping container|overlap/i.test(issue));if(fatal.length)throw new Error('Preview could not be applied: '+fatal[0]);cosmetic=this.unresolved[0]||'';await new Promise<void>(resolve=>{const fallback=setTimeout(resolve,300);requestAnimationFrame(()=>requestAnimationFrame(()=>{clearTimeout(fallback);resolve();}));});}
+          try{this.commit(next,stateId);const fatal=this.unresolved.filter(issue=>!/clipped|beyond a clipping container|overlap/i.test(issue));if(fatal.length)throw new Error('Preview could not be applied: '+fatal[0]);cosmetic=this.unresolved[0]||'';await new Promise<void>(resolve=>{const fallback=setTimeout(resolve,300);requestAnimationFrame(()=>requestAnimationFrame(()=>{clearTimeout(fallback);resolve();}));});
+          // A menu or dialog that is still opening reports its contents as clipped; only a clip that remains once it settles is worth a warning.
+          if(/clipped|beyond a clipping container/i.test(cosmetic)){await new Promise(resolve=>setTimeout(resolve,500));cosmetic=inspectLayout(this.renderer.owned.values()).find(issue=>/clipped|beyond a clipping container/i.test(issue))||'';}}
           catch(error){this.workflow=previous;this.stateId=previousState;this.dirty=dirty;this.history.past=past;this.history.future=future;this.render(true);throw new Error(rolledBackPreview+(error instanceof Error?error.message:'The preview did not pass verification.'));}
           // A change that rendered but fails a layout check stays visible; the user decides to keep, fix or undo it.
           try{verify();}catch(error){flagged=error instanceof Error?error.message:'A layout check did not pass.';

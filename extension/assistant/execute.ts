@@ -155,12 +155,17 @@ export function compileAssistant(workflow:Workflow,stateId:string,planInput:unkn
    const card=action.description?.trim()?(findCard(source)?.description?findCard(source):plainCard(source)):null;
    let descriptionIndex:number|undefined;if(action.description?.trim()){if(card?.description&&source.contains(card.description)){descriptionIndex=identities.get(card.description);if(!same(card.description.textContent,action.description))rename(descriptionIndex,action.description);}else{descriptionIndex=copy.length;copy.push({id:uid(),parent:0,tag:'p',text:'',style:{'font-family':'inherit','font-size':'13px','line-height':'1.5',color:getComputedStyle(source).color,margin:'8px 0 0',width:'auto',height:'auto'}});copy.push({id:uid(),parent:descriptionIndex,tag:'#text',text:action.description,style:{}});}}
    // Renamed text needs room: wrappers between it and the card drop the width they had for the old text.
-   for(const index of [headingIndex,descriptionIndex])for(let i=index===undefined?0:copy[index].parent;i>0;i=copy[i].parent)if(/px$/.test(copy[i].style.width||''))copy[i].style.width='auto';
+   // A wrapper that filled its own container (a menu row's button) keeps filling it; others size to the new text.
+   const originals=new Map([...identities].map(([node,index])=>[index,node]));
+   const fillsParent=(index:number)=>{const node=originals.get(index);return node instanceof HTMLElement&&!!node.parentElement&&node.getBoundingClientRect().width>=node.parentElement.clientWidth*0.9;};
+   for(const index of [headingIndex,descriptionIndex])for(let i=index===undefined?0:copy[index].parent;i>0;i=copy[i].parent)if(/px$/.test(copy[i].style.width||''))copy[i].style.width=fillsParent(i)?'100%':'auto';
    if(action.labels.length){const buttons=[...(source.matches('button,a,[role=button],[role=link]')?[source]:source.querySelectorAll<HTMLElement>('button,a,[role=button],[role=link]'))].map(node=>identities.get(node)).filter((index):index is number=>index!==undefined);if(buttons.length!==action.labels.length)throw new Error('Specify one label per button on the copied card.');buttons.forEach((index,i)=>rename(index,action.labels[i]));}
    // Visual copies are local prototypes, not production actions or navigations.
    for(const item of copy)delete item.href;
    // A copy of the selected item is another option, not a second selection: its checkmark stays behind.
    if(selectedSource)for(const item of copy)if(item.icon)item.style.display='none';
+   // The copy is a new, unselected item: the element carrying the selected state drops the highlight it has only because it is selected.
+   if(selectedSource)for(const [node,index] of identities)if(node instanceof HTMLElement&&(node.matches(selectedMark)||/\bselected\b/i.test(node.getAttribute('aria-label')||''))){const own=getComputedStyle(node).backgroundColor,around=node.parentElement?getComputedStyle(node.parentElement).backgroundColor:'';if(own!==around)copy[index].style['background-color']='transparent';}
    // A destination (relativeTo) places the copy there, such as inside a new row; otherwise it sits beside or after its original.
    const destination=action.relativeTo?locate(action.relativeTo):null;
    const placed=action.position==='end'||action.position==='row-below'?placeAt(source,action.position):null;

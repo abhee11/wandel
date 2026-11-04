@@ -9,20 +9,21 @@ import {APIError,rateLimit} from './security';
 import {one,type DB} from './db';
 import type {Entitlements} from './entitlements';
 export type AssistantInput={instruction:string;context:PageContext;history?:ConversationHistory;feedback?:string;referenceImage?:string;pageScreenshot?:string};
-/** Only the instruction blocks the request can use: fewer rules the model must weigh, and none that pull it toward a tool the request never asked for. */
+/** The instruction blocks a request can use. Anything that is not clearly a small edit gets every block; a duplicate, rename, move, hide or restyle that adds nothing new gets only the blocks its words call for. */
 export function relevantInstructions(input:AssistantInput){
- const asked=(input.instruction+' '+(input.feedback||'')+' '+JSON.stringify(input.history||[]).slice(-2000)).toLowerCase(),has=(pattern:RegExp)=>pattern.test(asked)||!!input.referenceImage;
- // Composing a new section needs the block rules; duplicating, restyling, moving or renaming does not.
- const adding=has(/\b(add|adds|adding|create|insert|build|include|compose|new (section|card|panel|page|screen|block|form|table))\b/);
+ const request=input.instruction.toLowerCase(),asked=(request+' '+(input.feedback||'')+' '+JSON.stringify(input.history||[]).slice(-2000)).toLowerCase();
+ const adding=/\b(add|adds|adding|create|insert|build|include|compose|put|place|show|new|more|another|section|banner|modal|dialog|page|screen|form|table|chart|graph)\b/.test(asked);
+ const small=!input.referenceImage&&!adding&&/\b(duplicate|copy|copies|rename|move|swap|reorder|stack|hide|remove|delete|restyle|recolou?r|colou?r|purple|blue|red|green|black|white|grey|gray|bold|italic|bigger|smaller|larger|font|rounded|border|align|center|spacing|padding|margin|title)\b/.test(request);
+ const has=(pattern:RegExp)=>!small||pattern.test(asked);
  return [assistantInstructions,layoutInstructions,
   has(/\b(theme|dark|light|page|screen|header|redesign|rearrange|reorganize|layout|navigation|nav|region)\b/)&&pageDesignInstructions,
   referenceInstructions,
   has(/\b(grid|columns?|2x2|rows?|layout|arrange|stack|side by side|swap|reorder)\b/)&&layoutConversationInstructions,
   has(/\b(field|input|form|search|email|password|login|sign ?(in|up)|textarea|dropdown|select|checkbox|radio|date)\b/)&&fieldInstructions,
   conversationInstructions,
-  has(/\b(page|screen|header|footer)\b/)&&has(/\b(chart|graph|plot|metrics?|dashboard|report)\b/)&&prototypePageInstructions,
-  has(/\b(chart|graph|plot|metrics?|stats?|dashboard|analytics|data|trend)\b/)&&chartSectionInstructions,
-  adding&&blockInstructions,
+  has(/\b(chart|graph|plot|dashboard)\b/)&&prototypePageInstructions,
+  has(/\b(chart|graph|plot|metrics?|stats?|dashboard|analytics|trend)\b/)&&chartSectionInstructions,
+  has(/\b(block|section)\b/)&&blockInstructions,
   continuityInstructions,completionInstructions].filter(Boolean).join('\n');
 }
 export interface AssistantProvider{verify?(input:{instruction:string;plan:AssistantPlan;before:string;after:string;reference?:string}):Promise<VisualVerdict>;plan(input:AssistantInput):Promise<AssistantPlan>;transcribe(wav:Uint8Array):Promise<string>;}
