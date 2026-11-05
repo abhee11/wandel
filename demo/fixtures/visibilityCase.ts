@@ -123,6 +123,20 @@ const cases:Record<string,()=>Promise<Result>>={
   let blocked='';try{await session.dispatch({type:'undo'});}catch(error){blocked=error instanceof Error?error.message:'';}
   const banner=document.querySelector<HTMLElement>('[role=alert][data-dx-ignore]'),visible=!!banner&&banner.getBoundingClientRect().height>0&&/another tab/.test(banner.textContent||'');
   return check(kept&&warned&&visible&&/another tab/.test(blocked),`Other tab’s save kept: ${kept}; warned: ${warned}; banner visible: ${visible}; further edits blocked: ${!!blocked}.`);
+ },
+ async 'A click behind a prototype modal never reaches the page'(){
+  const {home}=await homeRefs();let reached=0;
+  const library=[...document.querySelectorAll<HTMLElement>('nav button')].find(button=>button.textContent==='Library')!;library.addEventListener('click',()=>{reached++;});
+  const node=(parent:number,type:string,text:string|null)=>({parent,type,text,detail:null,icon:null,variant:null,tone:null,level:null,columns:null,justify:null,selected:null,options:null,items:null,action:null,src:null,value:null,min:null,max:null,seconds:null,html:null,css:null});
+  const applied=await apply([{kind:'connect',targets:[home],newViewTitle:'Prototype modal',presentation:'modal',block:{accent:'#7B29FF',nodes:[node(-1,'stack',null),node(0,'text','Inside the modal')]}}]);
+  if(applied!=='OK')return check(false,'Rolled back: '+applied);
+  await session.dispatch({type:'interact'});
+  const shown=!!document.querySelector('[role=dialog][data-dx-owned]');
+  library.click();await frames();
+  const behind=reached;
+  const close=[...document.querySelectorAll<HTMLElement>('[role=dialog][data-dx-owned] button')].find(button=>/close/i.test(button.getAttribute('aria-label')||''));
+  press(close);await frames();library.click();await frames();
+  return check(shown&&behind===0&&reached===1,`Modal shown: ${shown}; clicks through it: ${behind}; page works again once closed: ${reached===1}.`);
  }
 };
 const name=new URL(location.href).searchParams.get('case')||'';

@@ -17,7 +17,7 @@ Each row is one request, typed as written. Pass means it works when clicked thro
 | ID | Request | Pass looks like | Stretches | How | Status | Result |
 |---|---|---|---|---|---|---|
 | B1 | Build an analytics dashboard page from the General dropdown: a KPI row, two charts, a table of students, and a date filter with mock data | Page opens from the dropdown, keeps the left panel, all parts visible, General returns | Many parts in one plan (12 action cap) | AI, Panel | ⚠️ | One plan, 1 AI request (page hooks, no panel review). KPIs, two charts, 6-student table, date picker, left panel kept; General and Analytics switch both ways; survives reload. Problems: the date filter selects but changes nothing (the reply and page both say so honestly, see the prototype data gap); the plan removed the Activity row, leaving a blank band; false clipping warning again; chart text sits about 40px inside the other cards |
-| B2 | Clicking New Activity should open a 3-step wizard: name and date, pick a template, review. Include Next, Back, Cancel and a progress indicator | Steps go forward and back, Cancel closes, entered values show on the review step | Multi-screen modal, values carried across steps | AI, Panel | ⬜ | |
+| B2 | Clicking New Activity should open a 3-step wizard: name and date, pick a template, review. Include Next, Back, Cancel and a progress indicator | Steps go forward and back, Cancel closes, entered values show on the review step | Multi-screen modal, values carried across steps | AI, Panel | ⚠️ | One plan, 1 AI request (page hooks, no panel review). Wizard opens from New Activity with step labels and a progress bar; Next, Back, Cancel and X work; entries kept on Back. Problems: the review step shows a generic checklist, not the entered values, so the main pass rule fails; no Finish button; Next accepts an empty name. Testing found and fixed a safety bug: the dimmed area behind prototype modals let clicks reach the real app |
 | B3 | Add a search box above the transcript that filters the lines as I type, and shows a match count | Typing narrows lines live, count updates, clearing restores | Live behaviour tied to app content | AI, Panel | ⬜ | |
 | B4 | Build a students page with a sortable, filterable table of 10 mock students. Clicking a row opens a details drawer with their scores and a chart | Sort and filter work, each row opens its own details, drawer closes | Tables with state, per-row data | AI, Panel | ⬜ | |
 | B5 | Add a settings page from the left menu, with tabs General, Notifications and Privacy. Toggles should show or hide related options, and Save shows a confirmation | Tabs switch, toggles reveal options, Save confirms, left menu highlight moves | Tabs, toggles, nested reveal, new menu item | AI, Panel | ⬜ | |
@@ -107,6 +107,10 @@ Each row is one request, typed as written. Pass means it works when clicked thro
 | V2 | Two tabs on one workflow | Edits don't collide | Free | ✅ | Fixed: a tab no longer overwrites newer work. It shows a banner with Reload this tab and blocks edits until reloaded. Tested with two real tabs and the free fixture |
 | V3 | Share with someone else | They see the same prototype | Panel | ⬜ | |
 | V4 | Reach the 30-screen limit and the AI limit | Clear messages | Free | ⚠️ | Screen limit stops at 30 with a clear message. AI limit not tested |
+
+## Safety rule for testing
+
+Prototypes run on the real application. Before clicking a real control that a prototype takes over (New Activity, Delete, Send), confirm it is wired, and add a guard listener on that button that stops the event, so a missed intercept can never change real data.
 
 ## Already tested
 

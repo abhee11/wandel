@@ -19,6 +19,7 @@ import {freeBuild,assistantEnabled} from '../shared/build';
 import {sectionOperations} from '../ai/section';
 import {sectionTarget} from './selection';
 import {findDrop,floats,type Drop} from './dropTarget';
+const behindModal=['pointerdown','mousedown','pointerup','mouseup','click'];
 const staleTabMessage='This prototype changed in another tab. Reload this tab to continue. Changes made here since then were not saved.';
 import {compileFlow,buttonTheme} from '../ai/flow';
 import {BatchSchema} from '../ai/planSchema';
@@ -84,6 +85,7 @@ export class Session {
     this.renderer=new Renderer(root,id=>this.click(id),id=>{if(this.runningConnections)this.click(id);else{const node=this.renderer.owned.get(id);if(node)this.select(node);}});
     this.renderer.onReveal=issues=>this.revealed(issues);
     document.addEventListener('visibilitychange',this.checkStale);window.addEventListener('focus',this.checkStale);
+    for(const type of behindModal)window.addEventListener(type,this.modalGuard,true);
     this.dropMark=document.createElement('div');this.dropMark.dataset.dxIgnore='true';this.dropMark.style.cssText='position:fixed;pointer-events:none;z-index:2147483647;display:none;box-sizing:border-box;border-radius:3px;';document.documentElement.append(this.dropMark);
     this.outline=document.createElement('div');this.outline.dataset.dxIgnore='true';this.outline.style.cssText='position:fixed;pointer-events:none;z-index:2147483647;border:2px solid #6473f4;border-radius:4px;background:#6c7afa12;display:none;box-sizing:border-box;';document.documentElement.append(this.outline);
     this.selectionOutline.dataset.dxIgnore='true';this.selectionOutline.dataset.dxSelection='true';this.selectionOutline.setAttribute('aria-hidden','true');
@@ -431,13 +433,21 @@ export class Session {
       if(this.navigating)return;const from=this.stateId,workflow=this.workflow.id;this.navigating=true;
       const work=this.queue.then(async()=>{if(this.stateId!==from||this.workflow.id!==workflow){this.navigating=false;return;}try{await this.navigateState(next,[...this.visits,from]);}catch(error){this.navigating=false;this.pageEditor.notify(error instanceof Error?error.message:'Could not open the connected page.');}});this.queue=work;return;
     }
-    if(next){this.replayHistory.push(clone(this.replayData));for(const effect of (passes?edge?.effects:[])||[])this.replayData[effect.key]=effect.value;this.visits.push(this.stateId);this.stateId=next;this.selected=null;this.render(true);this.renderer.owned.get(`view:${next}`)?.scrollIntoView?.({behavior:'smooth',block:'center'});}
+    if(next){this.replayHistory.push(clone(this.replayData));for(const effect of (passes?edge?.effects:[])||[])this.replayData[effect.key]=effect.value;this.visits.push(this.stateId);this.stateId=next;this.selected=null;this.render(true);this.renderer.owned.get(`view:${next}`)?.scrollIntoView?.({behavior:'smooth',block:'center'});void this.rememberLivePosition().catch(()=>{/* The position is saved again at the next change. */});}
     else if(!this.replay){const el=this.renderer.owned.get(source);if(el)this.select(el);}
   }
   private commit(next:Workflow,nextState=this.stateId,group?:string,repaint=true) {const validated=validateWorkflow(next);if(!group||group!==this.historyGroup)this.history.push(this.workflow,this.stateId);this.historyGroup=group;this.workflow=validated;this.workflow.updatedAt=new Date().toISOString();this.stateId=nextState;this.dirty=true;if(repaint)this.render(true);this.scheduleDraft();}
   private scheduleDraft(){
     if(this.destroyed)return;    clearTimeout(this.draftTimer);this.draftPending=true;this.draftTimer=setTimeout(()=>{this.draftPending=false;const work=this.queue.then(()=>this.checkpoint());this.queue=work.catch(this.gestureError);},500);
   }
+  /** The dimming around a prototype modal is only a shadow, so the real page behind it is still there. A click on it must never reach the application. */
+  private modalGuard=(event:Event)=>{
+    if(!this.runningConnections)return;
+    const state=this.workflow.states.find(entry=>entry.id===this.stateId);if(state?.presentation!=='modal'&&state?.presentation!=='drawer')return;
+    const dialog=this.renderer.owned.get('view:'+this.stateId);if(!dialog?.isConnected)return;
+    for(const node of event.composedPath())if(node===dialog||node instanceof Element&&node.closest('[data-dx-ignore]'))return;
+    event.preventDefault();event.stopImmediatePropagation();
+  };
   /** Whether another tab saved this workflow after this tab last read or wrote it. */
   private async changedElsewhere(){
     if(this.staleTab)return true;
@@ -894,5 +904,5 @@ export class Session {
     if(editing.includes(c.type)&&!['copyPrompt','duplicateElement'].includes(c.type)&&this.assistant){const selected=this.findSelected();this.assistant.recordExternal('Manual '+c.type+' applied',selected?[selected]:[]);}
     this.emit();return this.snapshot();
   }
-  destroy(){if(this.destroyed)return;this.destroyed=true;this.staleBanner?.remove();document.removeEventListener('visibilitychange',this.checkStale);window.removeEventListener('focus',this.checkStale);this.stopWatch?.();this.assistant?.reset();this.closeComparison?.();this.closeLayouts?.();clearTimeout(this.draftTimer);window.removeEventListener('change',this.connectionChange,true);window.removeEventListener('keydown',this.connectionEnter,true);window.removeEventListener('dx-progress-done',this.progressDone,true);window.removeEventListener('input',this.inputMirror,true);window.removeEventListener('change',this.inputMirror,true);if(this.selectionFrame!==undefined)window.cancelAnimationFrame(this.selectionFrame);this.selectionFrame=undefined;window.removeEventListener('scroll',this.paintSelection,true);window.removeEventListener('resize',this.paintSelection);this.selectionOutline.remove();this.pageEditor.destroy();this.cancelDrag();window.removeEventListener('dragstart',this.nativeDrag,true);window.removeEventListener('pointerdown',this.dragStart,true);window.removeEventListener('pointermove',this.dragMove,true);window.removeEventListener('pointerup',this.dragEnd,true);window.removeEventListener('pointercancel',this.cancelDrag,true);window.removeEventListener('blur',this.blur);this.observer.disconnect();clearTimeout(this.timer);window.removeEventListener('click',this.handleClick,true);window.removeEventListener('pointermove',this.hover,true);window.removeEventListener('keydown',this.escape,true);window.removeEventListener('keyup',this.keyup,true);this.renderer.reset();this.outline.remove();this.listeners.clear();}
+  destroy(){if(this.destroyed)return;this.destroyed=true;this.staleBanner?.remove();for(const type of behindModal)window.removeEventListener(type,this.modalGuard,true);document.removeEventListener('visibilitychange',this.checkStale);window.removeEventListener('focus',this.checkStale);this.stopWatch?.();this.assistant?.reset();this.closeComparison?.();this.closeLayouts?.();clearTimeout(this.draftTimer);window.removeEventListener('change',this.connectionChange,true);window.removeEventListener('keydown',this.connectionEnter,true);window.removeEventListener('dx-progress-done',this.progressDone,true);window.removeEventListener('input',this.inputMirror,true);window.removeEventListener('change',this.inputMirror,true);if(this.selectionFrame!==undefined)window.cancelAnimationFrame(this.selectionFrame);this.selectionFrame=undefined;window.removeEventListener('scroll',this.paintSelection,true);window.removeEventListener('resize',this.paintSelection);this.selectionOutline.remove();this.pageEditor.destroy();this.cancelDrag();window.removeEventListener('dragstart',this.nativeDrag,true);window.removeEventListener('pointerdown',this.dragStart,true);window.removeEventListener('pointermove',this.dragMove,true);window.removeEventListener('pointerup',this.dragEnd,true);window.removeEventListener('pointercancel',this.cancelDrag,true);window.removeEventListener('blur',this.blur);this.observer.disconnect();clearTimeout(this.timer);window.removeEventListener('click',this.handleClick,true);window.removeEventListener('pointermove',this.hover,true);window.removeEventListener('keydown',this.escape,true);window.removeEventListener('keyup',this.keyup,true);this.renderer.reset();this.outline.remove();this.listeners.clear();}
 }

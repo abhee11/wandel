@@ -27,7 +27,7 @@ All planned and finished tests, including the complex build requests, are in `do
 - The repo's `node_modules` are macOS builds; run builds on the Mac.
 
 ## Free checks (no AI)
-`npx vite --port 5180 --host 127.0.0.1`, then open `http://127.0.0.1:5180/demo/fixtures/visibility-check.html`. Nine cases, each in a fresh frame through the real context → compile → render → verify path. Storage is cleared at the start of each run. All pass:
+`npx vite --port 5180 --host 127.0.0.1`, then open `http://127.0.0.1:5180/demo/fixtures/visibility-check.html`. Ten cases, each in a fresh frame through the real context → compile → render → verify path. Storage is cleared at the start of each run. All pass:
 1. Card hidden until a click, shown below on click, removed by Undo
 2. Toggle
 3. Hidden at load with nothing that shows it → reported (rolled back)
@@ -37,6 +37,7 @@ All planned and finished tests, including the complex build requests, are in `do
 7. New menu option opens its own page; the original option ("General") returns
 8. Dragging a card: beside, into a panel, Shift for free offset, sidebar and no slot save nothing, Undo returns it
 9. A save from another tab is not overwritten; banner shown, edits blocked
+10. A click behind a prototype modal never reaches the page
 Older fixture: `demo/fixtures/mirrortalk-group.html` (globals `context()` and `apply(actions)`).
 
 Real panel with no AI: open `demo/fixtures/assistant.html?stub=new-page`, clear storage, then call `sendToPanel(text)` from a timer and read the result in a second call (long awaits can detach Claude in Chrome). The plan call is stubbed. This fixture has no screenshot capture, so visual review does not run there.
@@ -73,6 +74,7 @@ Note: Claude in Chrome cannot work in tabs holding another extension's iframe, s
 - **False "Not completed" on new pages** (`AssistantPanel.tsx stillHere`): a request that built a page moved the workflow to it, so the panel treated its own move as the user leaving, cancelled itself and skipped the review. Moves inside the workflow during an apply no longer cancel.
 - **Free test round** (see the tracker): switcher labels survive state-based names (`atStructure`), Try flow no longer ends on Wandel's own fake Escape (`session.escape` ignores untrusted keys), menus that ignore Escape close through their own button, and large panels cannot drop into page frames (`dropTarget.ts pageFrame`).
 - **Two tabs no longer overwrite each other** (`session.ts changedElsewhere`, `warnStale`): before saving, a tab checks that storage still holds the version it last read or wrote. If not, it does not save, shows its own banner with Reload this tab, and blocks edits. The check also runs when a tab regains focus.
+- **Prototype modals block the page behind them** (`session.ts modalGuard`): the dimming is only a box-shadow, so clicks used to reach the real app through it. Prototype screen changes also save their position, so a closed modal does not return on reload.
 - The 05:25 plans were one turn with retries of a real request ("add an option to expand… the checkbox contents in the My record"), not a mystery.
 
 ## Open issues (not yet resolved)
@@ -85,8 +87,9 @@ Note: Claude in Chrome cannot work in tabs holding another extension's iframe, s
 7. **Test 5 rough edges.** The expand/collapse control is small text on a pale ellipse. This transcript has one checklist item, so "each item" is untested with several.
 8. **`status: open` plans.** `wandel:dev-chat` stops at them; the panel opens the control and replans. For a closed dropdown, open it with a real click and resend. The panel's own flow was not exercised.
 9. **MirrorTalk data moved during testing.** The quote carousel beside My Record disappeared (with zero Wandel edits on the page) and Takeaways regenerated, so saved targets there can change between runs.
-10. **Tabs warn but do not sync.** A stale tab keeps its unsaved edit on screen until reloaded, and that edit is lost. Live sync between tabs was not built.
-11. **Review after a new page is unconfirmed.** The false cancel is fixed in the fixture, but only the real panel can show the review running on the new page. In the owner's panel run, review also answered "uncertain" when the panel covered the changed controls.
-12. **Next panel test not run yet:** repeat the General request, follow-up "Add a graph with mock data to that page", switch back and forth, Undo from the panel, then save and reopen. Also untested in the panel: failure recovery. Conversation mode (hands-free turns on top of push-to-talk) is proposed for after that.
-13. Owner asked: on a menu item click, the highlight should move to the clicked item (and back), like a real sidebar. Not built; owner hasn't confirmed.
-14. Older gaps: nearest-style rule unconfirmed on a real page; neighbour check compares only size/position; core instructions not reviewed for contradictions; copies of tabs/toggles in their "on" state may copy the active look; not deployed (Railway runs old code; hosted zip needs rebuilding — see `scripts/` and env vars `WANDEL_APP_ORIGIN`, `API_ORIGIN`, `CLERK_SYNC_HOST`, `WANDEL_EXTENSION_KEY`).
+10. **Prototypes cannot show entered data elsewhere.** B1's date filter changes nothing and B2's review step cannot show typed values. Likely blocks B8, B9 and B11 too.
+11. **Tabs warn but do not sync.** A stale tab keeps its unsaved edit on screen until reloaded, and that edit is lost. Live sync between tabs was not built.
+12. **Review after a new page is unconfirmed.** The false cancel is fixed in the fixture, but only the real panel can show the review running on the new page. In the owner's panel run, review also answered "uncertain" when the panel covered the changed controls.
+13. **Next panel test not run yet:** repeat the General request, follow-up "Add a graph with mock data to that page", switch back and forth, Undo from the panel, then save and reopen. Also untested in the panel: failure recovery. Conversation mode (hands-free turns on top of push-to-talk) is proposed for after that.
+14. Owner asked: on a menu item click, the highlight should move to the clicked item (and back), like a real sidebar. Not built; owner hasn't confirmed.
+15. Older gaps: nearest-style rule unconfirmed on a real page; neighbour check compares only size/position; core instructions not reviewed for contradictions; copies of tabs/toggles in their "on" state may copy the active look; not deployed (Railway runs old code; hosted zip needs rebuilding — see `scripts/` and env vars `WANDEL_APP_ORIGIN`, `API_ORIGIN`, `CLERK_SYNC_HOST`, `WANDEL_EXTENSION_KEY`).
