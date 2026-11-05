@@ -1,4 +1,5 @@
 import {FloatingPanel} from './floatingPanel';
+import {isLocalDev} from '../sidepanel/devReload';
 import {createRuntimeChannel} from './runtimeChannel';
 import {registerShareRelay} from './shareRelay';
 import {accountConfig} from '../shared/accountConfig';
@@ -24,6 +25,8 @@ for(const type of ['pointerdown','keydown','pointermove'])window.addEventListene
 const session=new Session(document.body,new Repository((freeBuild?new PersistentChromeStorage(send):new TemporaryChromeStorage(send))),new URL(location.href),{historyStore:{read:async workflowId=>(await send({type:'WANDEL_HISTORY',action:'read',workflowId}))?.value,write:async(workflowId,value)=>{await send({type:'WANDEL_HISTORY',action:'write',workflowId,value});}},liveNavigation:new ChromeLiveNavigation(send),externalConnections:true,requestConnections:async()=>{const result=await send({type:'WANDEL_OPEN_CONNECTIONS'});if(result?.error)throw new Error(result.error);},...(freeBuild?{}:{requestSignIn:async()=>{const result=await send({type:'WANDEL_SIGN_IN_REQUEST'});if(result?.error)throw new Error(result.error);},requestPlan:async(prompt,selection)=>{const result=await send({type:'WANDEL_PLAN_REQUEST',prompt,selection});if(!result)throw new Error('Open the Wandel panel to use the connected planner.');if(result.error)throw new Error(result.error);return result.plan;}}),requestSectionChat:(rect,label)=>{void send({type:'WANDEL_INLINE_STATUS'}).then(status=>{if(status?.tabId){floatingPanel.show(status.tabId);floatingPanel.focusSection(rect,label);}}).catch(ignore);},requestClose:async()=>{if(session.snapshot().panelMinimized)floatingPanel.collapse(true);else{floatingPanel.destroy();void send({type:'WANDEL_INLINE_CLOSE'}).catch(ignore);}const result=await send({type:'WANDEL_COLLAPSE'});if(result?.error)throw new Error(result.error);},requestSave:()=>{send({type:'WANDEL_SAVE_REQUEST'}).catch(()=>{});}});
 const floatingPanel=new FloatingPanel(()=>{void send({type:'WANDEL_INLINE_CLOSE'}).catch(ignore);},()=>{void ready.then(()=>session.dispatch({type:'restorePanel'})).catch(ignore);});
 const ready=session.init();
+// Local development: a page event opens the Wandel panel, so browser automation can test end to end.
+if(isLocalDev())window.addEventListener('wandel:dev-open',()=>{void send({type:'WANDEL_OPEN_CONNECTIONS'}).catch(ignore);},{signal:lifecycle.signal});
 void ready.then(()=>send({type:'WANDEL_INLINE_STATUS'})).then(status=>{if(status?.open)floatingPanel.show(status.tabId);}).catch(ignore);
 void ready.then(()=>{if(!channel.available())session.destroy();}).catch(ignore);
 const browserControls=new DestinationBrowserControls(document,async action=>{const result=await send({type:'WANDEL_BROWSER_FINISH',action});if(!result?.ok)throw new Error(result?.error||'This browsing session has ended. Return to Wandel.');});
