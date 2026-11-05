@@ -49,6 +49,11 @@ export function describe(el:Element,ownedId?:string):Selection {
   if(popup)locator.popup={role:popup.getAttribute('role') as 'listbox'|'menu',id:popup.id,label:popup.getAttribute('aria-label')||''};
   return {locator,label:locator.name||text||locator.tag,tag:locator.tag,owned:!!ownedId};
 }
+/** A saved reference that still finds an element when its text changes or siblings share a generated class. */
+export function stableLocator(el:Element,ownedId?:string):Locator{
+ const locator=describe(el,ownedId).locator;if(ownedId)return locator;
+ locator.structure=structuralIdentity(el);const classes=el.getAttribute('class');if(classes)locator.attrs.class=classes;return locator;
+}
 function parentScore(el:Element,l:Locator) {
   const p=el.parentElement; if(!p) return 0;
   return (l.parent.id && p.id===l.parent.id?25:0)+(l.parent.role && roleOf(p)===l.parent.role?10:0)+(l.parent.label && p.getAttribute('aria-label')===l.parent.label?15:0)+(l.parent.tag===p.tagName.toLowerCase()?3:0);

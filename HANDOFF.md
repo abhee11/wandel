@@ -24,7 +24,7 @@ A Chrome extension and server. The user types a design change in a panel ("dupli
 - The repo's `node_modules` are macOS builds; run builds on the Mac.
 
 ## Free checks (no AI)
-`npx vite --port 5180 --host 127.0.0.1`, then open `http://127.0.0.1:5180/demo/fixtures/visibility-check.html`. Seven cases, each in a fresh frame through the real context → compile → render → verify path. All pass as of `3c6ca1d`:
+`npx vite --port 5180 --host 127.0.0.1`, then open `http://127.0.0.1:5180/demo/fixtures/visibility-check.html`. Eight cases, each in a fresh frame through the real context → compile → render → verify path. Storage is cleared at the start of each run. All pass:
 1. Card hidden until a click, shown below on click, removed by Undo
 2. Toggle
 3. Hidden at load with nothing that shows it → reported (rolled back)
@@ -32,6 +32,7 @@ A Chrome extension and server. The user types a design change in a panel ("dupli
 5. New menu item with no destination shows a hidden card
 6. Copy of an icon-only sidebar item named X (label visible, no borrowed icon)
 7. New menu option opens its own page; the original option ("General") returns
+8. Dragging a card: beside, into a panel, Shift for free offset, no slot saves nothing, Undo returns it
 Older fixture: `demo/fixtures/mirrortalk-group.html` (globals `context()` and `apply(actions)`).
 
 ## Diagnosing without asking the owner
@@ -61,12 +62,13 @@ Note: Claude in Chrome cannot work in tabs holding another extension's iframe, s
 - **Popups no longer break targets** (`locator.ts`, `nativeDesign.ts visible`): an open menu marks the page aria-hidden, which made outside targets "missing" and showed "N elements can't be seen". Addresses also ignore Wandel's own inserted elements. `remove “name”: target missing` now names its target.
 - **`reset` clears `assistantMemory`.**
 - **Test 5:** expand/collapse on the My Record item, and manual rename, delete and chat move, all work with Undo and survive reload.
+- **Drag is a real move** (`content/dropTarget.ts`, `session.ts dragEnd`, command `move`): dropping saves a `reorder`, so the page reflows. Over a panel, the outer quarter drops beside it and the middle drops inside. Gaps use the nearest neighbour within 120px; smaller elements join the content around them. Wrapper cells holding one element move with it, and full-cover click overlays are ignored. No slot = snaps back, saving nothing. Shift, or an absolute/fixed element, keeps the old x/y offset. Before committing, both saved locators must resolve to the exact elements.
 - The 05:25 plans were one turn with retries of a real request ("add an option to expand… the checkbox contents in the My record"), not a mystery.
 
 ## Open issues (not yet resolved)
 1. **Card placement differs between requests.** "Below the current section" put Home Options at the very bottom but Quick Notes between Participant Reflection and Plan and Setup. Home Options also sat about 12px inside the cards above it.
 2. **Revealed content can be off screen.** Quick Notes opens about 1,190px down the page, so on a laptop-sized window clicking My Record seems to do nothing unless you scroll.
-3. **Dragging a panel only offsets it.** Edit mode's Move stores an x/y style: the card floats over its neighbours and keeps its slot, so a panel cannot be dragged into another panel or position. A chat request ("move X to the left of Y") does a real reorder and works.
+3. **Drag indicator not seen by eye.** The drop line and panel highlight are painted during the drag; automation only sees the result, so nobody has looked at them mid-drag yet.
 4. **The old-workflow click is unexplained.** Before the locator fix, clicking My Record on the 05:24 workflow opened the transcript instead of toggling. That workflow is gone; not seen on new runs.
 5. **Toggle first click after reload: cause not proven.** It failed once, and passed 3 of 3 after the locator fix. Likely the same cause, but not shown directly. Watch for it.
 6. **Test 4 rough edges.** The General run removed the Activity row, leaving a blank band at the top; the Activity run kept it, so the model decides. A copied dropdown option keeps its source's date. A false "extends beyond a clipping container" warning appeared on General though nothing is clipped (page measured, no clipping ancestor).

@@ -18,6 +18,7 @@ import {chooseLayout} from './layouts';
 import {freeBuild,assistantEnabled} from '../shared/build';
 import {sectionOperations} from '../ai/section';
 import {sectionTarget} from './selection';
+import {findDrop,floats,type Drop} from './dropTarget';
 import {compileFlow,buttonTheme} from '../ai/flow';
 import {BatchSchema} from '../ai/planSchema';
 import {duplicateIntent} from '../ai/duplicateIntent';
@@ -33,7 +34,7 @@ import { PageEditor } from './pageEditor';
 import { editableText } from './text';
 import { textAlignment } from './textAlignment';
 import { Renderer } from './renderer';
-import { describe, resolve } from './locator';
+import { describe, resolve, stableLocator } from './locator';
 export class Session {
   private destroyed=false;
   private assistant:AssistantController|undefined;
@@ -68,11 +69,13 @@ export class Session {
   renderer:Renderer; private observer:MutationObserver; private timer:ReturnType<typeof setTimeout>|undefined;
   private draftTimer:ReturnType<typeof setTimeout>|undefined;
   private draftPending=false;
+  private dropMark:HTMLElement;
   private listeners=new Set<(s:Snapshot)=>void>(); private outline:HTMLElement; private queue:Promise<unknown>=Promise.resolve();
   constructor(public root:HTMLElement,public repository:Repository,public url:URL, private options:{ historyStore?:{read(id:string):Promise<unknown>;write(id:string,value:unknown):Promise<void>};assistantEnabled?:boolean;liveNavigation?:LiveNavigation;connectionViewport?:()=>{width:number;height:number};externalConnections?:boolean;requestConnections?:()=>void|Promise<void>;directSelection?:boolean;requestSectionChat?:(rect:DOMRect,label:string)=>void;requestSave?:()=>void;requestSignIn?:()=>Promise<void>;requestClose?:()=>Promise<void>;requestPlan?:(prompt:string,selection:Selection)=>Promise<unknown> } = {}) {
     this.projectionActive=!!options.directSelection;this.workflow=createWorkflow(url);this.stateId=this.workflow.entry;
     this.renderer=new Renderer(root,id=>this.click(id),id=>{if(this.runningConnections)this.click(id);else{const node=this.renderer.owned.get(id);if(node)this.select(node);}});
     this.renderer.onReveal=issues=>this.revealed(issues);
+    this.dropMark=document.createElement('div');this.dropMark.dataset.dxIgnore='true';this.dropMark.style.cssText='position:fixed;pointer-events:none;z-index:2147483647;display:none;box-sizing:border-box;border-radius:3px;';document.documentElement.append(this.dropMark);
     this.outline=document.createElement('div');this.outline.dataset.dxIgnore='true';this.outline.style.cssText='position:fixed;pointer-events:none;z-index:2147483647;border:2px solid #6473f4;border-radius:4px;background:#6c7afa12;display:none;box-sizing:border-box;';document.documentElement.append(this.outline);
     this.selectionOutline.dataset.dxIgnore='true';this.selectionOutline.dataset.dxSelection='true';this.selectionOutline.setAttribute('aria-hidden','true');
     this.selectionOutline.style.cssText='position:fixed;pointer-events:none;z-index:2147483646;border:2px solid #7770df;border-radius:4px;background:rgba(119,112,223,.10);display:none;box-sizing:border-box;';document.documentElement.append(this.selectionOutline);
@@ -199,7 +202,7 @@ export class Session {
     if(!this.selecting||!target||!((assistantEnabled||this.options.assistantEnabled)?inScope(this.root,target):this.root.contains(target))||target.closest('[data-dx-ignore]')){this.hovered=null;this.outline.style.display='none';return;}
     this.hovered=target;this.paintHover(target);
   };
-  private dragData:{el:HTMLElement;selection:Selection;mode:'move'|'resize';startX:number;startY:number;x:number;y:number;width:number;height:number;styles:{key:string;value:string;priority:string}[];dx:number;dy:number;pointerId?:number;pending:boolean}|null=null;
+  private dragData:{el:HTMLElement;selection:Selection;mode:'move'|'resize';startX:number;startY:number;x:number;y:number;width:number;height:number;styles:{key:string;value:string;priority:string}[];dx:number;dy:number;pointerId?:number;pending:boolean;floating:boolean;free?:boolean;drop?:Drop|null}|null=null;
   private suppressClick=false;
   private dimensions(el:HTMLElement){const css=getComputedStyle(el),rect=el.getBoundingClientRect();return {width:parseFloat(css.width)||rect.width||1,height:parseFloat(css.height)||rect.height||1};}
   private offset(el:HTMLElement){const parts=getComputedStyle(el).translate.split(' ').map(parseFloat);return {x:Number.isFinite(parts[0])?parts[0]:0,y:Number.isFinite(parts[1])?parts[1]:0};}
@@ -222,7 +225,7 @@ export class Session {
   beginGesture(el:HTMLElement,mode:'move'|'resize',e:PointerEvent,pending=false){
     if(!this.selecting)return;
     if(!pending){e.preventDefault();e.stopImmediatePropagation();}
-    this.dragData={el,selection:describe(el,this.renderer.idFor(el)),mode,startX:e.clientX,startY:e.clientY,...this.offset(el),...this.dimensions(el),styles:(mode==='resize'?['width','height','display']:['translate','display','position','z-index']).map(key=>({key,value:el.style.getPropertyValue(key),priority:el.style.getPropertyPriority(key)})),dx:0,dy:0,pointerId:e.pointerId,pending};
+    this.dragData={el,selection:describe(el,this.renderer.idFor(el)),mode,startX:e.clientX,startY:e.clientY,...this.offset(el),...this.dimensions(el),styles:(mode==='resize'?['width','height','display']:['translate','display','position','z-index']).map(key=>({key,value:el.style.getPropertyValue(key),priority:el.style.getPropertyPriority(key)})),dx:0,dy:0,pointerId:e.pointerId,pending,floating:mode==='move'&&floats(el)};
     if(!pending){try{el.setPointerCapture(e.pointerId);}catch{/* Synthetic events may not support pointer capture. */}this.paintHover(el,mode==='resize'?'Resizing · Esc to cancel':'Moving · Esc to cancel');}
   };
   private gestureStyle(d:NonNullable<Session['dragData']>) {return d.mode==='resize'?{width:this.bound(d.width+d.dx,1,4000),height:this.bound(d.height+d.dy,1,4000)}:{x:this.bound(d.x+d.dx,-10000,10000),y:this.bound(d.y+d.dy,-10000,10000)};}
@@ -234,18 +237,33 @@ export class Session {
     e.preventDefault();e.stopImmediatePropagation();
     const style=this.gestureStyle(d);
     if('width' in style){if(getComputedStyle(d.el).display==='inline')d.el.style.setProperty('display','inline-block','important');d.el.style.setProperty('width',`${style.width}px`,'important');d.el.style.setProperty('height',`${style.height}px`,'important');}
-    else {d.el.style.setProperty('position',getComputedStyle(d.el).position==='static'?'relative':getComputedStyle(d.el).position,'important');d.el.style.setProperty('z-index','1000','important');if(getComputedStyle(d.el).display==='inline')d.el.style.setProperty('display','inline-block','important');d.el.style.setProperty('translate',`${style.x}px ${style.y}px`,'important');}
-    this.paintHover(d.el,d.mode==='resize'?`${Math.round(d.width+d.dx)} × ${Math.round(d.height+d.dy)} px · Esc to cancel`:'Moving · Esc to cancel');
+    else {d.free=e.shiftKey||d.floating;d.drop=d.free?null:findDrop(d.el,e.clientX,e.clientY,this.root);d.el.style.setProperty('position',getComputedStyle(d.el).position==='static'?'relative':getComputedStyle(d.el).position,'important');d.el.style.setProperty('z-index','1000','important');if(getComputedStyle(d.el).display==='inline')d.el.style.setProperty('display','inline-block','important');d.el.style.setProperty('translate',`${style.x}px ${style.y}px`,'important');this.paintDrop(d.drop||null);}
+    this.paintHover(d.el,d.mode==='resize'?`${Math.round(d.width+d.dx)} × ${Math.round(d.height+d.dy)} px · Esc to cancel`:d.free?'Moving freely · Esc to cancel':d.drop?'Release to drop here · Shift for free position · Esc to cancel':'Drag onto a panel or between items · Shift for free position · Esc to cancel');
   };
+  /** Shows where the element will land: a line beside its new neighbour, or a highlight on the panel it joins. */
+  private paintDrop(drop:Drop|null){
+    if(!drop){this.dropMark.style.display='none';return;}
+    const box=drop.anchor.getBoundingClientRect(),end=drop.position==='after',thick=4;
+    const area=drop.position==='inside'?{left:box.left,top:box.top,width:box.width,height:box.height,border:'3px solid #6473f4',background:'#6c7afa22'}:{border:'0',background:'#6473f4',...(drop.axis==='horizontal'?{left:(end?box.right:box.left)-thick/2,top:box.top,width:thick,height:box.height}:{left:box.left,top:(end?box.bottom:box.top)-thick/2,width:box.width,height:thick})};
+    Object.assign(this.dropMark.style,{display:'block',left:`${area.left}px`,top:`${area.top}px`,width:`${area.width}px`,height:`${area.height}px`,border:area.border,background:area.background});
+  }
   private cancelDrag=()=>{
     const d=this.dragData;if(d){for(const {key,value,priority} of d.styles){if(value)d.el.style.setProperty(key,value,priority);else d.el.style.removeProperty(key);}try{if(d.pointerId!==undefined)d.el.releasePointerCapture(d.pointerId);}catch{/* Pointer may already be released. */}}
-    this.dragData=null;this.outline.style.display='none';
+    this.dragData=null;this.outline.style.display='none';this.paintDrop(null);
   };
   private gestureError=(error:unknown)=>{this.unresolved=[error instanceof Error?error.message:'Gesture could not be applied.'];this.emit();};
   private dragEnd=(e:PointerEvent)=>{
     const d=this.dragData;if(!d)return;if(d.pending){this.dragData=null;return;}e.preventDefault();e.stopImmediatePropagation();this.cancelDrag();
     this.suppressClick=true;setTimeout(()=>{this.suppressClick=false;},0);
-    if(Math.abs(d.dx)+Math.abs(d.dy)>2){this.selected=d.selection;void this.dispatch({type:'style',style:this.gestureStyle(d)}).catch(this.gestureError);}
+    if(Math.abs(d.dx)+Math.abs(d.dy)<=2)return;
+    this.selected=d.selection;
+    if(d.mode==='resize'||d.free){void this.dispatch({type:'style',style:this.gestureStyle(d)}).catch(this.gestureError);return;}
+    // With no slot under the pointer the element simply goes back; it never lands in a place the layout doesn't hold.
+    if(!d.drop)return;
+    const target=stableLocator(d.drop.item,this.renderer.idFor(d.drop.item)),anchor=stableLocator(d.drop.anchor,this.renderer.idFor(d.drop.anchor));
+    // These references are what the move replays from, so they must find exactly these two elements.
+    if(resolve(target,this.root,this.renderer.owned)!==d.drop.item||resolve(anchor,this.root,this.renderer.owned)!==d.drop.anchor){this.gestureError(new Error('These items can’t be told apart reliably, so nothing was moved. Try a nearby spot, or hold Shift for free position.'));return;}
+    void this.dispatch({type:'move',target,anchor,position:d.drop.position}).catch(this.gestureError);
   };
   private keyup=(e:KeyboardEvent)=>{const key=shortcutKey(e);if(!key)return;if(e.code==='KeyS'||key==='s')this.resizeHeld=false;};
   private blur=()=>{this.resizeHeld=false;this.cancelDrag();};
@@ -486,9 +504,9 @@ export class Session {
     if(this.navigationError&&!['snapshot','new','reset'].includes(c.type))throw new Error(this.navigationError);
     if(['reset','new'].includes(c.type)){this.navigationError='';this.pausedWorkflow=null;await this.options.liveNavigation?.clear();this.liveSession=false;}
     if(this.dragData&&c.type!=='snapshot')this.cancelDrag();
-    const editing=['appearance','alignText','insertElement','fieldSettings','pasteStyle','image','prompt','text','child','link','undo','redo','style','remove','drag','duplicateElement','copyPrompt','mirror'];
+    const editing=['appearance','alignText','insertElement','fieldSettings','pasteStyle','image','prompt','text','child','link','undo','redo','style','remove','move','drag','duplicateElement','copyPrompt','mirror'];
     if(editing.includes(c.type)&&this.replay)throw new Error('Return to Edit to change the workflow.');
-    if(['appearance','alignText','insertElement','fieldSettings','pasteStyle','image','prompt','text','child','link','style','remove','drag','duplicateElement','copyPrompt','mirror'].includes(c.type)&&!this.enabled)throw new Error('Enable the workflow before editing.');
+    if(['appearance','alignText','insertElement','fieldSettings','pasteStyle','image','prompt','text','child','link','style','remove','move','drag','duplicateElement','copyPrompt','mirror'].includes(c.type)&&!this.enabled)throw new Error('Enable the workflow before editing.');
     if(c.type==='connectionAnchor'){this.pageEditor.connectionAnchor(c.ratio);return this.snapshot();}
     if(c.type==='snapshot')return this.snapshot();
     if(c.type==='previewOriginal'){this.previewOriginal=c.value;this.cancelDrag();this.selected=null;this.hovered=null;this.closeComparison?.();this.render(true);return this.snapshot();}
@@ -722,6 +740,12 @@ export class Session {
       if(c.type==='style'&&c.group&&c.group===this.historyGroup){const previous=this.workflow.states.find(st=>st.id===this.stateId)!.operations.at(-1);if(previous?.kind==='style'&&JSON.stringify(previous.target)===JSON.stringify(locator)){next=clone(this.workflow);next.states.find(st=>st.id===this.stateId)!.operations.splice(-1,1,{...previous,style:{...previous.style,...c.style}});}}
       this.commit(next,this.stateId,c.type==='style'?c.group:undefined);
       if(c.type==='remove'){this.selected=null;this.dragging=false;}else{const el=resolve(locator,this.root,this.renderer.owned);if(el){this.hovered=el;this.select(el);this.historyGroup=c.type==='style'?c.group:undefined;}}
+    }
+    else if(c.type==='move'){
+      const target=resolve(c.target,this.root,this.renderer.owned),anchor=resolve(c.anchor,this.root,this.renderer.owned);
+      if(!target||!anchor||target===anchor||target.contains(anchor))throw new Error('Choose a different place to move this to.');
+      this.commit(addOperation(this.workflow,this.stateId,OperationSchema.parse({id:uid(),kind:'reorder',target:c.target,anchor:c.anchor,position:c.position})),this.stateId);
+      const moved=resolve(c.target,this.root,this.renderer.owned);if(moved){this.hovered=moved;this.select(moved);}
     }
     else if(c.type==='mirror'){
       if(!this.selected?.owned)throw new Error('Duplicate a button or field first, then mirror its behavior.');

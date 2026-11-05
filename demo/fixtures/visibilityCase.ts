@@ -80,6 +80,33 @@ const cases:Record<string,()=>Promise<Result>>={
   press(option('General'));await frames();const original=(await snap()).stateId,back=original!==testPage&&title()==='General';
   press(option('Test'));await frames();const again=(await snap()).stateId===testPage&&title()==='Test';
   return check(back&&again,`General returned: ${back}; Test opened its page again: ${again}`);
+ },
+ async 'Dragging a card moves it in the layout, into a panel, and Undo returns it'(){
+  await ready;await session.dispatch({type:'edit'});
+  const cards=()=>[...document.querySelectorAll<HTMLElement>('section.cards > *')],first=cards()[0],second=cards()[1];
+  const at=(el:HTMLElement,xRatio:number,yRatio:number)=>{const box=el.getBoundingClientRect();return {clientX:box.left+box.width*xRatio,clientY:box.top+box.height*yRatio};};
+  const drag=async(el:HTMLElement,to:{clientX:number;clientY:number},shiftKey=false)=>{
+   press(el);await frames();const start=at(el,.5,.5),common={bubbles:true,cancelable:true,composed:true,pointerId:1,button:0};
+   el.dispatchEvent(new PointerEvent('pointerdown',{...common,...start}));
+   el.dispatchEvent(new PointerEvent('pointermove',{...common,...to,shiftKey}));
+   el.dispatchEvent(new PointerEvent('pointerup',{...common,...to,shiftKey}));await frames();await frames();
+  };
+  const left=(el:HTMLElement)=>el.getBoundingClientRect().left,ops=async()=>(await snap()).workflow.states[0].operations.map(op=>op.kind).join(',');
+  const before={first:left(first),second:left(second)};
+  await drag(first,at(second,.9,.5));
+  const swapped=left(first)>left(second)&&!first.style.translate,kinds=await ops();
+  if(!swapped||kinds!=='reorder')return check(false,`Sideways move: swapped ${swapped}; saved ${kinds}; translate “${first.style.translate}”.`);
+  await session.dispatch({type:'undo'});await frames();
+  if(left(first)!==before.first)return check(false,'Undo did not return the card.');
+  await drag(first,at(second,.5,.5));
+  const inside=second.contains(first);
+  await session.dispatch({type:'undo'});await frames();
+  if(!inside||second.contains(first))return check(false,`Into a panel: inside ${inside}; still inside after Undo ${second.contains(first)}.`);
+  await drag(first,at(document.querySelector<HTMLElement>('nav')!,.5,.5),true);
+  const free=(await ops()).endsWith('style');
+  await session.dispatch({type:'undo'});await frames();
+  await drag(first,{clientX:1250,clientY:850});
+  return check(free&&(await ops())==='',`Moved beside, into a panel, freely with Shift (${free}); a drop with no slot saved nothing (“${await ops()}”).`);
  }
 };
 const name=new URL(location.href).searchParams.get('case')||'';

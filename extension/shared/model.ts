@@ -147,6 +147,7 @@ export type Command =
  | { type: 'state' | 'link' | 'load'; id: string }
  | { type: 'restore'; version: number }
  | { type:'style'; style:StylePatch; group?:string }
+ | { type:'move'; target:Locator; anchor:Locator; position:'before'|'after'|'inside' }
  | { type: 'enabled'; value: boolean };
 export const uid = () => crypto.randomUUID();
 export const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value));
