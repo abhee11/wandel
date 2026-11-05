@@ -132,6 +132,7 @@ export function App({bridge,demo=false}:{bridge:Bridge;demo?:boolean}) {
 
     {!demo&&<PanelWindowControl/>}
     {!demo&&<Account bridge={bridge} snapshot={s} onAuthChange={setAuth} onCount={setAccountCount}/>}
+    {s?.staleTab&&<div className="dx-resume-banner" role="alert"><p>This prototype changed in another tab. Reload this tab to continue. Changes made here since then were not saved.</p><div><button className="dx-primary" disabled={busy} onClick={()=>void run({type:'reloadTab'})}>Reload this tab</button></div></div>}
     {s?.resumeChoice&&!s.navigationError&&<div className="dx-resume-banner" role="status"><p>This page isn’t part of <strong>{s.resumeChoice.name}</strong> yet.</p><div><button className="dx-primary" disabled={busy} onClick={()=>void run({type:'continueWorkflowHere'})}>Add this page</button><button className="dx-secondary" disabled={busy} onClick={()=>void run({type:'dismissResumeChoice'})}>Keep separate</button></div></div>}
     {saving&&s&&!demo&&<SaveFlow snapshot={s} bridge={bridge} onClose={()=>setSaving(false)}/>}
     {!s?<main className="dx-empty"><div className="dx-empty-icon">↗</div><h1>Start with a live app.</h1><p>Open an http(s) webpage, then open Wandel. Reload the page if you just installed the extension.</p><p>{pageConnectionError||'Chrome settings, the Web Store, and other protected pages cannot be edited.'}</p>{bridge.retry&&<button className="dx-primary" onClick={()=>void bridge.retry?.()}>Retry connection</button>}</main>:<>

@@ -19,6 +19,7 @@ import {freeBuild,assistantEnabled} from '../shared/build';
 import {sectionOperations} from '../ai/section';
 import {sectionTarget} from './selection';
 import {findDrop,floats,type Drop} from './dropTarget';
+const staleTabMessage='This prototype changed in another tab. Reload this tab to continue. Changes made here since then were not saved.';
 import {compileFlow,buttonTheme} from '../ai/flow';
 import {BatchSchema} from '../ai/planSchema';
 import {duplicateIntent} from '../ai/duplicateIntent';
@@ -62,7 +63,14 @@ export class Session {
   private selectionElement:HTMLElement|null=null;
   private selectionFrame:number|undefined;
   private assistantCheckpoint:{token:string;before:Workflow;stateId:string;dirty:boolean;past:History['past'];future:History['future'];after:string}|null=null;
-  history=new History(); visits:string[]=[]; unresolved:string[]=[]; record:SavedRecord|null=null; library:SavedRecord[]=[];
+  history=new History(); visits:string[]=[]; unresolved:string[]=[]; library:SavedRecord[]=[];
+  private loadedRecord:SavedRecord|null=null;
+  get record(){return this.loadedRecord;}
+  // A record read or saved as a whole replaces what this tab last knew about storage.
+  set record(value:SavedRecord|null){this.loadedRecord=value;this.savedStamp=null;}
+  /** The version this tab last wrote, so a save can tell when another tab has written since. */
+  private savedStamp:{id:string;updatedAt:string}|null=null;
+  private staleTab=false;private staleBanner:HTMLElement|null=null;
   private pageEditor:PageEditor;
   private historyGroup:string|undefined;
   private closeLayouts:(()=>void)|undefined;
@@ -75,6 +83,7 @@ export class Session {
     this.projectionActive=!!options.directSelection;this.workflow=createWorkflow(url);this.stateId=this.workflow.entry;
     this.renderer=new Renderer(root,id=>this.click(id),id=>{if(this.runningConnections)this.click(id);else{const node=this.renderer.owned.get(id);if(node)this.select(node);}});
     this.renderer.onReveal=issues=>this.revealed(issues);
+    document.addEventListener('visibilitychange',this.checkStale);window.addEventListener('focus',this.checkStale);
     this.dropMark=document.createElement('div');this.dropMark.dataset.dxIgnore='true';this.dropMark.style.cssText='position:fixed;pointer-events:none;z-index:2147483647;display:none;box-sizing:border-box;border-radius:3px;';document.documentElement.append(this.dropMark);
     this.outline=document.createElement('div');this.outline.dataset.dxIgnore='true';this.outline.style.cssText='position:fixed;pointer-events:none;z-index:2147483647;border:2px solid #6473f4;border-radius:4px;background:#6c7afa12;display:none;box-sizing:border-box;';document.documentElement.append(this.outline);
     this.selectionOutline.dataset.dxIgnore='true';this.selectionOutline.dataset.dxSelection='true';this.selectionOutline.setAttribute('aria-hidden','true');
@@ -167,7 +176,7 @@ export class Session {
   suspend(){this.closeComparison?.();this.previewOriginal=false;this.assistant?.reset();this.restoringPanel=false;this.panelMinimized=false;this.styleClipboard=null;this.replayData={};this.replayHistory=[];this.closeLayouts?.();this.resizeHeld=false;this.cancelDrag();this.projectionActive=false;this.picking=false;this.dragging=false;this.replay=false;this.selected=null;this.hovered=null;this.render(true);}
 
   subscribe(listener:(s:Snapshot)=>void) {this.listeners.add(listener);listener(this.snapshot());return()=>{this.listeners.delete(listener);};}
-  snapshot():Snapshot {this.seenViews.add(this.stateId);const capture=watched();return clone({watching:this.watching,watched:capture?{id:capture.id,kind:capture.kind,title:capture.title,outline:capture.outline,trigger:capture.trigger}:null,...(this.watchError?{watchError:this.watchError}:{}),previewOriginal:this.previewOriginal,...(this.assistant?{assistant:this.assistant.snapshot()}:{}),navigationError:this.navigationError,...(this.pausedWorkflow?{resumeChoice:{name:this.pausedWorkflow.name,page:new URL(this.pausedWorkflow.url).pathname}}:{}),liveSession:this.liveSession,panelMinimized:this.panelMinimized,panelRestoring:this.restoringPanel,connectionWorkspace:this.connectionWorkspace,visited:[...new Set([...this.seenViews,...this.visits])],mode:this.mode(),styleSource:this.styleClipboard?.selection||null,workflow:this.workflow,stateId:this.stateId,selected:this.selected,picking:this.picking,dragging:this.dragging,replay:this.replay,enabled:this.enabled,dirty:this.dirty,canUndo:!!this.history.past.length,canRedo:!!this.history.future.length,canBack:!!this.visits.length,unresolved:[...this.unresolved.filter(issue=>!/clipped|beyond a clipping container|overlap/i.test(issue)),...this.revealIssues],currentVersion:this.record?.currentVersion||this.record?.versions.at(-1)?.number||0,versions:this.record?.versions.map(({number,savedAt,workflow})=>({number,savedAt,name:workflow.name}))||[],library:[...this.library.map(r=>({id:r.draft.id,name:this.routeDrafts.has(r.draft.id)?this.routeDrafts.get(r.draft.id)!.workflow.name+' (unsaved)':r.draft.name,versions:r.versions.length})),...[...this.routeDrafts.values()].filter(d=>d.workflow.origin===this.url.origin&&d.workflow.route===routeOf(this.url)&&!this.library.some(r=>r.draft.id===d.workflow.id)).map(d=>({id:d.workflow.id,name:d.workflow.name+' (unsaved)',versions:d.record?.versions.length||0}))]});}
+  snapshot():Snapshot {this.seenViews.add(this.stateId);const capture=watched();return clone({staleTab:this.staleTab,watching:this.watching,watched:capture?{id:capture.id,kind:capture.kind,title:capture.title,outline:capture.outline,trigger:capture.trigger}:null,...(this.watchError?{watchError:this.watchError}:{}),previewOriginal:this.previewOriginal,...(this.assistant?{assistant:this.assistant.snapshot()}:{}),navigationError:this.navigationError,...(this.pausedWorkflow?{resumeChoice:{name:this.pausedWorkflow.name,page:new URL(this.pausedWorkflow.url).pathname}}:{}),liveSession:this.liveSession,panelMinimized:this.panelMinimized,panelRestoring:this.restoringPanel,connectionWorkspace:this.connectionWorkspace,visited:[...new Set([...this.seenViews,...this.visits])],mode:this.mode(),styleSource:this.styleClipboard?.selection||null,workflow:this.workflow,stateId:this.stateId,selected:this.selected,picking:this.picking,dragging:this.dragging,replay:this.replay,enabled:this.enabled,dirty:this.dirty,canUndo:!!this.history.past.length,canRedo:!!this.history.future.length,canBack:!!this.visits.length,unresolved:[...this.unresolved.filter(issue=>!/clipped|beyond a clipping container|overlap/i.test(issue)),...this.revealIssues],currentVersion:this.record?.currentVersion||this.record?.versions.at(-1)?.number||0,versions:this.record?.versions.map(({number,savedAt,workflow})=>({number,savedAt,name:workflow.name}))||[],library:[...this.library.map(r=>({id:r.draft.id,name:this.routeDrafts.has(r.draft.id)?this.routeDrafts.get(r.draft.id)!.workflow.name+' (unsaved)':r.draft.name,versions:r.versions.length})),...[...this.routeDrafts.values()].filter(d=>d.workflow.origin===this.url.origin&&d.workflow.route===routeOf(this.url)&&!this.library.some(r=>r.draft.id===d.workflow.id)).map(d=>({id:d.workflow.id,name:d.workflow.name+' (unsaved)',versions:d.record?.versions.length||0}))]});}
   private lastEmission='';
   private emit() {if(this.destroyed)return;this.updateSelection();const s=this.snapshot(),serialized=JSON.stringify(s);if(serialized===this.lastEmission)return;this.lastEmission=serialized;this.listeners.forEach(fn=>fn(s));}
   private updateSelection(){
@@ -429,10 +438,29 @@ export class Session {
   private scheduleDraft(){
     if(this.destroyed)return;    clearTimeout(this.draftTimer);this.draftPending=true;this.draftTimer=setTimeout(()=>{this.draftPending=false;const work=this.queue.then(()=>this.checkpoint());this.queue=work.catch(this.gestureError);},500);
   }
+  /** Whether another tab saved this workflow after this tab last read or wrote it. */
+  private async changedElsewhere(){
+    if(this.staleTab)return true;
+    const id=this.workflow.id,known=this.savedStamp?.id===id?this.savedStamp.updatedAt:this.record?.draft.id===id?this.record.draft.updatedAt:undefined;
+    if(known===undefined)return false;
+    const stored=await this.repository.get(id);
+    return !!stored&&stored.draft.updatedAt!==known;
+  }
+  private warnStale(){
+    if(this.staleTab)return;this.staleTab=true;clearTimeout(this.draftTimer);this.draftPending=false;
+    // Its own element: the editor's bar and messages change with the selection and mode, and this must stay until the tab reloads.
+    const banner=document.createElement('div'),text=document.createElement('span'),reload=document.createElement('button');
+    banner.dataset.dxIgnore='true';banner.setAttribute('role','alert');banner.style.cssText='position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:2147483647;display:flex;align-items:center;gap:12px;max-width:min(640px,calc(100vw - 32px));padding:10px 14px;border-radius:10px;background:#3a2a06;color:#fff;font:13px/1.4 system-ui,sans-serif;box-shadow:0 4px 16px #0004;';
+    text.textContent=staleTabMessage;reload.type='button';reload.textContent='Reload this tab';reload.style.cssText='flex:none;padding:6px 10px;border:0;border-radius:6px;background:#fff;color:#3a2a06;font:600 13px system-ui,sans-serif;cursor:pointer;';reload.onclick=()=>location.reload();
+    banner.append(text,reload);document.documentElement.append(banner);this.staleBanner=banner;this.emit();
+  }
+  /** Returning to a tab shows the warning before any work is done here. */
+  private checkStale=()=>{if(document.visibilityState!=='visible'||this.destroyed||this.staleTab)return;void this.changedElsewhere().then(changed=>{if(changed&&!this.destroyed)this.warnStale();}).catch(()=>{/* A failed check is repeated by the next save. */});};
   private async checkpoint(remember=true){
     if(this.destroyed||this.navigating||this.leaving)return;clearTimeout(this.draftTimer);
+    if(await this.changedElsewhere()){this.warnStale();return;}
     const record:SavedRecord={draft:clone(this.workflow),enabled:this.enabled,currentVersion:this.record?.currentVersion||0,versions:this.record?.versions||[]};
-    await this.repository.put(record);await this.repository.setActive(record.draft);this.persistHistory();
+    await this.repository.put(record);this.savedStamp={id:record.draft.id,updatedAt:record.draft.updatedAt};await this.repository.setActive(record.draft);this.persistHistory();
     if(remember)await this.rememberLivePosition();
     this.library=await this.repository.list(this.url.origin,routeOf(this.url));this.emit();
   }
@@ -507,6 +535,8 @@ export class Session {
     if(['reset','new'].includes(c.type)){this.navigationError='';this.pausedWorkflow=null;await this.options.liveNavigation?.clear();this.liveSession=false;}
     if(this.dragData&&c.type!=='snapshot')this.cancelDrag();
     const editing=['appearance','alignText','insertElement','fieldSettings','pasteStyle','image','prompt','text','child','link','undo','redo','style','remove','move','drag','duplicateElement','copyPrompt','mirror'];
+    if(this.staleTab&&[...editing,'assistantApply','connect'].includes(c.type))throw new Error(staleTabMessage);
+    if(c.type==='reloadTab'){location.reload();return this.snapshot();}
     if(editing.includes(c.type)&&this.replay)throw new Error('Return to Edit to change the workflow.');
     if(['appearance','alignText','insertElement','fieldSettings','pasteStyle','image','prompt','text','child','link','style','remove','move','drag','duplicateElement','copyPrompt','mirror'].includes(c.type)&&!this.enabled)throw new Error('Enable the workflow before editing.');
     if(c.type==='connectionAnchor'){this.pageEditor.connectionAnchor(c.ratio);return this.snapshot();}
@@ -864,5 +894,5 @@ export class Session {
     if(editing.includes(c.type)&&!['copyPrompt','duplicateElement'].includes(c.type)&&this.assistant){const selected=this.findSelected();this.assistant.recordExternal('Manual '+c.type+' applied',selected?[selected]:[]);}
     this.emit();return this.snapshot();
   }
-  destroy(){if(this.destroyed)return;this.destroyed=true;this.stopWatch?.();this.assistant?.reset();this.closeComparison?.();this.closeLayouts?.();clearTimeout(this.draftTimer);window.removeEventListener('change',this.connectionChange,true);window.removeEventListener('keydown',this.connectionEnter,true);window.removeEventListener('dx-progress-done',this.progressDone,true);window.removeEventListener('input',this.inputMirror,true);window.removeEventListener('change',this.inputMirror,true);if(this.selectionFrame!==undefined)window.cancelAnimationFrame(this.selectionFrame);this.selectionFrame=undefined;window.removeEventListener('scroll',this.paintSelection,true);window.removeEventListener('resize',this.paintSelection);this.selectionOutline.remove();this.pageEditor.destroy();this.cancelDrag();window.removeEventListener('dragstart',this.nativeDrag,true);window.removeEventListener('pointerdown',this.dragStart,true);window.removeEventListener('pointermove',this.dragMove,true);window.removeEventListener('pointerup',this.dragEnd,true);window.removeEventListener('pointercancel',this.cancelDrag,true);window.removeEventListener('blur',this.blur);this.observer.disconnect();clearTimeout(this.timer);window.removeEventListener('click',this.handleClick,true);window.removeEventListener('pointermove',this.hover,true);window.removeEventListener('keydown',this.escape,true);window.removeEventListener('keyup',this.keyup,true);this.renderer.reset();this.outline.remove();this.listeners.clear();}
+  destroy(){if(this.destroyed)return;this.destroyed=true;this.staleBanner?.remove();document.removeEventListener('visibilitychange',this.checkStale);window.removeEventListener('focus',this.checkStale);this.stopWatch?.();this.assistant?.reset();this.closeComparison?.();this.closeLayouts?.();clearTimeout(this.draftTimer);window.removeEventListener('change',this.connectionChange,true);window.removeEventListener('keydown',this.connectionEnter,true);window.removeEventListener('dx-progress-done',this.progressDone,true);window.removeEventListener('input',this.inputMirror,true);window.removeEventListener('change',this.inputMirror,true);if(this.selectionFrame!==undefined)window.cancelAnimationFrame(this.selectionFrame);this.selectionFrame=undefined;window.removeEventListener('scroll',this.paintSelection,true);window.removeEventListener('resize',this.paintSelection);this.selectionOutline.remove();this.pageEditor.destroy();this.cancelDrag();window.removeEventListener('dragstart',this.nativeDrag,true);window.removeEventListener('pointerdown',this.dragStart,true);window.removeEventListener('pointermove',this.dragMove,true);window.removeEventListener('pointerup',this.dragEnd,true);window.removeEventListener('pointercancel',this.cancelDrag,true);window.removeEventListener('blur',this.blur);this.observer.disconnect();clearTimeout(this.timer);window.removeEventListener('click',this.handleClick,true);window.removeEventListener('pointermove',this.hover,true);window.removeEventListener('keydown',this.escape,true);window.removeEventListener('keyup',this.keyup,true);this.renderer.reset();this.outline.remove();this.listeners.clear();}
 }

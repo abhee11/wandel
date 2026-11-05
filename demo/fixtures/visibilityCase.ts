@@ -109,6 +109,20 @@ const cases:Record<string,()=>Promise<Result>>={
   if(await ops())return check(false,`A card dropped on the sidebar was saved: ${await ops()}.`);
   await drag(first,{clientX:1250,clientY:850});
   return check(free&&(await ops())==='',`Moved beside, into a panel, freely with Shift (${free}); a drop with no slot saved nothing (“${await ops()}”).`);
+ },
+ async 'A save from another tab is not overwritten, and this tab says so'(){
+  const repository=new Repository(new BrowserStorage());
+  const add=async(text:string)=>apply([{kind:'create',element:'panel',text,targets:[await ref(e=>e.tag==='section')],position:'below',resultRef:'new:card'}]);
+  if(await add('First card')!=='OK')return check(false,'The first edit did not apply.');
+  await session.dispatch({type:'checkpointDraft'});
+  const id=(await snap()).workflow.id,other=await repository.get(id);if(!other)return check(false,'Nothing was saved.');
+  other.draft.name='Saved in another tab';other.draft.updatedAt=new Date(Date.now()+1000).toISOString();await repository.put(other);
+  if(await add('Second card')!=='OK')return check(false,'The second edit did not apply.');
+  await new Promise(resolve=>setTimeout(resolve,800));
+  const stored=await repository.get(id),kept=stored?.draft.name==='Saved in another tab',warned=!!(await snap()).staleTab;
+  let blocked='';try{await session.dispatch({type:'undo'});}catch(error){blocked=error instanceof Error?error.message:'';}
+  const banner=document.querySelector<HTMLElement>('[role=alert][data-dx-ignore]'),visible=!!banner&&banner.getBoundingClientRect().height>0&&/another tab/.test(banner.textContent||'');
+  return check(kept&&warned&&visible&&/another tab/.test(blocked),`Other tab’s save kept: ${kept}; warned: ${warned}; banner visible: ${visible}; further edits blocked: ${!!blocked}.`);
  }
 };
 const name=new URL(location.href).searchParams.get('case')||'';

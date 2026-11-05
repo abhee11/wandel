@@ -104,7 +104,7 @@ Each row is one request, typed as written. Pass means it works when clicked thro
 | ID | Scenario | Pass looks like | How | Status | Result |
 |---|---|---|---|---|---|
 | V1 | Save, close Chrome, reopen | Prototype and history return | Panel | ⬜ | |
-| V2 | Two tabs on one workflow | Edits don't collide | Free | ❌ | Second tab’s save overwrites the first with no warning: “Tab B title” was lost. Fix needs a product decision |
+| V2 | Two tabs on one workflow | Edits don't collide | Free | ✅ | Fixed: a tab no longer overwrites newer work. It shows a banner with Reload this tab and blocks edits until reloaded. Tested with two real tabs and the free fixture |
 | V3 | Share with someone else | They see the same prototype | Panel | ⬜ | |
 | V4 | Reach the 30-screen limit and the AI limit | Clear messages | Free | ⚠️ | Screen limit stops at 30 with a clear message. AI limit not tested |
 
