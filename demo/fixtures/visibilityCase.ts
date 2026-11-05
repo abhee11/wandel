@@ -59,6 +59,16 @@ const cases:Record<string,()=>Promise<Result>>={
   await session.dispatch({type:'interact'});press([...document.querySelectorAll('nav [data-dx-owned]')].find(a=>a.textContent==='X'));await frames();
   return check(shown(card())&&!(await snap()).unresolved.length,shown(card())?'X added; the card stays hidden until X is clicked.':'Clicking X did not show the card.');
  },
+ async 'Copy of an icon-only sidebar item named X shows a hidden card'(){
+  const library=await ref(e=>e.tag==='a'&&/Library/.test(e.name||'')),{section}=await homeRefs();
+  const applied=await apply([{kind:'duplicate',targets:[library],position:'after',text:'X',resultRef:'new:x'},{kind:'create',element:'panel',text:'Home Options',targets:[section],position:'below',resultRef:'new:card'},{kind:'behavior',targets:['new:card'],event:'load',effects:[{action:'hide',targets:['new:card'],value:null}]},{kind:'behavior',targets:['new:x'],event:'click',effects:[{action:'show',targets:['new:card'],value:null}]}]);
+  if(applied!=='OK')return check(false,applied);
+  const x=[...document.querySelectorAll<HTMLElement>('aside [data-dx-owned]')].find(n=>n.textContent?.trim()==='X');
+  if(!x)return check(false,'The copied item has no visible X label.');
+  if(shown(card()))return check(false,'The card is visible before X is clicked.');
+  await session.dispatch({type:'interact'});press(x);await frames();
+  return check(shown(card()),shown(card())?'X copied with a visible label; the card appears on click.':'Clicking X did not show the card.');
+ },
  async 'New menu option opens its page, and General returns'(){
   const general=await ref(e=>e.tag==='li'&&e.name==='General');
   const applied=await apply([{kind:'duplicate',targets:[general],position:'end',text:'Test',resultRef:'new:test'},{kind:'connect',targets:['new:test'],newViewTitle:'Test',presentation:'page'}]);

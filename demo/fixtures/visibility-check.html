@@ -4,7 +4,7 @@ body{font:14px/1.5 system-ui;margin:24px;color:#202638}table{border-collapse:col
 <h1>Free visibility check (no AI)</h1><p>Runs each case in a fresh frame through the real Wandel pipeline. Run it before any paid request.</p>
 <table><thead><tr><th>Case</th><th>Result</th><th>Detail</th></tr></thead><tbody id="rows"></tbody></table>
 <script type="module">
-const names=['Card hidden until Home is clicked, then shown below; Undo removes it','Toggle hides and shows again','Hidden at load with nothing that shows it is reported','A container the page hides still reports the new card','New menu item with no destination shows a hidden card','New menu option opens its page, and General returns'];
+const names=['Card hidden until Home is clicked, then shown below; Undo removes it','Toggle hides and shows again','Hidden at load with nothing that shows it is reported','A container the page hides still reports the new card','New menu item with no destination shows a hidden card','Copy of an icon-only sidebar item named X shows a hidden card','New menu option opens its page, and General returns'];
 const rows=document.getElementById('rows');
 for(const name of names){
  const row=rows.insertRow();row.insertCell().textContent=name;const status=row.insertCell(),detail=row.insertCell();status.textContent='Running…';
