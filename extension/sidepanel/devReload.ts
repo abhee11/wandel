@@ -4,7 +4,7 @@
  * Wandel open (and other tabs of the same sites) so they run the new content script.
  * The page can also ask to open the Wandel panel (`wandel:dev-open`), so a browser automation
  * can test without clicking Chrome's toolbar. Published builds never run any of this. */
-const tabsKey='wandel:dev-reload-tabs';
+const tabsKey='wandel:dev-reload-tabs',originsKey='wandel:dev-reload-origins';
 export function isLocalDev(){return /^https?:\/\/(127\.0\.0\.1|localhost)(:|\/|$)/.test(process.env.WANDEL_PUBLIC_API_ORIGIN||'');}
 export function watchDevReload(){
  if(!isLocalDev())return;
@@ -19,7 +19,9 @@ export function watchDevReload(){
   if(first===undefined){first=at;return;}
   if(at===first)return;
   const session=await chrome.storage.session.get(null),open=Object.entries(session).filter(([key,value])=>key.startsWith('wandel:inline:')&&value).map(([key])=>Number(key.slice(14)));
-  const tabs=await chrome.tabs.query({}),origins=new Set(tabs.filter(tab=>tab.id!==undefined&&open.includes(tab.id)&&tab.url).map(tab=>new URL(tab.url!).origin));
+  // Sites where Wandel was opened are remembered across reloads (session storage is cleared by one), so their tabs keep getting the new content script.
+  const tabs=await chrome.tabs.query({}),known=(await chrome.storage.local.get(originsKey))[originsKey],origins=new Set<string>([...(Array.isArray(known)?known:[]),...tabs.filter(tab=>tab.id!==undefined&&open.includes(tab.id)&&tab.url).map(tab=>new URL(tab.url!).origin)]);
+  await chrome.storage.local.set({[originsKey]:[...origins].slice(-20)});
   const reload=tabs.filter(tab=>tab.id!==undefined&&tab.url&&/^https?:/.test(tab.url)&&(open.includes(tab.id)||origins.has(new URL(tab.url).origin))).map(tab=>tab.id!);
   await chrome.storage.local.set({[tabsKey]:reload});chrome.runtime.reload();
  };

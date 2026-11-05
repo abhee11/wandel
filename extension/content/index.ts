@@ -27,12 +27,14 @@ const floatingPanel=new FloatingPanel(()=>{void send({type:'WANDEL_INLINE_CLOSE'
 const ready=session.init();
 // Local development: a page event opens the Wandel panel, so browser automation can test end to end.
 if(isLocalDev())window.addEventListener('wandel:dev-open',()=>{void send({type:'WANDEL_OPEN_CONNECTIONS'}).catch(ignore);},{signal:lifecycle.signal});
+// Local development: the current workflow and its problems, for automated checks.
+if(isLocalDev())window.addEventListener('wandel:dev-state',()=>{void ready.then(()=>{const s=session.snapshot();window.dispatchEvent(new CustomEvent('wandel:dev-state-result',{detail:JSON.stringify({stateId:s.stateId,mode:s.mode,unresolved:s.unresolved,canUndo:s.canUndo,workflow:s.workflow})}));});},{signal:lifecycle.signal});
 // Local development: a chat request sent from the page runs the real context → plan → apply path; the result comes back as a page event.
 if(isLocalDev())window.addEventListener('wandel:dev-chat',event=>{void (async()=>{
  let result:Record<string,unknown>;
  try{
   const {instruction}=JSON.parse(String((event as CustomEvent).detail));await ready;
-  const context=(await session.dispatch({type:'assistantContext',chat:true,instruction})).assistant?.context;if(!context)throw new Error('No page context.');
+  const snap=await session.dispatch({type:'assistantContext',chat:true,instruction}),context=snap.assistant?.context;if(!context)throw new Error('No page context: '+JSON.stringify({keys:Object.keys(snap),assistant:snap.assistant&&Object.keys(snap.assistant),mode:snap.mode,navigationError:snap.navigationError}).slice(0,400));
   const reply=await send({type:'WANDEL_DEV_PLAN',body:{instruction,context,history:[],requestId:crypto.randomUUID()}});if(reply?.error)throw new Error(reply.error);
   const plan=reply.plan;result={plan};
   if(plan?.status==='edit'){try{await session.dispatch({type:'assistantApply',plan,token:context.token});result.applied='OK';}catch(error){result.applied=error instanceof Error?error.message:String(error);}}
