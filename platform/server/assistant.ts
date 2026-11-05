@@ -102,7 +102,10 @@ export function assistantService(db:DB,entitlements:Entitlements,provider:Assist
   // A failed edit's exact reason, for diagnosis from the server log: the request, the planned steps and the error, never page content.
   if(path.endsWith('/diagnostic')){
    const input=z.object({detail:z.string().max(600),instruction:z.string().max(400).optional(),plan:z.string().max(400).optional(),page:z.string().max(300).optional(),applied:z.boolean().optional()}).strict().parse(decoded);
-   console.warn(JSON.stringify({event:'edit_failed',user:userId.slice(0,8),...input}));return {ok:true};
+   console.warn(JSON.stringify({event:'edit_failed',user:userId.slice(0,8),...input}));
+   // Also kept in the database, so a failed edit can be diagnosed later without reproducing it.
+   db.prepare('INSERT INTO analytics_events (id,user_id,name,properties,created_at) VALUES (?,?,?,?,?)').run(randomUUID(),userId,'edit_failed',JSON.stringify(input),clock().toISOString());
+   return {ok:true};
   }
   if(path.endsWith('/verify')){
    const input=z.object({instruction:z.string().trim().min(1).max(1600),plan:AssistantPlanSchema,before:ReferenceImageSchema,after:ReferenceImageSchema,reference:ReferenceImageSchema.optional(),requestId:z.string().uuid(),turnId:z.string().uuid().optional()}).strict().parse(decoded);
