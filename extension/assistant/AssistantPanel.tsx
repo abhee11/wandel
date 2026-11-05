@@ -86,7 +86,10 @@ export function AssistantPanel({bridge,snapshot,onSave,onBusyChange}:{bridge:Bri
  async function submit(text:string,prepared?:Promise<PageContext>,recordTurn=true,expectedSelection?:string|null,existingId?:string,capturedSelection?:string){
   const followUp=clarificationRequest.current;const value=text.trim();if(!value||sending.current)return;if(/^\/(?!\/)[a-zA-Z0-9/_-]*$/.test(value)){try{await bridge.send({type:'createPage',route:value});setInstruction('');}catch(error){setError(error instanceof Error?error.message:'Could not create that page.');}return;}sending.current=true;pendingCopy.current=null;const request=++epoch.current,origin=scopeRef.current,userId=existingId||uid(),selection=capturedSelection??JSON.stringify(snapshot.selected?.locator||null);activeRequest.current={id:userId,text:value,scope:origin,selection,applying:false};
   stickToBottom.current=true;if(recordTurn)setInstruction('');if(recordTurn)say('user',value,{id:userId,status:'sending',scope:origin,selection});else updateTurn(userId,{status:'sending',error:undefined,retryable:false});
-  abort.current?.abort();const controller=new AbortController();abort.current=controller;const requestDeadline=setTimeout(()=>controller.abort(),180000);let failed=false,waiting=false;setBusy(true);setError('');setClarification(null);clarificationRequest.current=null;setProgress('Understanding your request…');composer.current?.focus();
+  abort.current?.abort();const controller=new AbortController();abort.current=controller;const requestDeadline=setTimeout(()=>controller.abort(),180000);let failed=false,waiting=false;
+  // An edit can move this workflow to the screen it just built; that is this request finishing, not the user leaving.
+  const stillHere=()=>request===epoch.current&&!controller.signal.aborted&&(origin===scopeRef.current||!!activeRequest.current?.applying&&origin.split(':')[0]===scopeRef.current.split(':')[0]);
+  setBusy(true);setError('');setClarification(null);clarificationRequest.current=null;setProgress('Understanding your request…');composer.current?.focus();
 
   try{
    let c=await context(undefined,value);
@@ -96,7 +99,7 @@ export function AssistantPanel({bridge,snapshot,onSave,onBusyChange}:{bridge:Bri
    lastPlan.current='';
    let plan=await planConversation(combined,c,controller.signal,conversation.current.filter(turn=>turn.id!==userId),image,pageScreenshot,userId);
    const inspectPlan=async(input:AssistantPlan,current:PageContext,allowNavigation:boolean)=>resolveInspections(input,current,{
-    active:()=>request===epoch.current&&origin===scopeRef.current&&!controller.signal.aborted,
+    active:stillHere,
     inspect:async refs=>{
      const screen=refs.map(ref=>ref.startsWith('view:')?current.views.find(view=>view.id===ref.slice(5)):undefined).find(Boolean);
      if(screen&&screen.id!==current.stateId){
@@ -150,7 +153,7 @@ export function AssistantPanel({bridge,snapshot,onSave,onBusyChange}:{bridge:Bri
      // Review the applied page, including warnings. A warning is evidence, not a veto.
      // One targeted correction and one recheck bound latency and cost; never replay the original request here.
      for(let repair=0;repair<2;repair++){
-      if(request!==epoch.current||origin!==scopeRef.current||controller.signal.aborted)throw new Error('Request canceled.');
+      if(!stillHere())throw new Error('Request canceled.');
       if(!kept&&!requiresVisualReview(proposed,!!image)&&repair===0)break;
       setProgress(repair?'Checking the correction…':'Checking the rendered result…');
       let afterContext:PageContext,after:string|undefined,issue=kept;
@@ -174,13 +177,13 @@ export function AssistantPanel({bridge,snapshot,onSave,onBusyChange}:{bridge:Bri
       try{
        let correction=await planConversation(correctionRequest,afterContext!,controller.signal,conversation.current.filter(turn=>turn.id!==userId),image,after,userId);
        const inspected=await resolveInspections(correction,afterContext!,{
-        limit:2,active:()=>request===epoch.current&&origin===scopeRef.current&&!controller.signal.aborted,
+        limit:2,active:stillHere,
         inspect:async refs=>{const expanded=await context(refs,correctionRequest);after=await capture(expanded);return expanded;},
         replan:(expanded,note)=>planConversation(correctionRequest,expanded,controller.signal,[...conversation.current.filter(turn=>turn.id!==userId),{role:'assistant',text:note,status:'sent'}],image,after,userId)
        });
        correction=inspected.plan;afterContext=inspected.context;
        if(inspected.exhausted){verificationNote='The change is applied, but I could not resolve the remaining layout issue.';break;}
-       if(request!==epoch.current||origin!==scopeRef.current||controller.signal.aborted)throw new Error('Request canceled.');
+       if(!stillHere())throw new Error('Request canceled.');
        if(correction.status==='answer'){reviewIssue='';verificationNote=correction.message;break;}
        if(correction.status!=='edit'){verificationNote='The change is applied, but I could not complete its layout correction.';break;}
        const latest=await bridge.send({type:'snapshot'});
@@ -194,7 +197,7 @@ export function AssistantPanel({bridge,snapshot,onSave,onBusyChange}:{bridge:Bri
        verificationNote='The change is applied, but I could not finish correcting its layout.';break;
       }
      }
-    },refresh:async()=>{const fresh=await context(undefined,combined);pageScreenshot=await capture(fresh);return fresh;},inspect:(refs)=>context(refs,combined),replan:(feedback,current)=>planConversation(combined,current,controller.signal,[...conversation.current.filter(turn=>turn.id!==userId),{role:'assistant',text:'The last proposed edit was not applied or its preview was fully rolled back. Repair only the current request; inspect or ask a concise clarification when the target is genuinely ambiguous. '+feedback,status:'failed'}],image,pageScreenshot,userId),active:()=>request===epoch.current&&origin===scopeRef.current&&!controller.signal.aborted,repairing:()=>setProgress('Checking a safer way to apply your request…')});}
+    },refresh:async()=>{const fresh=await context(undefined,combined);pageScreenshot=await capture(fresh);return fresh;},inspect:(refs)=>context(refs,combined),replan:(feedback,current)=>planConversation(combined,current,controller.signal,[...conversation.current.filter(turn=>turn.id!==userId),{role:'assistant',text:'The last proposed edit was not applied or its preview was fully rolled back. Repair only the current request; inspect or ask a concise clarification when the target is genuinely ambiguous. '+feedback,status:'failed'}],image,pageScreenshot,userId),active:stillHere,repairing:()=>setProgress('Checking a safer way to apply your request…')});}
    lastPlan.current=plan.status+': '+plan.actions.map(action=>action.kind+(action.element?' '+action.element:'')+(action.position?' '+action.position:'')).join(', ');
    if(plan.status==='clarify'||plan.status==='unsupported'){setClarification(plan);if(plan.status!=='unsupported'){waiting=true;clarificationRequest.current={text:combined,id:userId,scope:origin};}if(plan.candidates.length)await bridge.send({type:'assistantCandidates',refs:plan.candidates});answer(plan.status==='clarify'?(plan.question||plan.message):plan.message);return;}
    if(request===epoch.current){await remember(plan);answer(plan.status==='edit'?(plan.reply||'Applied: '+plan.actions.map(action=>action.kind==='create'?'added '+(action.text||action.element):action.kind==='duplicate'?'duplicated '+(action.text||'the referenced element'):action.kind==='theme'?'updated the theme':action.kind==='layout'?'updated the layout':action.kind==='text'?'updated the text':action.kind==='remove'?'removed the element':action.kind==='connect'?'connected the views':'updated the element').join('; ')+'. Undo is available.')+(reviewIssue?' The edit still needs attention: '+reviewIssue.replace(/\s*\([^)]*\)/g,'')+' I couldn’t resolve this automatically. Undo is available.':verificationNote?' '+verificationNote:''):plan.message,plan.status==='edit',plan.status==='edit'?reviewIssue:'');}

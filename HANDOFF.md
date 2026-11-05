@@ -35,6 +35,8 @@ A Chrome extension and server. The user types a design change in a panel ("dupli
 8. Dragging a card: beside, into a panel, Shift for free offset, no slot saves nothing, Undo returns it
 Older fixture: `demo/fixtures/mirrortalk-group.html` (globals `context()` and `apply(actions)`).
 
+Real panel with no AI: open `demo/fixtures/assistant.html?stub=new-page`, clear storage, then call `sendToPanel(text)` from a timer and read the result in a second call (long awaits can detach Claude in Chrome). The plan call is stubbed. This fixture has no screenshot capture, so visual review does not run there.
+
 ## Diagnosing without asking the owner
 - `.data/wandel.sqlite`, table `ai_actions`: every AI request with its plan or verdict. Failed requests now store `{error, rejectedPlan}` in `result`.
 - Table `analytics_events`, name `edit_failed`: every failed or warned edit the panel reported (detail, instruction, plan, page).
@@ -63,6 +65,7 @@ Note: Claude in Chrome cannot work in tabs holding another extension's iframe, s
 - **`reset` clears `assistantMemory`.**
 - **Test 5:** expand/collapse on the My Record item, and manual rename, delete and chat move, all work with Undo and survive reload.
 - **Drag is a real move** (`content/dropTarget.ts`, `session.ts dragEnd`, command `move`): dropping saves a `reorder`, so the page reflows. Over a panel, the outer quarter drops beside it and the middle drops inside. Gaps use the nearest neighbour within 120px; smaller elements join the content around them. Wrapper cells holding one element move with it, and full-cover click overlays are ignored. No slot = snaps back, saving nothing. Shift, or an absolute/fixed element, keeps the old x/y offset. Before committing, both saved locators must resolve to the exact elements.
+- **False "Not completed" on new pages** (`AssistantPanel.tsx stillHere`): a request that built a page moved the workflow to it, so the panel treated its own move as the user leaving, cancelled itself and skipped the review. Moves inside the workflow during an apply no longer cancel.
 - The 05:25 plans were one turn with retries of a real request ("add an option to expand… the checkbox contents in the My record"), not a mystery.
 
 ## Open issues (not yet resolved)
@@ -75,5 +78,7 @@ Note: Claude in Chrome cannot work in tabs holding another extension's iframe, s
 7. **Test 5 rough edges.** The expand/collapse control is small text on a pale ellipse. This transcript has one checklist item, so "each item" is untested with several.
 8. **`status: open` plans.** `wandel:dev-chat` stops at them; the panel opens the control and replans. For a closed dropdown, open it with a real click and resend. The panel's own flow was not exercised.
 9. **MirrorTalk data moved during testing.** The quote carousel beside My Record disappeared (with zero Wandel edits on the page) and Takeaways regenerated, so saved targets there can change between runs.
-10. Owner asked: on a menu item click, the highlight should move to the clicked item (and back), like a real sidebar. Not built; owner hasn't confirmed.
-11. Older gaps: nearest-style rule unconfirmed on a real page; neighbour check compares only size/position; core instructions not reviewed for contradictions; copies of tabs/toggles in their "on" state may copy the active look; not deployed (Railway runs old code; hosted zip needs rebuilding — see `scripts/` and env vars `WANDEL_APP_ORIGIN`, `API_ORIGIN`, `CLERK_SYNC_HOST`, `WANDEL_EXTENSION_KEY`).
+10. **Review after a new page is unconfirmed.** The false cancel is fixed in the fixture, but only the real panel can show the review running on the new page. In the owner's panel run, review also answered "uncertain" when the panel covered the changed controls.
+11. **Next panel test not run yet:** repeat the General request, follow-up "Add a graph with mock data to that page", switch back and forth, Undo from the panel, then save and reopen. Also untested in the panel: failure recovery. Conversation mode (hands-free turns on top of push-to-talk) is proposed for after that.
+12. Owner asked: on a menu item click, the highlight should move to the clicked item (and back), like a real sidebar. Not built; owner hasn't confirmed.
+13. Older gaps: nearest-style rule unconfirmed on a real page; neighbour check compares only size/position; core instructions not reviewed for contradictions; copies of tabs/toggles in their "on" state may copy the active look; not deployed (Railway runs old code; hosted zip needs rebuilding — see `scripts/` and env vars `WANDEL_APP_ORIGIN`, `API_ORIGIN`, `CLERK_SYNC_HOST`, `WANDEL_EXTENSION_KEY`).
