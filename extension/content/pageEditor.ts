@@ -28,7 +28,8 @@ export class PageEditor {
   private issueHost=document.createElement('div');
   private issueKey='';private issueDismissed='';
   private showIssues(s:Snapshot){
-    const list=s.mode&&s.mode!=='closed'&&s.mode!=='replay'?s.unresolved:[];const key=JSON.stringify(list);
+    // Not while the panel asks whether this page belongs to the workflow: its edits were made elsewhere.
+    const list=s.mode&&s.mode!=='closed'&&s.mode!=='replay'&&!s.resumeChoice?s.unresolved:[];const key=JSON.stringify(list);
     if(!list.length||key===this.issueDismissed){this.issueHost.remove();this.issueKey='';return;}
     if(key===this.issueKey&&this.issueHost.isConnected)return;this.issueKey=key;
     if(!this.issueHost.shadowRoot){this.issueHost.dataset.dxIgnore='true';this.issueHost.attachShadow({mode:'open'});}

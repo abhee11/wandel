@@ -151,3 +151,8 @@
 /* Request progress lives beside Cancel above the composer, so it stays in view while the conversation scrolls. */
 .dx-chat-progress{display:flex;align-items:center;gap:8px;min-width:0;overflow-wrap:anywhere}.dx-chat-progress>i{flex:none;width:7px;height:7px;border-radius:50%;background:#8e7cc6;animation:dx-typing 1s ease-in-out infinite}
 @media (prefers-reduced-motion:reduce){.dx-chat-progress>i{animation:none}}
+
+/* In the chat layout only the conversation shrinks; notices, tools and Your flow keep their height, so nothing overlaps the composer. */
+.dx-chat-layout>.dx-main>*:not(.dx-chat-workspace){flex-shrink:0}
+.dx-chat-layout>.dx-main>.dx-chat-workspace{min-height:220px}
+.dx-chat-layout .dx-unresolved{max-height:28vh;overflow:auto}
