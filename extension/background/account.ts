@@ -1,5 +1,13 @@
 import {createClerkClient} from '@clerk/chrome-extension/client';
 import {accountConfig} from '../shared/accountConfig';
+/** The signed-in user's API token, read in the background (null when signed out). */
+export async function backgroundAccountToken(signOut=false){
+ if(!accountConfig.publishableKey)throw new Error('This extension build has no Clerk key. Rebuild Wandel and click Reload in chrome://extensions, then refresh this page.');
+ if(accountConfig.publishableKey.startsWith('pk_test_')&&!await chrome.cookies.get({url:accountConfig.syncHost,name:'__clerk_db_jwt'}))return null;
+ const clerk=await createClerkClient({publishableKey:accountConfig.publishableKey,syncHost:accountConfig.syncHost,background:true});
+ if(signOut){await clerk.signOut();return null;}
+ return await clerk.session?.getToken()||null;
+}
 export function registerAccountBridge(){
  const trustedSurface=(sender:chrome.runtime.MessageSender)=>{
   if(sender.id!==chrome.runtime.id||!sender.url)return false;
@@ -64,12 +72,6 @@ export function registerAccountBridge(){
   }
   // Only exact packaged UI pages can request tokens; host-page content scripts cannot.
   if(message?.type!=='WANDEL_ACCOUNT_TOKEN'||!trustedSurface(sender))return;
-  (async()=>{
-   if(!accountConfig.publishableKey)throw new Error('This extension build has no Clerk key. Rebuild Wandel and click Reload in chrome://extensions, then refresh this page.');
-   if(accountConfig.publishableKey.startsWith('pk_test_')&&!await chrome.cookies.get({url:accountConfig.syncHost,name:'__clerk_db_jwt'}))return {token:null};
-   const clerk=await createClerkClient({publishableKey:accountConfig.publishableKey,syncHost:accountConfig.syncHost,background:true});
-   if(message.signOut){await clerk.signOut();return {token:null};}
-   return {token:await clerk.session?.getToken()||null};
-  })().then(reply).catch(error=>reply({error:error instanceof Error?(/authenticate this browser|dev.*browser/i.test(error.message)?'Sign in to Wandel in this Chrome profile, then return and retry. Your draft is unchanged.':error.message):'Sign-in unavailable.'}));return true;
+  (async()=>message.signOut?{token:await backgroundAccountToken(true)}:{token:await backgroundAccountToken()})().then(reply).catch(error=>reply({error:error instanceof Error?(/authenticate this browser|dev.*browser/i.test(error.message)?'Sign in to Wandel in this Chrome profile, then return and retry. Your draft is unchanged.':error.message):'Sign-in unavailable.'}));return true;
  });
 }

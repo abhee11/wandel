@@ -4,6 +4,15 @@ registerFloatingPanel();
 import {watchDevReload} from '../sidepanel/devReload';
 // Local development: reload the extension and its pages after each rebuild (npm run dev:local).
 watchDevReload();
+import {backgroundAccountToken} from './account';
+import {accountConfig as devAccount} from '../shared/accountConfig';
+import {isLocalDev} from '../sidepanel/devReload';
+// Local development: Wandel's own content script asks for a plan from the local server, so
+// end-to-end checks can run where the panel can't load (for example a browser automation tab).
+if(isLocalDev())chrome.runtime.onMessage.addListener((message,sender,reply)=>{
+ if(message?.type!=='WANDEL_DEV_PLAN'||sender.id!==chrome.runtime.id||sender.tab?.id===undefined)return;
+ (async()=>{const token=await backgroundAccountToken();if(!token)throw new Error('Sign in to Wandel first.');const response=await fetch(devAccount.apiOrigin+'/api/assistant/plan',{method:'POST',credentials:'omit',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify(message.body)});const data=await response.json();if(!response.ok)throw new Error(data.error?.message||'Plan request failed.');return {plan:data.plan};})().then(reply).catch(error=>reply({error:error instanceof Error?error.message:String(error)}));return true;
+});
 import {registerSharedWorkflow} from './sharedWorkflow';
 registerSharedWorkflow();
 import {registerWorkflowOpener} from './openWorkflow';

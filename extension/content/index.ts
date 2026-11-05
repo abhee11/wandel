@@ -27,6 +27,19 @@ const floatingPanel=new FloatingPanel(()=>{void send({type:'WANDEL_INLINE_CLOSE'
 const ready=session.init();
 // Local development: a page event opens the Wandel panel, so browser automation can test end to end.
 if(isLocalDev())window.addEventListener('wandel:dev-open',()=>{void send({type:'WANDEL_OPEN_CONNECTIONS'}).catch(ignore);},{signal:lifecycle.signal});
+// Local development: a chat request sent from the page runs the real context → plan → apply path; the result comes back as a page event.
+if(isLocalDev())window.addEventListener('wandel:dev-chat',event=>{void (async()=>{
+ let result:Record<string,unknown>;
+ try{
+  const {instruction}=JSON.parse(String((event as CustomEvent).detail));await ready;
+  const context=(await session.dispatch({type:'assistantContext',chat:true,instruction})).assistant?.context;if(!context)throw new Error('No page context.');
+  const reply=await send({type:'WANDEL_DEV_PLAN',body:{instruction,context,history:[],requestId:crypto.randomUUID()}});if(reply?.error)throw new Error(reply.error);
+  const plan=reply.plan;result={plan};
+  if(plan?.status==='edit'){try{await session.dispatch({type:'assistantApply',plan,token:context.token});result.applied='OK';}catch(error){result.applied=error instanceof Error?error.message:String(error);}}
+  result.unresolved=session.snapshot().unresolved;
+ }catch(error){result={error:error instanceof Error?error.message:String(error)};}
+ window.dispatchEvent(new CustomEvent('wandel:dev-chat-result',{detail:JSON.stringify(result)}));
+})();},{signal:lifecycle.signal});
 void ready.then(()=>send({type:'WANDEL_INLINE_STATUS'})).then(status=>{if(status?.open)floatingPanel.show(status.tabId);}).catch(ignore);
 void ready.then(()=>{if(!channel.available())session.destroy();}).catch(ignore);
 const browserControls=new DestinationBrowserControls(document,async action=>{const result=await send({type:'WANDEL_BROWSER_FINISH',action});if(!result?.ok)throw new Error(result?.error||'This browsing session has ended. Return to Wandel.');});
