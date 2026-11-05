@@ -19,6 +19,7 @@ import {freeBuild,assistantEnabled} from '../shared/build';
 import {sectionOperations} from '../ai/section';
 import {sectionTarget} from './selection';
 import {findDrop,floats,type Drop} from './dropTarget';
+import {screenDataKeys} from './blockData';
 const behindModal=['pointerdown','mousedown','pointerup','mouseup','click'];
 const staleTabMessage='This prototype changed in another tab. Reload this tab to continue. Changes made here since then were not saved.';
 import {compileFlow,buttonTheme} from '../ai/flow';
@@ -319,6 +320,8 @@ export class Session {
   private handleClick=(event:MouseEvent)=>{
     if(this.renderer.forwarding)return;
     if(this.suppressClick){event.preventDefault();event.stopImmediatePropagation();return;}
+    // A click can change prototype data and still follow its connection.
+    if(this.runningConnections&&event.target instanceof Element&&this.renderer.dataClick(event.target,this.replayData))this.renderer.updateData(this.replayData);
     const original=(this.assistant||assistantEnabled||this.options.assistantEnabled)?(event.composedPath()[0]||event.target):event.target;let target=original instanceof HTMLElement?original:original instanceof Element?original.closest<HTMLElement>('button,a,[role=button]'):null;if(target instanceof HTMLElement&&this.selecting)target=beneathCover(target,event.clientX,event.clientY);if(!(target instanceof HTMLElement)||!((this.assistant||assistantEnabled||this.options.assistantEnabled)?inScope(this.root,target):this.root.contains(target))||target.closest('[data-dx-ignore]'))return;
     if(target.closest('[data-dx-interactive]'))return;
     if(this.selecting&&(event.ctrlKey||event.metaKey||this.styleClipboard)){
@@ -433,7 +436,10 @@ export class Session {
       if(this.navigating)return;const from=this.stateId,workflow=this.workflow.id;this.navigating=true;
       const work=this.queue.then(async()=>{if(this.stateId!==from||this.workflow.id!==workflow){this.navigating=false;return;}try{await this.navigateState(next,[...this.visits,from]);}catch(error){this.navigating=false;this.pageEditor.notify(error instanceof Error?error.message:'Could not open the connected page.');}});this.queue=work;return;
     }
-    if(next){this.replayHistory.push(clone(this.replayData));for(const effect of (passes?edge?.effects:[])||[])this.replayData[effect.key]=effect.value;this.visits.push(this.stateId);this.stateId=next;this.selected=null;this.render(true);this.renderer.owned.get(`view:${next}`)?.scrollIntoView?.({behavior:'smooth',block:'center'});void this.rememberLivePosition().catch(()=>{/* The position is saved again at the next change. */});}
+    if(next){this.replayHistory.push(clone(this.replayData));for(const effect of (passes?edge?.effects:[])||[])this.replayData[effect.key]=effect.value;
+      // Cancel or close means start over; moving on through a connection keeps what was entered.
+      if(source==='modal:'+this.stateId+':close')for(const key of screenDataKeys(this.workflow.states.find(state=>state.id===this.stateId)?.operations||[]))delete this.replayData[key];
+      this.visits.push(this.stateId);this.stateId=next;this.selected=null;this.render(true);this.renderer.owned.get(`view:${next}`)?.scrollIntoView?.({behavior:'smooth',block:'center'});void this.rememberLivePosition().catch(()=>{/* The position is saved again at the next change. */});}
     else if(!this.replay){const el=this.renderer.owned.get(source);if(el)this.select(el);}
   }
   private commit(next:Workflow,nextState=this.stateId,group?:string,repaint=true) {const validated=validateWorkflow(next);if(!group||group!==this.historyGroup)this.history.push(this.workflow,this.stateId);this.historyGroup=group;this.workflow=validated;this.workflow.updatedAt=new Date().toISOString();this.stateId=nextState;this.dirty=true;if(repaint)this.render(true);this.scheduleDraft();}

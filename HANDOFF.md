@@ -27,7 +27,7 @@ All planned and finished tests, including the complex build requests, are in `do
 - The repo's `node_modules` are macOS builds; run builds on the Mac.
 
 ## Free checks (no AI)
-`npx vite --port 5180 --host 127.0.0.1`, then open `http://127.0.0.1:5180/demo/fixtures/visibility-check.html`. Ten cases, each in a fresh frame through the real context → compile → render → verify path. Storage is cleared at the start of each run. All pass:
+`npx vite --port 5180 --host 127.0.0.1`, then open `http://127.0.0.1:5180/demo/fixtures/visibility-check.html`. Eleven cases, each in a fresh frame through the real context → compile → render → verify path. Storage is cleared at the start of each run. All pass:
 1. Card hidden until a click, shown below on click, removed by Undo
 2. Toggle
 3. Hidden at load with nothing that shows it → reported (rolled back)
@@ -37,7 +37,8 @@ All planned and finished tests, including the complex build requests, are in `do
 7. New menu option opens its own page; the original option ("General") returns
 8. Dragging a card: beside, into a panel, Shift for free offset, sidebar and no slot save nothing, Undo returns it
 9. A save from another tab is not overwritten; banner shown, edits blocked
-10. A click behind a prototype modal never reaches the page
+10. A click behind a prototype modal never reaches the page; a closed modal reopens empty
+11. Prototype data: values cross steps, filters switch, required fields hold, lists grow and shrink
 Older fixture: `demo/fixtures/mirrortalk-group.html` (globals `context()` and `apply(actions)`).
 
 Real panel with no AI: open `demo/fixtures/assistant.html?stub=new-page`, clear storage, then call `sendToPanel(text)` from a timer and read the result in a second call (long awaits can detach Claude in Chrome). The plan call is stubbed. This fixture has no screenshot capture, so visual review does not run there.
@@ -75,6 +76,7 @@ Note: Claude in Chrome cannot work in tabs holding another extension's iframe, s
 - **Free test round** (see the tracker): switcher labels survive state-based names (`atStructure`), Try flow no longer ends on Wandel's own fake Escape (`session.escape` ignores untrusted keys), menus that ignore Escape close through their own button, and large panels cannot drop into page frames (`dropTarget.ts pageFrame`).
 - **Two tabs no longer overwrite each other** (`session.ts changedElsewhere`, `warnStale`): before saving, a tab checks that storage still holds the version it last read or wrote. If not, it does not save, shows its own banner with Reload this tab, and blocks edits. The check also runs when a tab regains focus.
 - **Prototype modals block the page behind them** (`session.ts modalGuard`): the dimming is only a box-shadow, so clicks used to reach the real app through it. Prototype screen changes also save their position, so a closed modal does not return on reload.
+- **Prototype data** (`content/blockData.ts`, `logic` and `data` in `shared/block.ts`): block parts can bind fields, show `{{name}}` and `{{list.count}}`, show on a condition, set values on click, require values, and repeat, add and remove list items. It builds on `replayData`, and values are shared across screens. Cancel or X on a modal discards that modal's values; moving on through a connection keeps them. The prompt tells the planner to use this and never `custom` for anything that changes.
 - The 05:25 plans were one turn with retries of a real request ("add an option to expand… the checkbox contents in the My record"), not a mystery.
 
 ## Open issues (not yet resolved)
@@ -87,7 +89,7 @@ Note: Claude in Chrome cannot work in tabs holding another extension's iframe, s
 7. **Test 5 rough edges.** The expand/collapse control is small text on a pale ellipse. This transcript has one checklist item, so "each item" is untested with several.
 8. **`status: open` plans.** `wandel:dev-chat` stops at them; the panel opens the control and replans. For a closed dropdown, open it with a real click and resend. The panel's own flow was not exercised.
 9. **MirrorTalk data moved during testing.** The quote carousel beside My Record disappeared (with zero Wandel edits on the page) and Takeaways regenerated, so saved targets there can change between runs.
-10. **Prototypes cannot show entered data elsewhere.** B1's date filter changes nothing and B2's review step cannot show typed values. Likely blocks B8, B9 and B11 too.
+10. **Prototype data limits.** Charts and `custom` parts cannot use it, values are lost on reload, and there is no sort or text filtering of a list yet (B3, B4).
 11. **Tabs warn but do not sync.** A stale tab keeps its unsaved edit on screen until reloaded, and that edit is lost. Live sync between tabs was not built.
 12. **Review after a new page is unconfirmed.** The false cancel is fixed in the fixture, but only the real panel can show the review running on the new page. In the owner's panel run, review also answered "uncertain" when the panel covered the changed controls.
 13. **Next panel test not run yet:** repeat the General request, follow-up "Add a graph with mock data to that page", switch back and forth, Undo from the panel, then save and reopen. Also untested in the panel: failure recovery. Conversation mode (hands-free turns on top of push-to-talk) is proposed for after that.

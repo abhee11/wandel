@@ -128,15 +128,68 @@ const cases:Record<string,()=>Promise<Result>>={
   const {home}=await homeRefs();let reached=0;
   const library=[...document.querySelectorAll<HTMLElement>('nav button')].find(button=>button.textContent==='Library')!;library.addEventListener('click',()=>{reached++;});
   const node=(parent:number,type:string,text:string|null)=>({parent,type,text,detail:null,icon:null,variant:null,tone:null,level:null,columns:null,justify:null,selected:null,options:null,items:null,action:null,src:null,value:null,min:null,max:null,seconds:null,html:null,css:null});
-  const applied=await apply([{kind:'connect',targets:[home],newViewTitle:'Prototype modal',presentation:'modal',block:{accent:'#7B29FF',nodes:[node(-1,'stack',null),node(0,'text','Inside the modal')]}}]);
+  const applied=await apply([{kind:'connect',targets:[home],newViewTitle:'Prototype modal',presentation:'modal',block:{accent:'#7B29FF',nodes:[node(-1,'stack',null),node(0,'text','Inside the modal'),{...node(0,'input','Answer'),logic:{bind:'answer'}}]}}]);
   if(applied!=='OK')return check(false,'Rolled back: '+applied);
   await session.dispatch({type:'interact'});
   const shown=!!document.querySelector('[role=dialog][data-dx-owned]');
   library.click();await frames();
   const behind=reached;
   const close=[...document.querySelectorAll<HTMLElement>('[role=dialog][data-dx-owned] button')].find(button=>/close/i.test(button.getAttribute('aria-label')||''));
+  const answer=document.querySelector<HTMLInputElement>('[role=dialog][data-dx-owned] input')!;answer.value='typed';answer.dispatchEvent(new Event('input',{bubbles:true}));
   press(close);await frames();library.click();await frames();
-  return check(shown&&behind===0&&reached===1,`Modal shown: ${shown}; clicks through it: ${behind}; page works again once closed: ${reached===1}.`);
+  press(homeButton());await frames();
+  const fresh=document.querySelector<HTMLInputElement>('[role=dialog][data-dx-owned] input')?.value==='';
+  return check(shown&&behind===0&&reached===1&&fresh,`Modal shown: ${shown}; clicks through it: ${behind}; page works again once closed: ${reached===1}; reopens empty: ${fresh}.`);
+ },
+ async 'Prototype data: values carry across steps, filters switch, lists grow and shrink'(){
+  const part=(parent:number,type:string,text:string|null,logic:Record<string,unknown>|null=null,extra:Record<string,unknown>={})=>({parent,type,text,detail:null,icon:null,variant:null,tone:null,level:null,columns:null,justify:null,selected:null,options:null,items:null,action:null,src:null,value:null,min:null,max:null,seconds:null,html:null,css:null,logic,...extra});
+  const block={accent:'#7B29FF',data:[{key:'step',value:'1'}],nodes:[
+   part(-1,'stack',null),
+   part(0,'stack',null,{when:{key:'step',is:'1'}}),
+   part(1,'input','Name',{bind:'name'}),
+   part(1,'button','Next',{set:[{key:'step',value:'2'}],requires:['name']}),
+   part(0,'stack',null,{when:{key:'step',is:'2'}}),
+   part(4,'text','Review {{name}}'),
+   part(4,'button','Back',{set:[{key:'step',value:'1'}]}),
+   part(0,'select','Range',{bind:'range'},{options:['Sep','Oct']}),
+   part(0,'text','Sep figures',{when:{key:'range',is:'Sep'}}),
+   part(0,'text','Oct figures',{when:{key:'range',is:'Oct'}}),
+   part(0,'input','Note',{bind:'note'}),
+   part(0,'button','Add note',{add:{list:'notes',fields:[{key:'title',value:'{{note}}'}]},set:[{key:'note',value:''}],requires:['note']}),
+   part(0,'text','No notes yet',{when:{key:'notes.count',is:'0'}}),
+   part(0,'text','Total {{notes.count}}'),
+   part(0,'card',null,{repeat:'notes'}),
+   part(14,'text','Note: {{item.title}}'),
+   part(14,'button','Delete',{remove:true})
+  ]};
+  const applied=await apply([{kind:'create',element:'block',block,targets:[await ref(e=>e.tag==='section')],position:'below'}]);
+  if(applied!=='OK')return check(false,'Rolled back: '+applied);
+  if((await snap()).unresolved.length)return check(false,'Warnings: '+(await snap()).unresolved.join(' | '));
+  await session.dispatch({type:'interact'});await frames();
+  const host=document.querySelector<HTMLElement>('[data-dx-block]')!,vis=(el:Element|null|undefined)=>!!el&&(el as HTMLElement).getBoundingClientRect().height>0;
+  const button=(text:string)=>[...host.querySelectorAll<HTMLButtonElement>('button')].find(b=>b.textContent===text&&vis(b));
+  const said=(text:string)=>[...host.querySelectorAll('p')].some(p=>vis(p)&&p.textContent===text);
+  const field=(label:string)=>[...host.querySelectorAll('label')].find(l=>l.textContent?.startsWith(label))!.querySelector<HTMLInputElement>('input,select')!;
+  const type=(input:HTMLInputElement,value:string)=>{input.value=value;input.dispatchEvent(new Event('input',{bubbles:true}));input.dispatchEvent(new Event('change',{bubbles:true}));};
+  const results:string[]=[];
+  if(!button('Next')?.disabled)results.push('Next should wait for a name');
+  type(field('Name'),'Fractions');await frames();
+  if(button('Next')?.disabled)results.push('Next stayed disabled');
+  button('Next')?.click();await frames();
+  if(!said('Review Fractions'))results.push('review lacks the typed name');
+  if(button('Next'))results.push('step 1 still showing');
+  button('Back')?.click();await frames();
+  if(field('Name').value!=='Fractions')results.push('the name was lost going back');
+  if(!said('Sep figures')||said('Oct figures'))results.push('first filter option wrong');
+  type(field('Range'),'Oct');await frames();
+  if(said('Sep figures')||!said('Oct figures'))results.push('filter did not switch');
+  if(!said('No notes yet')||!said('Total 0'))results.push('empty state missing');
+  for(const note of ['One','Two']){type(field('Note'),note);await frames();button('Add note')?.click();await frames();}
+  if(!said('Note: One')||!said('Note: Two')||!said('Total 2')||said('No notes yet'))results.push('list did not grow');
+  if(field('Note').value!=='')results.push('input not cleared');
+  button('Delete')?.click();await frames();
+  if(said('Note: One')||!said('Note: Two')||!said('Total 1'))results.push('delete removed the wrong item');
+  return check(!results.length,results.join('; ')||'Wizard, filter, required field and list all work from data.');
  }
 };
 const name=new URL(location.href).searchParams.get('case')||'';

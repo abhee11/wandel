@@ -16,6 +16,7 @@ export function mountBlock(host:HTMLElement,block:Block,register:(id:string,node
  host.style.setProperty('overflow-wrap','break-word');host.style.setProperty('word-break','normal');
  block.nodes.forEach((node,i)=>{
   const part=render(node,accent,i?block.nodes[node.parent].type:undefined);built.push(part);if(node.id){part.dataset.dxOwned=node.id;register(node.id,part);}
+  if(node.logic){part.dataset.dxLogic=JSON.stringify(node.logic);if(node.logic.remove)part.dataset.dxRemoveItem='true';}
   if(i===0)host.append(part);else (built[node.parent].querySelector<HTMLElement>(':scope > [data-dx-body]')||built[node.parent]).append(part);
  });
  refreshTemplates(host);

@@ -1,5 +1,6 @@
 import {mountPrototypePage,mountChartSection} from './prototypePage';
 import {mountBlock,blockInteract} from './block';
+import {fill,fieldOf,dataClick,syncBlocks} from './blockData';
 import {Behaviors,safeDeclarations,choiceLabels} from './behavior';
 import {applyArrangement} from './arrangement';
 import {placeBelow,restoreInsertionStyles,type InsertionStyle} from './insertionPlacement';
@@ -32,11 +33,21 @@ export class Renderer {
   updateData(data:Record<string,string>){
     for(const el of this.owned.values()){
       const walk=document.createTreeWalker(el,NodeFilter.SHOW_TEXT);let n:Node|null;
-      while((n=walk.nextNode()))if(n instanceof Text&&/\{\{[a-zA-Z][a-zA-Z0-9_]*\}\}/.test(n.data))this.templates.set(n,n.data);
+      while((n=walk.nextNode()))if(n instanceof Text&&/\{\{[a-zA-Z][a-zA-Z0-9_.]*\}\}/.test(n.data)&&!n.parentElement?.closest('[data-dx-clone-of]'))this.templates.set(n,n.data);
     }
-    for(const [node,template] of this.templates){if(!node.isConnected){this.templates.delete(node);continue;}const value=template.replace(/\{\{([a-zA-Z][a-zA-Z0-9_]*)\}\}/g,(_,key)=>Object.hasOwn(data,key)?data[key]:'');if(node.data!==value)node.data=value;}
+    for(const [node,template] of this.templates){if(!node.isConnected){this.templates.delete(node);continue;}const value=fill(template,data);if(node.data!==value)node.data=value;}
     for(const [input,key] of this.bindings){const value=Object.hasOwn(data,key)?data[key]:'';if(input instanceof HTMLInputElement&&['checkbox','radio'].includes(input.type))input.checked=value==='true';else if(input.value!==value)input.value=value;}
+    syncBlocks([...this.owned.values()].filter(node=>node.isConnected&&node.dataset.dxBlock==='true'),data);
   }
+  /** Connects a block's fields to prototype data and fills in its starting values. */
+  private bindBlock(host:HTMLElement,block:NonNullable<Extract<Operation,{kind:'insert'}>['node']['block']>){
+    for(const entry of block.data||[])if(!Object.hasOwn(this.data,entry.key))this.data[entry.key]=entry.value;
+    for(const part of host.querySelectorAll<HTMLElement>('[data-dx-logic]')){
+      const key=(JSON.parse(part.dataset.dxLogic!) as {bind?:string|null}).bind,field=key?fieldOf(part):null;if(!key||!field)continue;
+      this.bindings.set(field,key);if(!Object.hasOwn(this.data,key)&&field.value)this.data[key]=field.value;
+    }
+  }
+  dataClick(target:Element,data:Record<string,string>){return dataClick(target,data);}
   forwarding=false;
   private mirrors=new Map<HTMLElement,Locator>();
   private triggers=new Map<HTMLElement,string>();
@@ -128,7 +139,9 @@ export class Renderer {
       if(cover){if(getComputedStyle(node).position==='static')node.style.setProperty('position','relative','important');node.style.setProperty('z-index',String(cover),'important');}
     }
   }
+  private data:Record<string,string>={};
   reconcile(w:Workflow,stateId:string,data:Record<string,string>=Object.fromEntries((w.variables||[]).map(v=>[v.key,v.value]))):string[] {
+    this.data=data;
     const errors:string[]=[];
     const chain=renderLineage(w,stateId);
     const deferred=new Set<string>();
@@ -338,7 +351,7 @@ export class Renderer {
     if(op.node.kind==='field'&&!op.node.copy){const field=configureField(node,op.node);field.dataset.dxOwned=op.node.id+':input';this.owned.set(op.node.id+':input',field);if(op.node.binding)this.bindings.set(field,op.node.binding);}
     if(op.node.control)mountControl(node,op.node);
     if(op.node.chart)mountChartSection(node,op.node.chart);
-    if(op.node.block)mountBlock(node,op.node.block,(id,part)=>this.owned.set(id,part));
+    if(op.node.block){mountBlock(node,op.node.block,(id,part)=>this.owned.set(id,part));this.bindBlock(node,op.node.block);}
     if(op.node.grid)node.style.setProperty('grid-column',`${op.node.grid.start} / span ${op.node.grid.span}`,'important');
     if(op.node.isolated){
       const canvas=document.createElement('div');canvas.dataset.dxCanvas='true';canvas.style.cssText='position:fixed!important;inset:52px 16px 16px!important;z-index:2147483000!important;overflow:auto!important;isolation:isolate!important;background:#f4f3f8!important;border:1px solid #d6d3e3!important;border-radius:16px!important;box-shadow:0 15px 80px #18122e44!important;padding:24px!important;';

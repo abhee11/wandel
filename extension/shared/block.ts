@@ -4,6 +4,20 @@ export const blockTypes=['card','stack','row','grid','heading','text','eyebrow',
 export const blockContainers=['card','stack','row','grid','disclosure'] as const;
 export const blockTones=['none','pink','peach','yellow','lime','mint','sky','lilac','gray'] as const;
 const httpImage=z.string().max(2048).refine(value=>{try{const url=new URL(value);return ['https:','http:'].includes(url.protocol)&&!url.username&&!url.password;}catch{return false;}},'Use an HTTP(S) image link.');
+const dataKey=z.string().regex(/^[a-zA-Z][a-zA-Z0-9_]{0,59}$/);
+const valueKey=z.string().regex(/^[a-zA-Z][a-zA-Z0-9_]{0,59}(\.count)?$/);
+const dataEntry=z.object({key:dataKey,value:z.string().max(4000)}).strict();
+/** How a part reads and writes prototype data. Every field is optional, so a static part carries none of it. */
+export const BlockLogicSchema=z.object({
+ bind:dataKey.nullable().optional(),
+ when:z.object({key:valueKey,is:z.string().max(120).nullable().optional(),not:z.boolean().nullable().optional()}).strict().nullable().optional(),
+ set:z.array(dataEntry).max(8).nullable().optional(),
+ requires:z.array(valueKey).max(8).nullable().optional(),
+ repeat:dataKey.nullable().optional(),
+ add:z.object({list:dataKey,fields:z.array(dataEntry).min(1).max(8)}).strict().nullable().optional(),
+ remove:z.boolean().nullable().optional()
+}).strict();
+export type BlockLogic=z.infer<typeof BlockLogicSchema>;
 export const BlockNodeSchema=z.object({
  id:z.string().min(1).max(100).optional(),
  parent:z.number().int().min(-1).max(119),
@@ -26,10 +40,12 @@ export const BlockNodeSchema=z.object({
  max:z.number().min(-1e6).max(1e6).nullable().optional(),
  seconds:z.number().min(0.5).max(60).nullable().optional(),
  html:z.string().max(20000).nullable().optional(),
- css:z.string().max(12000).nullable().optional()
+ css:z.string().max(12000).nullable().optional(),
+ logic:BlockLogicSchema.nullable().optional()
 }).strict();
 export const BlockSchema=z.object({
  accent:z.string().regex(/^#[0-9a-fA-F]{6}$/).nullable().optional(),
+ data:z.array(dataEntry).max(20).nullable().optional(),
  nodes:z.array(BlockNodeSchema).min(1).max(120)
 }).strict().superRefine((block,ctx)=>{
  block.nodes.forEach((node,i)=>{
