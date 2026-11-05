@@ -56,7 +56,10 @@ export function resolve(l:Locator,root:ParentNode,owned:Map<string,HTMLElement>)
   // Layout containers retain their identity while responsive charts redraw
   // descendant text. Require both the captured class and ancestry, and refuse
   // ambiguous copies; aggregate text is not a stable container identifier.
-  if(l.attrs.class){const exact=candidates.filter(el=>el.children.length&&!el.matches('button,a,input,textarea,select,[role=button],[role=link]')&&el.getAttribute('class')===l.attrs.class&&roleOf(el)===l.role&&JSON.stringify(ancestorTags(el))===JSON.stringify(l.ancestorTags));if(exact.length===1)return exact[0];}
+  if(l.attrs.class){const exact=candidates.filter(el=>el.children.length&&!el.matches('button,a,input,textarea,select,[role=button],[role=link]')&&el.getAttribute('class')===l.attrs.class&&roleOf(el)===l.role&&JSON.stringify(ancestorTags(el))===JSON.stringify(l.ancestorTags));if(exact.length===1)return exact[0];
+   // Sibling containers can share a generated class. Its recorded address tells them apart, even when the content inside has changed since.
+   if(exact.length>1&&l.structure){const anchors=deepElements(root,'[id]').filter(el=>el.id===l.structure!.anchorId);if(root instanceof HTMLElement&&root.id===l.structure.anchorId)anchors.unshift(root);if(anchors.length===1){let node:Element|undefined=anchors[0];for(const index of l.structure.path)node=node?.children[index];if(node&&exact.includes(node as HTMLElement))return node as HTMLElement;}}
+  }
   // Icon-only layout wrappers often have no text or accessible name. Anchor
   // their structural address to a unique application ID, with a fingerprint
   // check; never accept a bare positional path into changed content.

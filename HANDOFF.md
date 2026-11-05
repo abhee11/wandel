@@ -19,7 +19,7 @@ A Chrome extension and server. The user types a design change in a panel ("dupli
 
 ## Running locally
 - **`Start Wandel.command`** (double-click in Finder) or `npm run dev:local`: stops any old server on port 4320, builds the extension and the server, starts the server, then keeps running. It polls `extension/` and `platform/` for changes, rebuilds, restarts the server (and restarts it if it crashes), and pushes new commits on `main` every ~10 s. Its log (and the server's output) is in **`.data/dev-local.log`**.
-- After each extension rebuild it writes `dist/dev-reload.json`. In local builds (API on 127.0.0.1) the extension's background watches that stamp and reloads itself, then reloads tabs on sites where Wandel was opened (`extension/sidepanel/devReload.ts`). This is not fully reliable: if Chrome keeps old content-script code, reload Wandel once in `chrome://extensions` and refresh the page.
+- After each extension rebuild it writes `dist/dev-reload.json`. In local builds (API on 127.0.0.1) the extension's background watches that stamp and reloads itself, then reloads tabs on sites where Wandel was opened (`extension/sidepanel/devReload.ts`). The last loaded stamp is kept in storage, so a worker that slept through a build still notices it when it wakes. If Chrome still runs old content-script code, reload Wandel once in `chrome://extensions` and refresh the page.
 - Type check: `npx tsc --noEmit -p .`
 - The repo's `node_modules` are macOS builds; run builds on the Mac.
 
@@ -44,7 +44,8 @@ Page events handled by Wandel's content script (`extension/content/index.ts`), f
 - `wandel:dev-open` opens the Wandel panel in that tab.
 - `wandel:dev-chat` with `detail = JSON.stringify({instruction})` runs context → plan (via background `WANDEL_DEV_PLAN`) → apply. Result arrives as `wandel:dev-chat-result` (JSON string: `plan`, `applied`, `unresolved`, or `error`). No visual review or replanning.
 - `wandel:dev-state` → `wandel:dev-state-result`: current workflow, state, mode and problems.
-Note: Claude in Chrome blocks other extensions' iframes in tabs it controls, so Wandel's panel cannot load there; use these hooks instead, or a Chrome you launch yourself with `--load-extension=dist`.
+- `wandel:dev-command` with `detail = JSON.stringify(command)` runs one session command (`interact`, `undo`, `redo`, `reset`…). Result arrives as `wandel:dev-command-result`. The page starts in mode `closed`: send `interact` first. Do not fire `wandel:dev-open`: its iframe stops Claude in Chrome running scripts in that tab.
+Note: Claude in Chrome cannot work in tabs holding another extension's iframe, so Wandel's panel cannot be used there; use these hooks instead, or a Chrome you launch yourself with `--load-extension=dist`.
 
 ## Done (2026-11-04/05)
 - **Shared intended visibility** (`extension/content/visibility.ts`): the renderer records what the prototype hides on purpose (until a click/hover, on request, deferred in a closed menu or screen). Layout inspection (`nativeDesign.ts inspectLayout`) and the plan's checks (`visualVerification.ts`, `controlVerification.ts`, `execute.ts verify`) skip it; content hidden by accident still fails and names the hiding container; a load-time hide nothing reverses is reported. Revealed content is re-checked once shown (`Behaviors.onReveal` → `Renderer.checkRevealed` → `Session.revealed`, issues prefixed "After it was shown:"). The visual review is told click/hover-revealed content is expected to be absent (`revealNote` in AssistantPanel).
@@ -53,12 +54,16 @@ Note: Claude in Chrome blocks other extensions' iframes in tabs it controls, so 
 - **Navigation persists** (`session.ts lead()`): a menu/tab/switcher still shown on a screen it opened keeps going to its other screens; an option with no connection of its own (the original "General", or a block option) returns to the screen it was picked from.
 - **Menu copies**: copied pick-one options get choice behavior (`choice` op, `behavior.ts addChoice`). Links without a destination are allowed as prototype items. Copies of icon-only items get a visible label of their own and drop the source's icon (`content/duplicateHeading.ts`).
 - Rejected plans show their rule in chat; the panel/notice no longer overlap the composer.
+- **Tests 2 and 3 run on MirrorTalk** (through the page hooks, so no panel, visual review or replanning): both pass clicks and Undo.
+- **Targets survive changing content** (`locator.ts`): MirrorTalk's two grids share a generated class, and the carousel inside changes between loads. That was the "3 edits couldn't find their elements" failure. Class matches are now told apart by recorded address.
+- **Icon-only copies** take the icon's colour, not the link's browser-default blue (`duplicateHeading.ts`).
+- The 05:25 plans were one turn with retries of a real request ("add an option to expand… the checkbox contents in the My record"), not a mystery.
 
 ## Open issues (not yet resolved)
-1. **Tests 2 and 3 have not been re-run on MirrorTalk after the latest fixes.**
-   - Test 2: "Add a left menu option X and then Clicking X should append a full-width card below the current section called "Home Options", with some text." Expect: X as a plain unselected item with a visible label, card hidden, click X → card below, Undo removes both.
-   - Test 3: "Clicking the "My Record" title should show or hide a full-width card below the current section called "Quick Notes", with some text. Start with it hidden." Expect: hidden; clicks show/hide/show; Undo.
-2. **"3 edits couldn't find their elements"** on the Decimal Concepts Review activity: the Quick Notes insert and its two behaviors (from a 05:24 run) no longer resolve their targets. Cause not found yet. Check with `wandel:dev-state`.
-3. At 05:25 three plans ran that were not the user's request ("Expand contents" toggle hiding the transcript); all rolled back. Trigger unknown (possibly a Fix it / Retry).
-4. Owner asked: on a menu item click, the highlight should move to the clicked item (and back), like a real sidebar. Not built; owner hasn't confirmed.
-5. Older gaps: nearest-style rule unconfirmed on a real page; neighbour check compares only size/position; core instructions not reviewed for contradictions; copies of tabs/toggles in their "on" state may copy the active look; not deployed (Railway runs old code; hosted zip needs rebuilding — see `scripts/` and env vars `WANDEL_APP_ORIGIN`, `API_ORIGIN`, `CLERK_SYNC_HOST`, `WANDEL_EXTENSION_KEY`).
+1. **Card placement differs between requests.** "Below the current section" put Home Options at the very bottom but Quick Notes between Participant Reflection and Plan and Setup. Home Options also sat about 12px inside the cards above it.
+2. **Revealed content can be off screen.** Quick Notes opens about 1,190px down the page, so on a laptop-sized window clicking My Record seems to do nothing unless you scroll.
+3. **`assistantReset` does not clear `workflow.assistantMemory`.** Old memory stays in later requests after a `reset`.
+4. **The old-workflow click is unexplained.** Before the locator fix, clicking My Record on the 05:24 workflow opened the transcript instead of toggling. That workflow is gone; not seen on new runs.
+5. **Toggle first click after reload: cause not proven.** It failed once, and passed 3 of 3 after the locator fix. Likely the same cause, but not shown directly. Watch for it.
+6. Owner asked: on a menu item click, the highlight should move to the clicked item (and back), like a real sidebar. Not built; owner hasn't confirmed.
+7. Older gaps: nearest-style rule unconfirmed on a real page; neighbour check compares only size/position; core instructions not reviewed for contradictions; copies of tabs/toggles in their "on" state may copy the active look; not deployed (Railway runs old code; hosted zip needs rebuilding — see `scripts/` and env vars `WANDEL_APP_ORIGIN`, `API_ORIGIN`, `CLERK_SYNC_HOST`, `WANDEL_EXTENSION_KEY`).

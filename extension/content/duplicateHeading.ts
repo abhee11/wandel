@@ -28,7 +28,9 @@ export function renameCopyHeading(source:HTMLElement,heading:string,copy:CopyNod
   const inside=(index:number)=>{for(let i=index;i>=0;i=copy[i].parent)if(i===at)return true;return false;};
   copy.forEach((item,index)=>{if(!inside(index))return;delete item.icon;if(item.tag==='img')item.style={...item.style,display:'none'};});
   // Icon-only items often hide text with their own styling (no font size, off-screen indent); the label sets its own.
-  const css=getComputedStyle(control||source),ink=/rgba?\([^)]*,\s*0\)$/.test(css.color)||css.color==='transparent'?'#14131b':css.color;
+  // The item's visible colour is usually its icon's: the link around an icon may only have the browser's default blue.
+  const css=getComputedStyle(control||source),unset=(paint:string)=>/rgba?\([^)]*,\s*0\)$/.test(paint)||paint==='transparent',shape=[...(control||source).querySelectorAll<SVGElement>('svg path,svg circle,svg rect,svg line,svg polyline,svg polygon,svg ellipse')].map(node=>getComputedStyle(node)),icon=shape.flatMap(style=>[style.fill,style.stroke]).find(paint=>/^rgb/.test(paint)&&!unset(paint));
+  const ink=icon||(unset(css.color)||css.color==='rgb(0, 0, 238)'?'#14131b':css.color);
   copy.push({id:uid(),parent:at,tag:'span',text:'',style:{display:'inline-block',color:ink,'font-size':'14px','font-weight':'600','line-height':'20px','white-space':'nowrap','text-indent':'0','visibility':'visible',opacity:'1'}});
   const label=copy.length-1;copy.push({id:uid(),parent:label,tag:'#text',text:heading,style:{}});return label;
  }

@@ -29,6 +29,12 @@ const ready=session.init();
 if(isLocalDev())window.addEventListener('wandel:dev-open',()=>{void send({type:'WANDEL_OPEN_CONNECTIONS'}).catch(ignore);},{signal:lifecycle.signal});
 // Local development: the current workflow and its problems, for automated checks.
 if(isLocalDev())window.addEventListener('wandel:dev-state',()=>{void ready.then(()=>{const s=session.snapshot();window.dispatchEvent(new CustomEvent('wandel:dev-state-result',{detail:JSON.stringify({stateId:s.stateId,mode:s.mode,unresolved:s.unresolved,canUndo:s.canUndo,workflow:s.workflow})}));});},{signal:lifecycle.signal});
+// Local development: run one session command (undo, interact, reset…) from the page, for automated checks.
+if(isLocalDev())window.addEventListener('wandel:dev-command',event=>{void (async()=>{
+ let result:Record<string,unknown>;
+ try{await ready;const s=await session.dispatch(JSON.parse(String((event as CustomEvent).detail)));result={mode:s.mode,unresolved:s.unresolved,canUndo:s.canUndo};}catch(error){result={error:error instanceof Error?error.message:String(error)};}
+ window.dispatchEvent(new CustomEvent('wandel:dev-command-result',{detail:JSON.stringify(result)}));
+})();},{signal:lifecycle.signal});
 // Local development: a chat request sent from the page runs the real context → plan → apply path; the result comes back as a page event.
 if(isLocalDev())window.addEventListener('wandel:dev-chat',event=>{void (async()=>{
  let result:Record<string,unknown>;

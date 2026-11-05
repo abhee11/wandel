@@ -4,7 +4,7 @@
  * Wandel open (and other tabs of the same sites) so they run the new content script.
  * The page can also ask to open the Wandel panel (`wandel:dev-open`), so a browser automation
  * can test without clicking Chrome's toolbar. Published builds never run any of this. */
-const tabsKey='wandel:dev-reload-tabs',originsKey='wandel:dev-reload-origins';
+const tabsKey='wandel:dev-reload-tabs',originsKey='wandel:dev-reload-origins',stampKey='wandel:dev-reload-stamp';
 export function isLocalDev(){return /^https?:\/\/(127\.0\.0\.1|localhost)(:|\/|$)/.test(process.env.WANDEL_PUBLIC_API_ORIGIN||'');}
 export function watchDevReload(){
  if(!isLocalDev())return;
@@ -13,11 +13,13 @@ export function watchDevReload(){
   const ids=(await chrome.storage.local.get(tabsKey))[tabsKey];if(!Array.isArray(ids))return;
   await chrome.storage.local.remove(tabsKey);for(const id of ids)await chrome.tabs.reload(id).catch(()=>{});
  });
- let first:number|undefined;
+ // The last loaded build is kept in storage: a worker that slept through a build still sees that it changed.
  const check=async()=>{
   let at:number|undefined;try{const response=await fetch(chrome.runtime.getURL('dev-reload.json'),{cache:'no-store'});if(!response.ok)return;at=(await response.json()).at;}catch{return;}
-  if(first===undefined){first=at;return;}
-  if(at===first)return;
+  const seen=(await chrome.storage.local.get(stampKey))[stampKey];
+  if(at===undefined||at===seen)return;
+  await chrome.storage.local.set({[stampKey]:at});
+  if(seen===undefined)return;
   const session=await chrome.storage.session.get(null),open=Object.entries(session).filter(([key,value])=>key.startsWith('wandel:inline:')&&value).map(([key])=>Number(key.slice(14)));
   // Sites where Wandel was opened are remembered across reloads (session storage is cleared by one), so their tabs keep getting the new content script.
   const tabs=await chrome.tabs.query({}),known=(await chrome.storage.local.get(originsKey))[originsKey],origins=new Set<string>([...(Array.isArray(known)?known:[]),...tabs.filter(tab=>tab.id!==undefined&&open.includes(tab.id)&&tab.url).map(tab=>new URL(tab.url!).origin)]);
