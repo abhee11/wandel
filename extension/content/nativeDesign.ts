@@ -4,7 +4,9 @@ import {expectation,hidingAncestor,hiddenRoot} from './visibility';
 
 export type NativeDesign={surface:CopyNode['style'];heading:CopyNode['style'];text:CopyNode['style'];button:CopyNode['style'];field:CopyNode['style'];card:CopyNode['style'];table?:CopyNode['style'];tableHeader?:CopyNode['style']};
 export function visible(el:HTMLElement){
- for(let p:HTMLElement|null=el;p;p=p.parentElement){const s=getComputedStyle(p);if(p.hidden||p.getAttribute('aria-hidden')==='true'||s.display==='none'||s.visibility==='hidden')return false;}
+ // An open popup marks the page behind it aria-hidden; that page is still on screen.
+ const popupOpen=[...document.querySelectorAll<HTMLElement>('[role=listbox],[role=menu],[role=dialog]')].some(node=>node.getBoundingClientRect().height>0);
+ for(let p:HTMLElement|null=el;p;p=p.parentElement){const s=getComputedStyle(p);if(p.hidden||!popupOpen&&p.getAttribute('aria-hidden')==='true'||s.display==='none'||s.visibility==='hidden')return false;}
  return !el.closest('[data-dx-ignore],script,style');
 }
 /** Shown on screen, whatever assistive technology is told: apps mark decorative rows and icons aria-hidden, and they can still be designed. */

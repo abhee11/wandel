@@ -41,6 +41,8 @@ export function compileAssistant(workflow:Workflow,stateId:string,planInput:unkn
  // height its script fixed inline; growing the card then needs that slot released.
  const releaseFixedHeights=(start:HTMLElement)=>{let layers:HTMLElement[]=[];for(let node:HTMLElement|null=start,depth=0;node&&depth<8&&!node.matches('html,body');node=node.parentElement,depth++){const css=getComputedStyle(node);if(css.position==='fixed')return;if(css.position==='absolute')layers.push(node);if(layers.length&&/px$/.test(node.style.height)){for(const layer of layers)add({id:uid(),kind:'style',target:locatorOf(layer),style:{position:'relative'}});add({id:uid(),kind:'style',target:locatorOf(node),style:{blockSize:'auto'}});layers=[];}}};
  const resolveLayoutSource=(locator:Locator)=>locator.owned?collector.ownedNode(locator.owned):resolve(locator,collector.rootNode,new Map());
+ // The real card each section built in this plan sits beside; it has no position of its own until it renders.
+ const sectionSource=new Map<string,HTMLElement>();
  const locate=(ref:string)=>{if(outputs.has(ref))return outputs.get(ref)!;const node=collector.get(ref),id=collector.ownedId(node);const locator=id?owned(id):describe(node).locator;if(!id){locator.structure=structuralIdentity(node);const classes=node.getAttribute('class');if(classes)locator.attrs.class=classes;}return {node,id,locator};};
  // Layout-level placement, shared by every action: end adds the next item of the list, grid or row the target belongs to, after
  // any item added there earlier in this plan; row-below opens one full-width row under that structure, laid out as a grid, and
@@ -204,6 +206,15 @@ export function compileAssistant(workflow:Workflow,stateId:string,planInput:unkn
    checks.push(()=>{const moved=targets[0].node.isConnected&&collector.rootNode.contains(targets[0].node)?targets[0].node:resolveLayoutSource(targetLocator),relative=anchor.node.isConnected&&collector.rootNode.contains(anchor.node)?anchor.node:resolveLayoutSource(anchorLocator);if(!moved||!relative)throw new Error('The moved element or its destination is missing.');const shared=moved.parentElement===relative.parentElement,cssOrder=shared&&moved.parentElement&&['flex','inline-flex','grid','inline-grid'].includes(getComputedStyle(moved.parentElement).display),ordered=cssOrder&&Number(getComputedStyle(moved).order)!==Number(getComputedStyle(relative).order)?(position==='before'?Number(getComputedStyle(moved).order)<Number(getComputedStyle(relative).order):Number(getComputedStyle(moved).order)>Number(getComputedStyle(relative).order)):!!(moved.compareDocumentPosition(relative)&(position==='before'?Node.DOCUMENT_POSITION_FOLLOWING:Node.DOCUMENT_POSITION_PRECEDING));if(position==='inside'?!relative.contains(moved):!shared||!ordered)throw new Error('The requested element order was not rendered.');
     for(const unit of [moved,relative]){verifyContent(unit,node=>before.get(node));const box=unit.getBoundingClientRect();if(!visible(unit)||!box.width||!box.height)throw new Error('A reordered element is no longer visible.');for(const chart of unit.querySelectorAll('svg')){const rect=chart.getBoundingClientRect();if(rect.width&&rect.height&&(rect.left<box.left-4||rect.right>box.right+4||rect.top<box.top-4||rect.bottom>box.bottom+4))throw new Error('A reordered chart or icon escaped its card. Move the complete layout wrapper.');}}
    });
+  }else if(action.kind==='create'&&action.element==='chart'&&action.chart&&targets.length===1&&(created.includes(targets[0].id||'')||action.position==='end'||action.position==='inside')){
+   // A chart below a section this plan just built follows it, since that section has no position yet; one at the end of a container joins its content, in plan order. Both take the look of the real card beside them.
+   const chart=action.chart,fresh=created.includes(targets[0].id||''),container=targets[0].node,source=fresh?sectionSource.get(targets[0].id!)||(container.isConnected?container:null):container.lastElementChild instanceof HTMLElement?container.lastElementChild:container,card=source?readStyle(source):undefined,id=uid(),placed=fresh||action.position==='inside'?null:placeAt(container,'end'),surface:Record<string,string>={display:'block','box-sizing':'border-box',width:'100%','max-width':'100%','min-width':'0',height:'auto',margin:'24px 0 0'};
+   if(card)for(const key of ['background-color','border','border-radius','box-shadow','padding','color','font-family'] as ('color')[])if(card[key])surface[key]=card[key];
+   add({id:uid(),kind:'insert',target:placed?placed.locator:targets[0].locator,position:!fresh&&!placed?'inside':'after',node:{id,kind:'panel',text:chart.title,appearance:surface,chart}});created.push(id);group=id;
+   if(placed)appended.set(placed.key,id);
+   if(source)sectionSource.set(id,source);
+   checks.push(()=>{const section=collector.ownedNode(id);if(!section)throw new Error('The new section is missing.');verifyContent(section);});
+   if(action.resultRef){const representative=document.createElement('section');representative.textContent=chart.title;outputs.set(action.resultRef,{node:representative,id,locator:owned(id)});}
   }else if(action.kind==='create'&&(action.element==='chart'||(action.element==='panel'||action.element==='block')&&targets.length>1)){
    // A section below several cards spans exactly their combined width.
    const chart=action.element==='chart'?action.chart:undefined,block=action.element==='block'&&action.block?withIds(action.block):undefined;
@@ -233,6 +244,7 @@ export function compileAssistant(workflow:Workflow,stateId:string,planInput:unkn
    add({id:uid(),kind:'insert',target:locator,position:'after',node:{id,kind:'panel',text:chart?.title||action.text||'',appearance:surface,...(chart?{chart}:{}),...(block?{block}:{}),...(grid?{grid}:{})}});created.push(id);group=id;
    const points=chart?.points.length;
    checks.push(()=>{const section=collector.ownedNode(id);if(!section)throw new Error('The new section is missing.');verifyContent(section);verifyChartSection(section,targets.map(target=>(target.id&&collector.ownedNode(target.id))||target.node),cardBounds,points);});
+   sectionSource.set(id,nodes.at(-1)!);
    if(action.resultRef){const representative=document.createElement('section');representative.textContent=chart?.title||action.text||'';outputs.set(action.resultRef,{node:representative,id,locator:owned(id)});}
   }else if(action.kind==='create'&&action.element==='block'){
    if(!action.block||targets.length!==1)throw new Error('A block needs its parts and one target to sit in, before or after.');
@@ -391,6 +403,8 @@ export function compileAssistant(workflow:Workflow,stateId:string,planInput:unkn
     }else if(action.kind==='text'){
      if(!action.text?.trim())throw new Error('Text replacement requires nonempty content. If the request is to show only an icon, use iconOnly on the link/button, retaining its accessible name and destination.');
      if(target.id?.startsWith('heading:')){next.states.find(s=>s.id===target.id!.slice(8))!.title=action.text;continue;}
+     // A switcher shows its chosen option by itself; renaming its label as well would lose that label once the choice replaces its text.
+     if(renderLineage(next,opsState.id).flatMap(s=>s.operations).some(op=>op.kind==='choice'&&op.text===action.text!.trim()&&op.labels.some(label=>label.tag===target.locator.tag&&label.text===target.locator.text)))continue;
      // React can split a badge label into several adjacent text nodes. For a
      // generated copy, update those serialized direct runs together, preserving
      // nested icons and other descendants instead of flattening the container.

@@ -202,7 +202,7 @@ export class Renderer {
         if(!target&&(popupClosed(op.target)||!!op.target.owned&&deferred.has(op.target.owned))){if(op.kind==='insert'){deferred.add(op.node.id);deferOwned(op.node.id);for(const part of op.node.copy||[]){deferred.add(part.id);deferOwned(part.id);}}continue;}
         // A behavior that shows or hides content in a closed menu or unopened screen waits with that content; it is not missing.
         if(op.kind==='behavior'&&op.effects.some(effect=>!resolve(effect.target,this.root,this.owned)&&(popupClosed(effect.target)||!!effect.target.owned&&deferred.has(effect.target.owned))))continue;
-        if(!target) { errors.push(`${op.kind==='insert'?op.node.text:op.kind==='text'?op.text:op.kind}: target missing or ambiguous`);continue; }
+        if(!target) { errors.push(`${op.kind==='insert'?op.node.text:op.kind==='text'?op.text:op.kind+' “'+(op.target.name||op.target.text||op.target.tag).slice(0,50)+'”'}: target missing or ambiguous`);continue; }
         try { this.apply(op,target,op.kind==='reorder'?nativeTargets.get(op.anchor):undefined,nativeTargets); } catch(error) { errors.push(error instanceof Error?error.message:'Could not apply change.'); }
       }
     }

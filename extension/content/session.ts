@@ -746,7 +746,7 @@ export class Session {
     }
     else if(c.type==='reset'){
       this.cancelDrag();this.dragging=false;
-      const next=clone(this.workflow);next.states=[{id:next.entry,title:'Existing application',parent:null,view:'base',operations:[]}];next.edges=[];
+      const next=clone(this.workflow);next.states=[{id:next.entry,title:'Existing application',parent:null,view:'base',operations:[]}];next.edges=[];delete next.assistantMemory;
       this.selected=null;this.replay=false;this.picking=true;this.visits=[];this.commit(next,next.entry);
     }
     else if(c.type==='prompt'||c.type==='text') {

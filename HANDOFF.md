@@ -57,13 +57,21 @@ Note: Claude in Chrome cannot work in tabs holding another extension's iframe, s
 - **Tests 2 and 3 run on MirrorTalk** (through the page hooks, so no panel, visual review or replanning): both pass clicks and Undo.
 - **Targets survive changing content** (`locator.ts`): MirrorTalk's two grids share a generated class, and the carousel inside changes between loads. That was the "3 edits couldn't find their elements" failure. Class matches are now told apart by recorded address.
 - **Icon-only copies** take the icon's colour, not the link's browser-default blue (`duplicateHeading.ts`).
+- **New pages with content** (Test 4, both dropdowns): the prompt requires the plan to build what it promises, keeping left panel, top bar, floating helpers and the switcher. Charts can sit below a section made in the same plan, or at the end/inside of a container, in order (`execute.ts sectionSource`). A rename of the switcher's own label is skipped.
+- **Popups no longer break targets** (`locator.ts`, `nativeDesign.ts visible`): an open menu marks the page aria-hidden, which made outside targets "missing" and showed "N elements can't be seen". Addresses also ignore Wandel's own inserted elements. `remove “name”: target missing` now names its target.
+- **`reset` clears `assistantMemory`.**
+- **Test 5:** expand/collapse on the My Record item, and manual rename, delete and chat move, all work with Undo and survive reload.
 - The 05:25 plans were one turn with retries of a real request ("add an option to expand… the checkbox contents in the My record"), not a mystery.
 
 ## Open issues (not yet resolved)
 1. **Card placement differs between requests.** "Below the current section" put Home Options at the very bottom but Quick Notes between Participant Reflection and Plan and Setup. Home Options also sat about 12px inside the cards above it.
 2. **Revealed content can be off screen.** Quick Notes opens about 1,190px down the page, so on a laptop-sized window clicking My Record seems to do nothing unless you scroll.
-3. **`assistantReset` does not clear `workflow.assistantMemory`.** Old memory stays in later requests after a `reset`.
+3. **Dragging a panel only offsets it.** Edit mode's Move stores an x/y style: the card floats over its neighbours and keeps its slot, so a panel cannot be dragged into another panel or position. A chat request ("move X to the left of Y") does a real reorder and works.
 4. **The old-workflow click is unexplained.** Before the locator fix, clicking My Record on the 05:24 workflow opened the transcript instead of toggling. That workflow is gone; not seen on new runs.
 5. **Toggle first click after reload: cause not proven.** It failed once, and passed 3 of 3 after the locator fix. Likely the same cause, but not shown directly. Watch for it.
-6. Owner asked: on a menu item click, the highlight should move to the clicked item (and back), like a real sidebar. Not built; owner hasn't confirmed.
-7. Older gaps: nearest-style rule unconfirmed on a real page; neighbour check compares only size/position; core instructions not reviewed for contradictions; copies of tabs/toggles in their "on" state may copy the active look; not deployed (Railway runs old code; hosted zip needs rebuilding — see `scripts/` and env vars `WANDEL_APP_ORIGIN`, `API_ORIGIN`, `CLERK_SYNC_HOST`, `WANDEL_EXTENSION_KEY`).
+6. **Test 4 rough edges.** The General run removed the Activity row, leaving a blank band at the top; the Activity run kept it, so the model decides. A copied dropdown option keeps its source's date. A false "extends beyond a clipping container" warning appeared on General though nothing is clipped (page measured, no clipping ancestor).
+7. **Test 5 rough edges.** The expand/collapse control is small text on a pale ellipse. This transcript has one checklist item, so "each item" is untested with several.
+8. **`status: open` plans.** `wandel:dev-chat` stops at them; the panel opens the control and replans. For a closed dropdown, open it with a real click and resend. The panel's own flow was not exercised.
+9. **MirrorTalk data moved during testing.** The quote carousel beside My Record disappeared (with zero Wandel edits on the page) and Takeaways regenerated, so saved targets there can change between runs.
+10. Owner asked: on a menu item click, the highlight should move to the clicked item (and back), like a real sidebar. Not built; owner hasn't confirmed.
+11. Older gaps: nearest-style rule unconfirmed on a real page; neighbour check compares only size/position; core instructions not reviewed for contradictions; copies of tabs/toggles in their "on" state may copy the active look; not deployed (Railway runs old code; hosted zip needs rebuilding — see `scripts/` and env vars `WANDEL_APP_ORIGIN`, `API_ORIGIN`, `CLERK_SYNC_HOST`, `WANDEL_EXTENSION_KEY`).
