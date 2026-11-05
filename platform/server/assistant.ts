@@ -83,7 +83,10 @@ export function assistantService(db:DB,entitlements:Entitlements,provider:Assist
   db.transaction(()=>{const previous=one<{status:string;result:string;fingerprint:string}>(db,'SELECT status,result,fingerprint FROM ai_actions WHERE user_id=? AND request_key=?',userId,key);if(previous){if(previous.fingerprint!==fingerprint)throw new APIError(409,'IDEMPOTENCY_CONFLICT','Use a new request ID for another instruction.');if(previous.status!=='succeeded')throw new APIError(409,'ASSISTANT_PENDING','This request is pending or failed. Retry with a new request.');cached=JSON.parse(previous.result);return;}// A message already under way finishes its follow-up calls; only a new message is checked against the allowance.
    const continuing=!!turnId&&!!one(db,"SELECT 1 FROM ai_actions WHERE user_id=? AND turn_id=? AND status IN ('succeeded','pending')",userId,turnId);if(!continuing)entitlements.requireAI(userId);const usage=entitlements.get(userId).usage;db.prepare("INSERT INTO ai_actions (id,user_id,request_key,fingerprint,period_start,period_end,status,result,created_at,updated_at,turn_id) VALUES (?,?,?,?,?,?,'pending',NULL,?,?,?)").run(id,userId,key,fingerprint,usage.periodStart,usage.resetsAt,now,now,turnId||null);}).immediate();
   if(cached)return cached;
-  try{const result=await work();db.prepare("UPDATE ai_actions SET status='succeeded',result=?,updated_at=? WHERE id=?").run(JSON.stringify(result),clock().toISOString(),id);return result;}catch(error){db.prepare("UPDATE ai_actions SET status='failed',updated_at=? WHERE id=?").run(clock().toISOString(),id);throw error;}
+  try{const result=await work();db.prepare("UPDATE ai_actions SET status='succeeded',result=?,updated_at=? WHERE id=?").run(JSON.stringify(result),clock().toISOString(),id);return result;}catch(error){
+   // Keep why it failed (and the rejected plan, if any) with the request, so a failure can be diagnosed from the database without paying to reproduce it.
+   const reason=JSON.stringify({error:error instanceof Error?error.message.slice(0,1200):String(error).slice(0,1200),...(error&&typeof error==='object'&&'rejectedPlan' in error?{rejectedPlan:(error as {rejectedPlan:unknown}).rejectedPlan}:{})});
+   db.prepare("UPDATE ai_actions SET status='failed',result=?,updated_at=? WHERE id=?").run(reason,clock().toISOString(),id);throw error;}
  }
  return {async handle(userId:string,req:Request){
   if(!provider)throw new APIError(503,'ASSISTANT_DISABLED','Voice and cloud interpretation are disabled on this server. Typed local edits remain available.');
@@ -113,6 +116,7 @@ export function assistantService(db:DB,entitlements:Entitlements,provider:Assist
    const history=input.history?ConversationHistorySchema.parse(JSON.parse(JSON.stringify(input.history,(_key,value)=>typeof value==='string'?cleanText(value,1600):value))):undefined;
    let plan:AssistantPlan|undefined,feedback:string|undefined;
    for(let attempt=0;attempt<2;attempt++){
+    plan=undefined;
     try{
      plan=normalizePlan(await provider.plan({instruction:input.instruction,context,...(input.referenceImage?{referenceImage:input.referenceImage}:{}),...(input.pageScreenshot?{pageScreenshot:input.pageScreenshot}:{}),...history?{history}:{},...feedback?{feedback}:{}}));
      for(const action of plan.actions){if(action.kind!=='duplicate'||!action.labels.length)continue;const source=context.elements.find(e=>e.ref===action.targets[0]);if(source?.attributes['wandel-control-count']==='0')throw new APIError(502,'INVALID_PLAN','This feature card has no buttons. Duplicate it with text for the heading and description for the body; labels must be empty. Edit a copied badge through a separate text action using its captured ref.');}
@@ -122,7 +126,7 @@ export function assistantService(db:DB,entitlements:Entitlements,provider:Assist
      break;
     }catch(error){
      const repairable=error instanceof z.ZodError||error instanceof APIError&&['INVALID_REFERENCES','INVALID_DUPLICATE','INVALID_PLAN'].includes(error.code);
-     if(attempt||!repairable){if(error instanceof z.ZodError)console.warn(JSON.stringify({event:'assistant_invalid_plan',issues:error.issues.map(issue=>({path:issue.path.join('.'),message:issue.message})).slice(0,12)}));throw error;}
+     if(attempt||!repairable){if(plan&&error instanceof Error)Object.assign(error,{rejectedPlan:plan});if(error instanceof z.ZodError)console.warn(JSON.stringify({event:'assistant_invalid_plan',issues:error.issues.map(issue=>({path:issue.path.join('.'),message:issue.message})).slice(0,12)}));throw error;}
      feedback=error instanceof z.ZodError?'The previous plan failed validation: '+error.issues.map(issue=>issue.path.join('.')+': '+issue.message).join('; ').slice(0,900)+'. Use the supported action contract. Colors must be six-digit hex; no CSS named colors/inherit. No edit was applied.':(error as Error).message;
     }
    }

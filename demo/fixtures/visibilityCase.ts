@@ -51,6 +51,14 @@ const cases:Record<string,()=>Promise<Result>>={
   await new Promise(resolve=>setTimeout(resolve,800));const issues=(await snap()).unresolved;
   return check(issues.some(issue=>/Home Options: hidden control; its container “Overview” is hidden/.test(issue)),issues.join(' | ')||'No warning.');
  },
+ async 'New menu item with no destination shows a hidden card'(){
+  const nav=await ref(e=>e.tag==='nav'),{section}=await homeRefs();
+  const applied=await apply([{kind:'create',element:'link',text:'X',targets:[nav],position:'inside',resultRef:'new:x'},{kind:'create',element:'panel',text:'Home Options',targets:[section],position:'below',resultRef:'new:card'},{kind:'behavior',targets:['new:card'],event:'load',effects:[{action:'hide',targets:['new:card'],value:null}]},{kind:'behavior',targets:['new:x'],event:'click',effects:[{action:'show',targets:['new:card'],value:null}]}]);
+  if(applied!=='OK')return check(false,applied);
+  if(shown(card()))return check(false,'The card is visible before X is clicked.');
+  await session.dispatch({type:'interact'});press([...document.querySelectorAll('nav [data-dx-owned]')].find(a=>a.textContent==='X'));await frames();
+  return check(shown(card())&&!(await snap()).unresolved.length,shown(card())?'X added; the card stays hidden until X is clicked.':'Clicking X did not show the card.');
+ },
  async 'New menu option opens its page, and General returns'(){
   const general=await ref(e=>e.tag==='li'&&e.name==='General');
   const applied=await apply([{kind:'duplicate',targets:[general],position:'end',text:'Test',resultRef:'new:test'},{kind:'connect',targets:['new:test'],newViewTitle:'Test',presentation:'page'}]);

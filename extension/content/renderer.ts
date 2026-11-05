@@ -332,6 +332,8 @@ export class Renderer {
       node=copyDOM(op.node.copy,this.owned);this.owned.delete(op.node.copy[0].id);node.dataset.dxOwned=op.node.id;this.owned.set(op.node.id,node);
     }else node=this.make(op.node.id,op.node.kind,op.node.text,op.node.semanticTag);
     if(op.node.href){if(!(node instanceof HTMLAnchorElement))throw new Error('Only a link can have a navigation destination.');node.setAttribute('href',op.node.href);}
+    // A link with no destination is a prototype menu item: still reachable and announced as a link.
+    else if(node instanceof HTMLAnchorElement){node.setAttribute('role','link');node.tabIndex=0;}
     if(op.node.appearance){if(op.node.kind==='button'){for(const [key,value]of Object.entries(buttonAppearance(op.node.appearance)))node.style.setProperty(key,value,'important');node.style.setProperty('cursor','pointer','important');node.style.setProperty('min-height','40px','important');}else{node.style.border='0';node.style.boxShadow='none';node.style.backgroundColor='transparent';node.style.color='inherit';node.style.font='inherit';applyAppearance(node,op.node.appearance);}}
     if(op.node.kind==='field'&&!op.node.copy){const field=configureField(node,op.node);field.dataset.dxOwned=op.node.id+':input';this.owned.set(op.node.id+':input',field);if(op.node.binding)this.bindings.set(field,op.node.binding);}
     if(op.node.control)mountControl(node,op.node);
