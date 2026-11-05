@@ -8,9 +8,10 @@ import {validateTheme,verifyTheme} from '../content/theme';
 import {findCard} from './card';
 import {captureCopy} from '../content/duplicate';
 import {watched} from '../content/watch';
-import {safeDeclarations} from '../content/behavior';
+import {safeDeclarations,choiceChecks,choiceLabel,choiceLabels} from '../content/behavior';
 import {structureAround,structureOf} from './layoutMap';
 import {neighbourMismatch} from './applyVerified';
+import {isDeferred} from '../content/visibility';
 import {renameCopyHeading} from '../content/duplicateHeading';
 import {sensitive} from './privacy';
 import {clone,uid,OperationSchema,type Workflow,type Locator,type Operation,type CopyNode} from '../shared/model';
@@ -163,7 +164,7 @@ export function compileAssistant(workflow:Workflow,stateId:string,planInput:unkn
    // Visual copies are local prototypes, not production actions or navigations.
    for(const item of copy)delete item.href;
    // A copy of the selected item is another option, not a second selection: its checkmark stays behind.
-   if(selectedSource)for(const item of copy)if(item.icon)item.style.display='none';
+   if(selectedSource)for(const check of choiceChecks(source)){const index=identities.get(check);if(index!==undefined)copy[index].style.display='none';}
    // The copy is a new, unselected item: the element carrying the selected state drops the highlight it has only because it is selected.
    if(selectedSource)for(const [node,index] of identities)if(node instanceof HTMLElement&&(node.matches(selectedMark)||/\bselected\b/i.test(node.getAttribute('aria-label')||''))){const own=getComputedStyle(node).backgroundColor,around=node.parentElement?getComputedStyle(node.parentElement).backgroundColor:'';if(own!==around)copy[index].style['background-color']='transparent';}
    // A destination (relativeTo) places the copy there, such as inside a new row; otherwise it sits beside or after its original.
@@ -180,6 +181,21 @@ export function compileAssistant(workflow:Workflow,stateId:string,planInput:unkn
     const done=(endDone.get(placed.key)||0)+1;endDone.set(placed.key,done);
     if(done<(endFill.get(placed.key)||1)){const items=structureAround(source)?.items||[],earlier=items.length>=2?items[items.length-2]:null,margin=getComputedStyle(source);copy[0].style.margin=`${margin.marginTop} ${margin.marginRight} ${earlier?getComputedStyle(earlier).marginBottom:'0px'} ${margin.marginLeft}`;}}
    add({id:uid(),kind:'insert',target:placed?placed.locator:destination?destination.locator:besideAnchor,position:placed?placed.position:destination?((action.position==='over'?'inside':action.position)==='before'?'before':(action.position==='over'?'inside':action.position)==='after'?'after':'inside'):action.position==='beside'?'after':(action.position==='over'?'inside':action.position) as 'before'|'after'|'inside'|'below'||'after',node:{id,kind:'panel',text:action.text||'Card copy',copy}});created.push(id);cardId=id;checks.push(()=>{const copy=collector.ownedNode(id);if(!copy)throw new Error('The copied component is missing.');const copyBaseline=(node:HTMLElement)=>{const part=sourceParts.get(node===copy?id:node.dataset.dxOwned||'');return part&&sourceIssues.get(part);};verifyContent(copy,copyBaseline);const original=(targets[0].id&&collector.ownedNode(targets[0].id))||source;if(!destination&&action.position==='below')verifyBelow(copy,original,sourceBounds,node=>sourceIssues.get(node),copyBaseline);if(!destination&&action.position==='beside')verifyBeside(copy,original,sourceBounds);const label=(index:number|undefined)=>{if(index!==undefined&&insertParts[index]?.tag==='#text')index=insertParts[index].parent;return index===undefined||index<0?null:index===0?copy:collector.ownedNode(insertParts[index].id);};if(action.text&&label(headingIndex)?.textContent?.replace(/\s+/g,' ').trim()!==action.text.replace(/\s+/g,' ').trim())throw new Error('The copied heading did not match the request.');if(action.description&&label(descriptionIndex)?.textContent?.replace(/\s+/g,' ').trim()!==action.description.replace(/\s+/g,' ').trim())throw new Error('The copied description did not match the request.');});
+   // Every copied option joins its pick-one group, including copies of unselected options:
+   // clicking any option moves the selection to it, renames the menu's title and closes the menu.
+   const pickOne='[role=option],[role=menuitemradio],[role=tab],[role=radio],input[type=radio]',groups='[role=listbox],[role=menu],[role=tablist],[role=radiogroup]';
+   if(action.text?.trim()&&(source.matches(pickOne)||!!source.querySelector(pickOne)||!!source.closest(groups))){
+    const inside=source.closest<HTMLElement>(groups)||source.parentElement||source;
+    const options=[...inside.querySelectorAll<HTMLElement>(pickOne)].filter(el=>!el.closest('[data-dx-owned]'));
+    const selected=options.find(el=>el.matches(selectedMark)||/\bselected\b/i.test(el.getAttribute('aria-label')||''))||options[0]||source;
+    const carrier=source.matches(pickOne)?source:source.querySelector<HTMLElement>(pickOne)||source,carrierIndex=identities.get(carrier)??0;
+    const originalText=choiceLabel(selected);
+    const labels=choiceLabels(collector.rootNode,inside,[originalText]);
+    const groupKey=JSON.stringify(locatorOf(inside)).slice(0,400);
+    const previous=renderLineage(next,stateId).flatMap(s=>s.operations).find(op=>op.kind==='choice'&&op.group===groupKey);
+    const prior=previous?.kind==='choice'?previous:undefined;
+    add({id:uid(),kind:'choice',target:owned(id),container:locatorOf(inside),group:groupKey,original:prior?.original||locatorOf(selected),carrier:owned(carrierIndex===0?id:copy[carrierIndex].id),background:prior?.background||getComputedStyle(selected).backgroundColor,labels:prior?.labels||labels.map(locatorOf),text:action.text.trim(),originalText:prior?.originalText||originalText.slice(0,300)});
+   }
    if(action.resultRef){outputs.set(action.resultRef,{node:source,id,locator:owned(id)});for(const [part,index] of identities)if(part instanceof HTMLElement)outputs.set(action.resultRef+'/'+collector.ref(part),{node:part,id:index===0?id:copy[index].id,locator:owned(index===0?id:copy[index].id)});const controls=[...source.querySelectorAll<HTMLElement>('button,a,[role=button],[role=link]')];if(controls.length===1){const part=identities.get(controls[0]);if(part!==undefined)outputs.set(action.resultRef+':button',{node:controls[0],id:copy[part].id,locator:owned(copy[part].id)});}}
   }else if(action.kind==='reorder'){
    if(targets.length!==1||!action.relativeTo||!['before','after','inside'].includes(action.position||''))throw new Error('Choose an element and where it should move.');
@@ -282,7 +298,9 @@ export function compileAssistant(workflow:Workflow,stateId:string,planInput:unkn
   }else if(action.kind==='connect'){
    if(targets.length!==1)throw new Error('Choose one trigger.');const target=targets[0];let source=target.id;
    // A screen made earlier in this plan whose progress bar fills by itself moves on when it finishes; its next screen closes back to where that one would.
-   const timed=timedViews.get(action.targets[0]),from=timed?.view||stateId,back=timed?.back||stateId;let event:'click'|'change'|'finish'=timed?'finish':'click';
+   // Capture the source before creating a destination: later steps may already be
+   // editing a page variant, including a Back button that only exists there.
+   const timed=timedViews.get(action.targets[0]),from=timed?.view||opsState.id,back=timed?.back||opsState.id;let event:'click'|'change'|'finish'=timed?'finish':'click';
    // Naming one option of a composed switcher, dropdown, tab row or menu connects just that option.
    const part=target.node.closest<HTMLElement>('[data-dx-block] [data-dx-owned]')||target.node.querySelector<HTMLElement>('select,[data-dx-tab],[data-dx-menu-item],[data-dx-custom]')?.closest<HTMLElement>('[data-dx-block] [data-dx-owned]')||null;
    const planned=target.id?plannedBlocks.get(target.id):undefined;
@@ -297,6 +315,7 @@ export function compileAssistant(workflow:Workflow,stateId:string,planInput:unkn
    }
    if(action.targets[0].startsWith('new:')&&outputs.get(action.targets[0])?.locator.owned?.startsWith('view:')&&!timed)throw new Error('A screen moves on by itself only when it has a progress bar with seconds; connect one of its buttons instead.');
    if(!source){source=uid();add({id:uid(),kind:'trigger',target:target.locator,source});}
+   const existingScreens=new Set(next.states.map(screen=>screen.id));
    let destination=action.destination;
    // A page of this application becomes a live screen of the workflow; clicking opens the real page.
    if(destination&&/^(https?:\/\/|\/)/i.test(destination)&&!next.states.some(s=>s.id===destination)){
@@ -317,8 +336,13 @@ export function compileAssistant(workflow:Workflow,stateId:string,planInput:unkn
    // A variant of this page: the same page as a new screen, with the changes the rest of the plan makes.
    if(!destination&&action.presentation==='page'){
     if(!action.newViewTitle?.trim())throw new Error('Name the new page.');if(next.states.length>=next.maxStates)throw new Error('The workflow reached its screen limit.');
-    let base=stateId;while(next.states.find(s=>s.id===base)?.view==='panel'){const parent=next.states.find(s=>s.id===base)?.parent;if(!parent)break;base=parent;}
+    let base=from;while(next.states.find(s=>s.id===base)?.view==='panel'){const parent=next.states.find(s=>s.id===base)?.parent;if(!parent)break;base=parent;}
     destination=uid();next.states.push({id:destination,title:action.newViewTitle,parent:base,view:'base',variant:true,operations:[]});opsState=next.states.find(s=>s.id===destination)!;
+    // A copied option extends the existing switcher. Its original option is
+    // the return control on the variant, rather than an invented Back button.
+    const choice=renderLineage(next,from).flatMap(s=>s.operations).find(op=>op.kind==='choice'&&op.target.owned===source);
+    if(choice?.kind==='choice'){const originalSource=uid();add({id:uid(),kind:'trigger',target:choice.original,source:originalSource});next.edges.push({id:uid(),from:destination,source:originalSource,to:from,event:'click'});}
+
    }
    if(!destination){if(!action.newViewTitle?.trim())throw new Error('Choose a destination or name a new prototype view.');if(next.states.length>=next.maxStates)throw new Error('The workflow reached its screen limit.');destination=uid();const modal=(action.presentation==='modal'||action.presentation==='drawer')&&!action.pageContent;
     // A modal opened from inside another modal takes its place instead of stacking on it; closing still returns to it.
@@ -329,7 +353,10 @@ export function compileAssistant(workflow:Workflow,stateId:string,planInput:unkn
    if(!next.states.some(s=>s.id===destination))throw new Error('That destination no longer exists.');
    next.edges=next.edges.filter(e=>e.from!==from||e.source!==source);next.edges.push({id:uid(),from,source,to:destination,event});
    // A real application page opens when the connection is used; editing stays on the current page.
-   if(!next.states.find(s=>s.id===destination)?.liveURL){view=destination;nextState=destination;}
+   // Wiring an existing destination does not navigate the editor away from the
+   // screen being built. Otherwise its newly created controls are verified on
+   // the destination and falsely reported missing. New screens open for editing.
+   if(!existingScreens.has(destination)&&!next.states.find(s=>s.id===destination)?.liveURL){view=destination;nextState=destination;}
   }else{
    for(const target of targets){
     if(action.kind==='iconOnly'){
@@ -407,5 +434,8 @@ export function compileAssistant(workflow:Workflow,stateId:string,planInput:unkn
   }
   for(const id of created){const node=collector.ownedNode(id),text=node?.textContent?.trim()||'';if(node&&text.length>24&&node.getBoundingClientRect().width>0&&node.getBoundingClientRect().width<90)throw new Error(neighbourMismatch+`The new "${text.slice(0,30)}" is squeezed into ${Math.round(node.getBoundingClientRect().width)}px; give it a wider place.`);}
  });
- return {workflow:validateWorkflow(next),stateId:nextState,created,group,view,cardId,verify:()=>checks.forEach(check=>check())};
+ // A check that cannot find new content kept in a closed menu or unopened screen
+ // is waiting for that content, not failing; everything else reports as before.
+ const waiting=()=>created.some(id=>isDeferred(id)&&!collector.ownedNode(id));
+ return {workflow:validateWorkflow(next),stateId:nextState,created,group,view,cardId,verify:()=>{for(const check of checks){try{check();}catch(error){if(waiting()&&/missing|disappeared/i.test(error instanceof Error?error.message:''))continue;throw error;}}}};
 }

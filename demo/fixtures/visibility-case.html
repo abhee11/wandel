@@ -1,0 +1,17 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:0;font:16px/1.4 system-ui;background:#f7f6fb}main{padding:24px;width:1100px}
+nav{display:flex;gap:12px;margin-bottom:16px}nav button{padding:8px 14px;border:1px solid #ccc;border-radius:8px;background:#fff}
+h1{font:700 22px system-ui;margin:0 0 8px}
+ul[role=listbox]{list-style:none;margin:0 0 16px;padding:6px;width:240px;background:#fff;border:1px solid #ddd;border-radius:10px}
+ul[role=listbox] button{display:flex;width:100%;justify-content:space-between;border:0;padding:8px 10px;border-radius:8px;background:transparent;font:inherit}
+.sel{background:#eee!important}
+section.cards{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+article{padding:24px;border:1px solid #e3e0ef;border-radius:20px;background:#fff;min-height:100px}
+.vault{display:none}
+</style></head><body><main id="page">
+<nav aria-label="Main"><button type="button">Home</button><button type="button">Library</button></nav>
+<h1 id="title">General</h1>
+<ul role="listbox" id="groups" aria-label="Groups"><li><button role="option" aria-selected="true" aria-label="Group General, selected" class="sel">General<svg width="16" height="16" viewBox="0 0 24 24"><path d="M5 12l4 4L19 6" stroke="#000" fill="none"/></svg></button></li><li><button role="option" aria-selected="false" aria-label="Group Science">Science</button></li></ul>
+<section class="cards" aria-label="Overview"><article><h2>My Record</h2><p>Nothing yet.</p></article><article><h2>Plan and Setup</h2><p>Customize the activity.</p></article></section>
+<div class="vault" id="vault"><article><h2>Archive</h2><p>Old items.</p></article></div>
+</main><script type="module" src="./visibilityCase.ts"></script></body></html>

@@ -12,7 +12,10 @@ export function captureCopy(source:HTMLElement,identities?:Map<Node,number>):Cop
     // They cannot be exercised in this static prototype and must not become
     // visible controls (a hidden input otherwise defaults to a text field).
     if(node instanceof Element){const css=getComputedStyle(node);if(node.hasAttribute('hidden')||css.display==='none'||css.visibility==='hidden'||css.visibility==='collapse'||node.matches('input[type=hidden]'))return;}
-    if(node instanceof SVGSVGElement){const icon=captureIcon(node);if(icon){const css=getComputedStyle(node);identities?.set(node,nodes.length);nodes.push({id:uid(),parent,tag:'span',text:'',icon,style:{display:'inline-flex',width:css.width&&css.width!=='auto'?css.width:(parseFloat(node.getAttribute('width')||'')||24)+'px',height:css.height&&css.height!=='auto'?css.height:(parseFloat(node.getAttribute('height')||'')||24)+'px',color:css.color}});}return;}
+    // Screen-reader-only helpers are not visual content. Their clipping must
+    // not be lost when the visual copy normalizes dimensions and positioning.
+    if(node instanceof HTMLElement){const css=getComputedStyle(node);if(['absolute','fixed'].includes(css.position)&&(css.clip==='rect(0px, 0px, 0px, 0px)'||css.clipPath==='inset(50%)'||parseFloat(css.width)<=1&&parseFloat(css.height)<=1&&css.overflow==='hidden'))return;}
+    if(node instanceof SVGSVGElement){const icon=captureIcon(node);if(icon){const css=getComputedStyle(node);identities?.set(node,nodes.length);nodes.push({id:uid(),parent,tag:'span',text:'',icon,style:{display:'inline-flex','flex-grow':css.flexGrow,'flex-shrink':css.flexShrink,'flex-basis':css.flexBasis,'align-self':css.alignSelf,width:css.width&&css.width!=='auto'?css.width:(parseFloat(node.getAttribute('width')||'')||24)+'px',height:css.height&&css.height!=='auto'?css.height:(parseFloat(node.getAttribute('height')||'')||24)+'px',color:css.color}});}return;}
     if(!(node instanceof HTMLElement)||node.matches('script,style,noscript,iframe,object,embed,[data-dx-ignore]'))return;
     const tag=node.tagName.toLowerCase();
     // A checkbox drawn entirely by a background image (e.g. a circle) is copied as that image in a box of its size.

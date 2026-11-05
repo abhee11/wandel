@@ -1,5 +1,6 @@
 import {copyStyles,type CopyNode,type Operation,type Locator} from '../shared/model';
 import {describe} from './locator';
+import {expectation,hidingAncestor,hiddenRoot} from './visibility';
 
 export type NativeDesign={surface:CopyNode['style'];heading:CopyNode['style'];text:CopyNode['style'];button:CopyNode['style'];field:CopyNode['style'];card:CopyNode['style'];table?:CopyNode['style'];tableHeader?:CopyNode['style']};
 export function visible(el:HTMLElement){
@@ -86,12 +87,17 @@ export function nativeOperations(ops:Operation[],target:HTMLElement,profile=capt
  });
 }
 export function inspectLayout(nodes:Iterable<HTMLElement>):string[]{
- const issues=new Set<string>();
+ const issues=new Set<string>(),reported=new Set<HTMLElement>();
  for(const el of nodes){
   if(!el.isConnected)continue;
-  const box=el.getBoundingClientRect();if(!box.width&&!box.height){if(document.body.getBoundingClientRect().width&&!visible(el))issues.add((el.dataset.dxLabel||'New element')+': hidden control; inspect the containing section.');continue;} // no layout engine in unit tests
-  const label=el.dataset.dxLabel||el.textContent?.slice(0,50)||'New element';
-  if(!visible(el)||box.width<1||box.height<1)issues.add(label+': hidden control; inspect the containing section.');
+  const name=el.dataset.dxLabel||el.textContent?.replace(/\s+/g,' ').trim().slice(0,50)||'New element';
+  // Hidden until a click or hover, deliberately hidden, or inside a closed disclosure: valid now, checked once shown.
+  const reason=expectation(el);
+  if(reason==='unrevealed'){const root=hiddenRoot(el);if(reported.has(root))continue;reported.add(root);issues.add(`${root.dataset.dxLabel||name}: hidden control; it is hidden when the page loads and no click or hover shows it. Add a click that shows it, or don’t hide it.`);continue;}
+  if(reason)continue;
+  const box=el.getBoundingClientRect();if(!box.width&&!box.height){if(document.body.getBoundingClientRect().width&&!visible(el))issues.add(`${name}: hidden control; ${hidingAncestor(el)}, and nothing in the prototype shows it. Place it in a visible section, or make a click show it.`);continue;} // no layout engine in unit tests
+  const label=name;
+  if(!visible(el)||box.width<1||box.height<1)issues.add(`${label}: hidden control; ${hidingAncestor(el)}, so it can’t be seen or used. Place it in a visible section, or make a click show it.`);
   if(el.scrollWidth>el.clientWidth+4&&getComputedStyle(el).overflowX==='hidden')issues.add(label+': content is clipped.');
   for(let p=el.parentElement;p;p=p.parentElement){
    const css=getComputedStyle(p),clipX=/(hidden|clip)/.test(css.overflowX||css.overflow),clipY=/(hidden|clip)/.test(css.overflowY||css.overflow);

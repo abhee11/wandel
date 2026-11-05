@@ -1,3 +1,4 @@
+import {groupIssues,issueHeadline} from '../shared/diagnostics';
 import {beneathCover} from './cover';
 import {isTextEntry,shortcutKey} from '../shared/keyboard';
 import {ConnectionEditor} from './connectionEditor';
@@ -32,13 +33,12 @@ export class PageEditor {
     if(key===this.issueKey&&this.issueHost.isConnected)return;this.issueKey=key;
     if(!this.issueHost.shadowRoot){this.issueHost.dataset.dxIgnore='true';this.issueHost.attachShadow({mode:'open'});}
     const root=this.issueHost.shadowRoot!,style=document.createElement('style');
-    style.textContent=':host{all:initial!important;position:fixed!important;left:16px!important;top:16px!important;z-index:2147483646!important}details{max-width:360px;font:13px/1.45 system-ui;color:#5c2b00;background:#fff7ed;border:1px solid #f5c48a;border-radius:12px;box-shadow:0 8px 28px #211a3b26}summary{cursor:pointer;padding:9px 12px;font-weight:600;list-style:none}summary::-webkit-details-marker{display:none}div{padding:0 12px 10px}ul{margin:0 0 8px;padding-left:18px;max-height:160px;overflow:auto}p{margin:0 0 8px;color:#7a4a1a}button{font:12px system-ui;border:1px solid #f0b56f;background:#fff;border-radius:7px;padding:4px 9px;cursor:pointer;color:#5c2b00}';
-    const details=document.createElement('details'),summary=document.createElement('summary'),body=document.createElement('div'),items=document.createElement('ul'),hint=document.createElement('p'),dismiss=document.createElement('button');
-    summary.textContent=`⚠ ${list.length} ${list.length===1?'edit isn’t':'edits aren’t'} showing on this page`;
-    for(const issue of list){const item=document.createElement('li');item.textContent=issue.replace(/: target missing or ambiguous$/,' — its element wasn’t found');items.append(item);}
-    hint.textContent='The page changed since these edits were made (content reloaded, a dialog closed, or text changed). Open the same state of the page, or select the element and make the change again. Undo removes the last one.';
+    style.textContent=':host{all:initial!important;position:fixed!important;left:16px!important;top:16px!important;z-index:2147483646!important}details{max-width:360px;font:13px/1.45 system-ui;color:#5c2b00;background:#fff7ed;border:1px solid #f5c48a;border-radius:12px;box-shadow:0 8px 28px #211a3b26}summary{cursor:pointer;padding:9px 12px;font-weight:600;list-style:none}summary::-webkit-details-marker{display:none}div{padding:0 12px 10px}ul{margin:0 0 8px;padding-left:18px;max-height:160px;overflow:auto}p{margin:0 0 8px;color:#7a4a1a}strong{display:block;margin:4px 0}button{font:12px system-ui;border:1px solid #f0b56f;background:#fff;border-radius:7px;padding:4px 9px;cursor:pointer;color:#5c2b00}';
+    const details=document.createElement('details'),summary=document.createElement('summary'),body=document.createElement('div'),dismiss=document.createElement('button');
+    summary.textContent='⚠ '+issueHeadline(list);
+    for(const group of groupIssues(list)){const title=document.createElement('strong'),items=document.createElement('ul'),hint=document.createElement('p');title.textContent=group.title;for(const issue of group.items){const item=document.createElement('li');item.textContent=issue;items.append(item);}hint.textContent=group.hint;body.append(title,items,hint);}
     dismiss.textContent='Hide';dismiss.onclick=()=>{this.issueDismissed=key;this.issueHost.remove();};
-    body.append(items,hint,dismiss);details.append(summary,body);root.replaceChildren(style,details);if(!this.issueHost.isConnected)document.documentElement.append(this.issueHost);
+    body.append(dismiss);details.append(summary,body);root.replaceChildren(style,details);if(!this.issueHost.isConnected)document.documentElement.append(this.issueHost);
   }
   private unsubscribe:()=>void;
   connectionAnchor(ratio:number){this.connectionEditor.anchor(ratio);}
@@ -155,7 +155,7 @@ export class PageEditor {
       prompt.onkeydown=e=>{if(e.key==='Enter'&&!e.isComposing&&prompt.value.trim()){
         e.preventDefault();prompt.disabled=true;this.error(new Error('Planning your changes…'));
         const before=this.current.workflow.states.length;
-        void this.session.promptHere(prompt.value,this.scope).then(result=>{prompt.value='';if(this.session.isPreviewingLayouts()){this.message.hidden=true;return;}const count=result.workflow.states.length-before;this.message.replaceChildren(document.createTextNode(result.unresolved.length?'Some targets could not be found. Undo or select the target again.':count?`${count} connected steps ready. `:'Changes ready. '));this.message.hidden=false;this.button('Try flow','Try generated flow',()=>{void this.run({type:'replay'});},this.message);this.button('Undo','Undo generated changes',()=>{void this.run({type:'undo'});},this.message);}).catch(this.error).finally(()=>{prompt.disabled=false;});
+        void this.session.promptHere(prompt.value,this.scope).then(result=>{prompt.value='';if(this.session.isPreviewingLayouts()){this.message.hidden=true;return;}const count=result.workflow.states.length-before;this.message.replaceChildren(document.createTextNode(result.unresolved.length?issueHeadline(result.unresolved)+'. Open the warning for what to do, or Undo.':count?`${count} connected steps ready. `:'Changes ready. '));this.message.hidden=false;this.button('Try flow','Try generated flow',()=>{void this.run({type:'replay'});},this.message);this.button('Undo','Undo generated changes',()=>{void this.run({type:'undo'});},this.message);}).catch(this.error).finally(()=>{prompt.disabled=false;});
       }};
       this.button('Reimagine','Reimagine this section',()=>{void this.run({type:'layouts',count:3});},ask);
 

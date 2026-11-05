@@ -1,0 +1,14 @@
+import {Session} from '../../extension/content/session';
+import {Repository,BrowserStorage} from '../../extension/storage/store';
+const root=document.querySelector<HTMLElement>('#page')!,result=document.querySelector<HTMLOutputElement>('#result')!;
+const session=new Session(root,new Repository(new BrowserStorage()),new URL(location.href),{assistantEnabled:true});
+const ready=session.init().then(()=>session.dispatch({type:'interact'}));
+const icon='<svg aria-label="Group icon" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4" stroke="currentColor" fill="none"/><path d="M4 22v-3a8 8 0 0 1 16 0v3" stroke="currentColor" fill="none"/></svg>';
+const check='<svg data-icon="check" viewBox="0 0 24 24"><path d="M5 12l4 4L19 6" stroke="currentColor" fill="none"/></svg>';
+document.querySelector('#open')!.addEventListener('click',()=>{if(root.querySelector('.overlay'))return;const overlay=document.createElement('div');overlay.className='overlay';overlay.innerHTML=`<ul role="listbox" aria-label="Groups"><li><button role="option" aria-selected="true" aria-label="Group General, selected" class="selected">${icon}<span>General</span>${check}</button></li><li><button role="option" aria-selected="false" aria-label="Group Other">${icon}<span>Other</span></button></li></ul>`;overlay.addEventListener('click',event=>{if(event.target===overlay){overlay.remove();document.querySelector('#open')!.setAttribute('aria-expanded','false');}});root.append(overlay);document.querySelector('#open')!.setAttribute('aria-expanded','true');});
+async function duplicate(label:string,text:string){await ready;try{const c=(await session.dispatch({type:'assistantContext',instruction:`Duplicate ${label} as ${text}`,chat:true})).assistant!.context!;const target=c.elements.find(e=>e.role==='option'&&e.name.includes(label));if(!target)throw Error('Open the groups menu first.');await session.dispatch({type:'assistantApply',token:c.token,plan:{status:'edit',scope:'region',message:'Copy option',reply:'Copied',question:null,candidates:[],memory:null,actions:[{kind:'duplicate',targets:[target.ref],relativeTo:null,element:null,description:null,labels:[],position:'end',styleRef:null,style:null,destination:null,newViewTitle:null,resultRef:null,text}]}});await session.dispatch({type:'interact'});result.value=`Copied ${label} as ${text}`;}catch(e){result.value=String(e);}}
+document.querySelector('#selected')!.addEventListener('click',()=>void duplicate('General','Grade 7'));
+document.querySelector('#unselected')!.addEventListener('click',()=>void duplicate('Other','Grade 8'));
+document.querySelector('#redraw')!.addEventListener('click',()=>{document.querySelector('#title')!.outerHTML='<h1 id="title">General</h1>';});
+document.querySelector('#undo')!.addEventListener('click',()=>void session.dispatch({type:'undo'}));
+document.querySelector('#fresh')!.addEventListener('click',()=>void session.dispatch({type:'new',discard:true}));

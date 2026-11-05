@@ -7,6 +7,7 @@ import { z } from 'zod';
 const id = z.string().min(1).max(100);
 const label = z.string().min(1).max(300);
 export const LocatorSchema = z.object({
+  popup:z.object({role:z.enum(["listbox","menu"]),id:z.string().max(2048),label:z.string().max(2048)}).strict().optional(),
   structure:z.object({anchorId:z.string().min(1).max(2048),path:z.array(z.number().int().min(0).max(10000)).min(1).max(32)}).strict().optional(),
   textPath:z.array(z.number().int().min(0).max(10000)).min(1).max(32).optional(),
   ancestorTags:z.array(z.string().max(40)).max(32).optional(),
@@ -16,7 +17,7 @@ export const LocatorSchema = z.object({
 }).strict();
 export type Locator = z.infer<typeof LocatorSchema>;
 export const copyTags=['div','span','p','button','a','section','article','header','footer','nav','main','aside','h1','h2','h3','h4','ul','ol','li','label','input','textarea','strong','em','small','br','img','#text'] as const;
-export const copyStyles=['display','box-sizing','width','height','min-width','max-width','padding','margin','gap','flex-direction','flex-wrap','align-self','justify-self','row-gap','column-gap','order','flex-grow','flex-shrink','min-height','max-height','border-color','border-width','border-style','align-items','justify-content','grid-template-columns','color','background-color','background-image','border','border-radius','box-shadow','font-family','font-size','font-weight','font-style','line-height','text-align','text-decoration-line','letter-spacing','white-space','opacity','list-style-type','object-fit','position','top','right','bottom','left','z-index','float','clear','vertical-align','background-position','background-size','background-repeat'] as const;
+export const copyStyles=['display','box-sizing','width','height','min-width','max-width','padding','margin','gap','flex-direction','flex-wrap','align-self','justify-self','row-gap','column-gap','order','flex-grow','flex-shrink','flex-basis','min-height','max-height','border-color','border-width','border-style','align-items','justify-content','grid-template-columns','color','background-color','background-image','border','border-radius','box-shadow','font-family','font-size','font-weight','font-style','line-height','text-align','text-decoration-line','letter-spacing','white-space','opacity','list-style-type','object-fit','position','top','right','bottom','left','z-index','float','clear','vertical-align','background-position','background-size','background-repeat'] as const;
 // A copied control may be drawn by an inline SVG background (a checkbox circle); it is inert and loads nothing.
 export const svgBackground=(v:string)=>v.length<=8000&&/^url\("data:image\/svg\+xml[^"\\<>]*"\)$/.test(v);
 export const ImageSourceSchema=z.string().max(700000).refine(value=>{if(/^data:image\/(png|jpeg|webp|gif);base64,[a-z0-9+/=]+$/i.test(value))return true;
@@ -73,6 +74,8 @@ export const OperationSchema = z.discriminatedUnion('kind', [
   // Free-form CSS declarations on any element, real or prototype; checked for safe values when applied.
   z.object({id,kind:z.literal('css'),target:LocatorSchema,css:z.string().min(1).max(3000)}).strict(),
   // When something happens on the target, change other elements: the general way to make anything expand, toggle, reveal or switch.
+  // A copied option in a pick-one group: clicking it or its original moves the selected look, renames the group's title and closes the menu.
+  z.object({id,kind:z.literal('choice'),target:LocatorSchema,container:LocatorSchema.optional(),group:z.string().max(400),original:LocatorSchema,carrier:LocatorSchema,background:z.string().max(200),labels:z.array(LocatorSchema).max(3),text:z.string().min(1).max(300),originalText:z.string().max(300)}).strict(),
   z.object({id,kind:z.literal('behavior'),target:LocatorSchema,event:z.enum(['click','hover','load']),effects:z.array(z.object({action:z.enum(['show','hide','toggle','text','style']),target:LocatorSchema,value:z.string().max(600).optional()}).strict()).min(1).max(10)}).strict()
 ]);
 export type Operation = z.infer<typeof OperationSchema>;

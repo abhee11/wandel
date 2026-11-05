@@ -37,6 +37,8 @@ export function describe(el:Element,ownedId?:string):Selection {
   const fieldLabel=el.matches('input,textarea,select')?el.closest('label')?.textContent:undefined;
   const text=ownedId?normalize(el.getAttribute('data-dx-label')||fieldLabel||el.getAttribute('aria-label')||el.getAttribute('placeholder')||el.textContent):safeText(el);
   const locator:Locator={ancestorTags:ancestorTags(el),owned:ownedId,tag:el.tagName.toLowerCase(),role:roleOf(el),name:ownedId?text:nameOf(el),text,attrs,parent:{tag:parent?.tagName.toLowerCase()||'',id:parent?.id||'',role:parent?roleOf(parent):'',label:parent?.getAttribute('aria-label')||''},previous:safeText(el.previousElementSibling,100),next:safeText(el.nextElementSibling,100)};
+  const popup=el.closest('[role=listbox],[role=menu]');
+  if(popup)locator.popup={role:popup.getAttribute('role') as 'listbox'|'menu',id:popup.id,label:popup.getAttribute('aria-label')||''};
   return {locator,label:locator.name||text||locator.tag,tag:locator.tag,owned:!!ownedId};
 }
 function parentScore(el:Element,l:Locator) {

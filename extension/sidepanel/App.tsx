@@ -1,4 +1,5 @@
 import {PanelWindowControl} from './PanelWindowControl';
+import {groupIssues,issueHeadline} from '../shared/diagnostics';
 import {PageTools} from './PageTools';
 import {shortcutKey} from '../shared/keyboard';
 import {FlowNavigation} from './FlowNavigation';
@@ -25,13 +26,12 @@ export function generationPrompt(prompt:string,intent:'feature'|'edit'){
   const inlineSection=/\b(?:add|insert)\b[\s\S]*?\b(?:section|category|categories|dropdown|menu|tabs?|switch|toggles?|pills?|options?|choices?|field|card)\b/i.test(prompt)&&!/\b(?:workflow|journey|screens|multi.step)\b/i.test(prompt);
   return intent==='feature'&&!inlineSection?`Create a connected workflow: ${prompt}`:prompt;
 }
-/** Changes that could not be shown on this page: one plain line, details on request, and a way out. */
+/** Problems with the prototype on this page: one accurate line, grouped details with what to do, and a way out. Intended or deferred content is never counted. */
 function UnresolvedNotice({issues,busy,onUndo,onHide}:{issues:string[];busy:boolean;onUndo:()=>void;onHide:()=>void}){
-  const kinds=new Map<string,number>();for(const issue of issues){const kind=issue.split(':')[0].trim()||'change';kinds.set(kind,(kinds.get(kind)||0)+1);}
-  const words:Record<string,string>={style:'style',reorder:'move',remove:'hide',text:'text',insert:'added element',Section:'added section',css:'style',behavior:'behavior'};
+  const groups=groupIssues(issues);
   return <section className="dx-unresolved" role="status">
-    <p><strong>{issues.length} change{issues.length>1?'s':''} can’t be shown here.</strong> The parts of the page they changed aren’t on this screen right now, so they’re kept but not applied.</p>
-    <details><summary>Details</summary><ul>{[...kinds].map(([kind,count])=><li key={kind}>{count} × {words[kind]||kind}</li>)}</ul></details>
+    <p><strong>{issueHeadline(issues)}.</strong> {groups.length===1?groups[0].hint:'Open Details for what to do about each.'}</p>
+    <details><summary>Details</summary>{groups.map(group=><div key={group.kind}><p><strong>{group.title}</strong></p><ul>{group.items.map((item,index)=><li key={index}>{item}</li>)}</ul>{groups.length>1&&<p className="dx-muted">{group.hint}</p>}</div>)}</details>
     <div className="dx-row"><button className="dx-small" disabled={busy} onClick={onUndo}>Undo last change</button><button className="dx-small" onClick={onHide}>Hide</button></div>
   </section>;
 }
@@ -116,7 +116,7 @@ export function App({bridge,demo=false}:{bridge:Bridge;demo?:boolean}) {
       const next=await bridge.send({type:'prompt',prompt:request,plan,context:{workflowId:s.workflow.id,stateId:s.stateId,selection:JSON.stringify(destination.selected.locator)}});
       if(epoch!==pageEpoch.current)return;
       setS(next);setPrompt('');const added=next.workflow.states.length-s.workflow.states.length;
-      setNotice(next.unresolved.length?'Some changes could not be applied. See unresolved changes below.':added?`${added} connected screens ready. Click Try flow to experience your feature.`:'Changes applied. Undo reverses this request.');
+      setNotice(next.unresolved.length?issueHeadline(next.unresolved)+'. See below.':added?`${added} connected screens ready. Click Try flow to experience your feature.`:'Changes applied. Undo reverses this request.');
     }catch(e){if(epoch===pageEpoch.current)setError(e instanceof Error?e.message:'Could not create UI.');}finally{if(epoch===pageEpoch.current)setBusy(false);}
   }
   useEffect(()=>{

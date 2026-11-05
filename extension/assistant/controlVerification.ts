@@ -1,6 +1,8 @@
 import {color} from '../content/themeRoles';
+import {hiddenByDesign} from '../content/visibility';
 /** A fast additive-button check: a real, readable control with visible affordance. */
 export function verifyNewButton(node:HTMLElement){
+ if(node.isConnected&&hiddenByDesign(node))return;
  const box=node.getBoundingClientRect(),css=getComputedStyle(node);
  if(!(node instanceof HTMLButtonElement)||node.disabled||box.width<24||box.height<24)throw new Error('The new button is not a usable visible control.');
  const background=color(css.backgroundColor),border=color(css.borderColor),text=color(css.color);

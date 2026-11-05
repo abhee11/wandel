@@ -3,7 +3,7 @@ import {watchNextClick,watched,clearWatched} from './watch';
 import {captureScreen,type CaptureRect} from './screenCapture';
 import {compareScreens} from './comparison';
 import {copyPlacement} from './copyPlacement';
-import {rolledBackPreview,keptPreview,neighbourMismatch} from '../assistant/applyVerified';
+import {rolledBackPreview,keptPreview} from '../assistant/applyVerified';
 import {AssistantController} from '../assistant/controller';
 import {inScope} from '../assistant/dom';
 import {beneathCover} from './cover';
@@ -24,6 +24,7 @@ import {duplicateIntent} from '../ai/duplicateIntent';
 import {copyWithHeading} from './duplicateHeading';
 import { captureCopy } from './duplicate';
 import { VisitedScreenSchema, ConnectionSpecSchema, RecordSchema, OperationSchema, StyleSchema, clone, routeOf, uid, type Workflow, type Selection, type Snapshot, type Command, type SavedRecord, type CopyNode, type ConnectionEvent,type ConnectionWorkspace } from '../shared/model';
+import { renderLineage } from '../prototype/engine';
 import { createWorkflow, addOperation, addChild, addCapturedScreen, addLiveScreen, transition, History, validateWorkflow } from '../prototype/engine';
 import { operationFromPlan } from '../ai/planner';
 import { promptOperations } from '../ai/batch';
@@ -71,6 +72,7 @@ export class Session {
   constructor(public root:HTMLElement,public repository:Repository,public url:URL, private options:{ historyStore?:{read(id:string):Promise<unknown>;write(id:string,value:unknown):Promise<void>};assistantEnabled?:boolean;liveNavigation?:LiveNavigation;connectionViewport?:()=>{width:number;height:number};externalConnections?:boolean;requestConnections?:()=>void|Promise<void>;directSelection?:boolean;requestSectionChat?:(rect:DOMRect,label:string)=>void;requestSave?:()=>void;requestSignIn?:()=>Promise<void>;requestClose?:()=>Promise<void>;requestPlan?:(prompt:string,selection:Selection)=>Promise<unknown> } = {}) {
     this.projectionActive=!!options.directSelection;this.workflow=createWorkflow(url);this.stateId=this.workflow.entry;
     this.renderer=new Renderer(root,id=>this.click(id),id=>{if(this.runningConnections)this.click(id);else{const node=this.renderer.owned.get(id);if(node)this.select(node);}});
+    this.renderer.onReveal=issues=>this.revealed(issues);
     this.outline=document.createElement('div');this.outline.dataset.dxIgnore='true';this.outline.style.cssText='position:fixed;pointer-events:none;z-index:2147483647;border:2px solid #6473f4;border-radius:4px;background:#6c7afa12;display:none;box-sizing:border-box;';document.documentElement.append(this.outline);
     this.selectionOutline.dataset.dxIgnore='true';this.selectionOutline.dataset.dxSelection='true';this.selectionOutline.setAttribute('aria-hidden','true');
     this.selectionOutline.style.cssText='position:fixed;pointer-events:none;z-index:2147483646;border:2px solid #7770df;border-radius:4px;background:rgba(119,112,223,.10);display:none;box-sizing:border-box;';document.documentElement.append(this.selectionOutline);
@@ -89,6 +91,7 @@ export class Session {
   private observe() { if(this.destroyed)return;this.observer.observe(this.root,{childList:true,subtree:true,characterData:true,attributes:true,attributeFilter:['id','data-testid','data-test','data-qa','aria-label','hidden']}); }
   private render(reset=false) {
     if(this.destroyed)return;
+    this.revealIssues=[];
     this.observer.disconnect();
     try {const matchingPage=samePage(stateURL(this.workflow,this.stateId),this.url.href);if(reset||!matchingPage)this.renderer.reset();this.unresolved=this.enabled&&this.projectionActive&&!this.previewOriginal?(matchingPage?this.renderer.reconcile(this.workflow,this.stateId,this.runningConnections?this.replayData:this.defaults()):['This step belongs to another application page. Open its connected route before editing.']):[];} finally { this.observe(); }
     this.emit();
@@ -161,7 +164,7 @@ export class Session {
   suspend(){this.closeComparison?.();this.previewOriginal=false;this.assistant?.reset();this.restoringPanel=false;this.panelMinimized=false;this.styleClipboard=null;this.replayData={};this.replayHistory=[];this.closeLayouts?.();this.resizeHeld=false;this.cancelDrag();this.projectionActive=false;this.picking=false;this.dragging=false;this.replay=false;this.selected=null;this.hovered=null;this.render(true);}
 
   subscribe(listener:(s:Snapshot)=>void) {this.listeners.add(listener);listener(this.snapshot());return()=>{this.listeners.delete(listener);};}
-  snapshot():Snapshot {this.seenViews.add(this.stateId);const capture=watched();return clone({watching:this.watching,watched:capture?{id:capture.id,kind:capture.kind,title:capture.title,outline:capture.outline,trigger:capture.trigger}:null,...(this.watchError?{watchError:this.watchError}:{}),previewOriginal:this.previewOriginal,...(this.assistant?{assistant:this.assistant.snapshot()}:{}),navigationError:this.navigationError,...(this.pausedWorkflow?{resumeChoice:{name:this.pausedWorkflow.name,page:new URL(this.pausedWorkflow.url).pathname}}:{}),liveSession:this.liveSession,panelMinimized:this.panelMinimized,panelRestoring:this.restoringPanel,connectionWorkspace:this.connectionWorkspace,visited:[...new Set([...this.seenViews,...this.visits])],mode:this.mode(),styleSource:this.styleClipboard?.selection||null,workflow:this.workflow,stateId:this.stateId,selected:this.selected,picking:this.picking,dragging:this.dragging,replay:this.replay,enabled:this.enabled,dirty:this.dirty,canUndo:!!this.history.past.length,canRedo:!!this.history.future.length,canBack:!!this.visits.length,unresolved:this.unresolved.filter(issue=>!/clipped|beyond a clipping container|overlap/i.test(issue)),currentVersion:this.record?.currentVersion||this.record?.versions.at(-1)?.number||0,versions:this.record?.versions.map(({number,savedAt,workflow})=>({number,savedAt,name:workflow.name}))||[],library:[...this.library.map(r=>({id:r.draft.id,name:this.routeDrafts.has(r.draft.id)?this.routeDrafts.get(r.draft.id)!.workflow.name+' (unsaved)':r.draft.name,versions:r.versions.length})),...[...this.routeDrafts.values()].filter(d=>d.workflow.origin===this.url.origin&&d.workflow.route===routeOf(this.url)&&!this.library.some(r=>r.draft.id===d.workflow.id)).map(d=>({id:d.workflow.id,name:d.workflow.name+' (unsaved)',versions:d.record?.versions.length||0}))]});}
+  snapshot():Snapshot {this.seenViews.add(this.stateId);const capture=watched();return clone({watching:this.watching,watched:capture?{id:capture.id,kind:capture.kind,title:capture.title,outline:capture.outline,trigger:capture.trigger}:null,...(this.watchError?{watchError:this.watchError}:{}),previewOriginal:this.previewOriginal,...(this.assistant?{assistant:this.assistant.snapshot()}:{}),navigationError:this.navigationError,...(this.pausedWorkflow?{resumeChoice:{name:this.pausedWorkflow.name,page:new URL(this.pausedWorkflow.url).pathname}}:{}),liveSession:this.liveSession,panelMinimized:this.panelMinimized,panelRestoring:this.restoringPanel,connectionWorkspace:this.connectionWorkspace,visited:[...new Set([...this.seenViews,...this.visits])],mode:this.mode(),styleSource:this.styleClipboard?.selection||null,workflow:this.workflow,stateId:this.stateId,selected:this.selected,picking:this.picking,dragging:this.dragging,replay:this.replay,enabled:this.enabled,dirty:this.dirty,canUndo:!!this.history.past.length,canRedo:!!this.history.future.length,canBack:!!this.visits.length,unresolved:[...this.unresolved.filter(issue=>!/clipped|beyond a clipping container|overlap/i.test(issue)),...this.revealIssues],currentVersion:this.record?.currentVersion||this.record?.versions.at(-1)?.number||0,versions:this.record?.versions.map(({number,savedAt,workflow})=>({number,savedAt,name:workflow.name}))||[],library:[...this.library.map(r=>({id:r.draft.id,name:this.routeDrafts.has(r.draft.id)?this.routeDrafts.get(r.draft.id)!.workflow.name+' (unsaved)':r.draft.name,versions:r.versions.length})),...[...this.routeDrafts.values()].filter(d=>d.workflow.origin===this.url.origin&&d.workflow.route===routeOf(this.url)&&!this.library.some(r=>r.draft.id===d.workflow.id)).map(d=>({id:d.workflow.id,name:d.workflow.name+' (unsaved)',versions:d.record?.versions.length||0}))]});}
   private lastEmission='';
   private emit() {if(this.destroyed)return;this.updateSelection();const s=this.snapshot(),serialized=JSON.stringify(s);if(serialized===this.lastEmission)return;this.lastEmission=serialized;this.listeners.forEach(fn=>fn(s));}
   private updateSelection(){
@@ -271,6 +274,17 @@ export class Session {
   private get runningConnections(){return this.projectionActive&&this.enabled&&(this.replay||this.interacting||this.panelMinimized);}
   connectionSaved(){this.pageEditor.success("Connected. Switch to Interact to use it.");}
   private inputMirror=(event:Event)=>{if(this.runningConnections)try{const update=this.renderer.readPrototypeInput(event);if(update){this.replayData[update.key]=update.value;this.renderer.updateData(this.replayData);event.stopImmediatePropagation();return;}if(this.replay)this.renderer.forwardInput(event);}catch(error){this.gestureError(error);}};
+  /** Problems found in content a click or hover just showed. They last until the next render. */
+  private revealIssues:string[]=[];
+  /** The last applied plan's own checks, re-run against content once it is shown; only while that plan's result is the current workflow. */
+  private revealChecks:{verify:()=>void;workflow:string}|null=null;
+  private revealed(issues:string[]){
+    let failed='';const checks=this.revealChecks;
+    if(checks&&checks.workflow===JSON.stringify(this.workflow)){try{checks.verify();}catch(error){failed=error instanceof Error?error.message:'A check failed after the content was shown.';}}
+    const next=[...issues,...(failed?[failed]:[])].map(issue=>'After it was shown: '+issue);
+    if(JSON.stringify(next)===JSON.stringify(this.revealIssues))return;
+    this.revealIssues=next;this.emit();
+  }
   private handleClick=(event:MouseEvent)=>{
     if(this.renderer.forwarding)return;
     if(this.suppressClick){event.preventDefault();event.stopImmediatePropagation();return;}
@@ -298,16 +312,24 @@ export class Session {
         queueMicrotask(()=>{if(this.runningConnections&&state===this.stateId&&workflow===this.workflow.id&&target.isConnected){target.checked=checked;this.click(changeSource,'change');}});return;
       }
       const trigger=this.connectionSource(target,'click');
-      if(trigger){event.preventDefault();event.stopImmediatePropagation();this.click(trigger);return;}
+      if(trigger){event.preventDefault();event.stopImmediatePropagation();
+        // A connected option still performs its switcher selection/dismissal.
+        // Navigation must not bypass the existing menu interaction.
+        for(const behavior of this.renderer.behaviors.forClick(target)||[]){const choices=behavior.effects.filter(effect=>effect.action==='choose');if(choices.length)this.renderer.behaviors.run(choices,behavior.key);}
+        this.click(trigger);return;}
       // Cancel, Close, Done or Stop inside a modal returns to the page it opened from.
       const closer=target.closest<HTMLElement>('button,a,[role=button]'),modal=closer?.closest<HTMLElement>('[data-dx-owned^="view:"][role=dialog]'),modalId=modal?.dataset.dxOwned?.slice(5);
       if(closer&&modalId&&/^(cancel|close|done|dismiss|not now|stop|×|✕|✖|x)$/i.test((closer.getAttribute('aria-label')||closer.textContent||'').trim())&&this.workflow.edges.some(edge=>edge.from===this.stateId&&edge.source==='modal:'+modalId+':close')){event.preventDefault();event.stopImmediatePropagation();this.click('modal:'+modalId+':close');return;}
       // A prototype behavior on the clicked element (expand, collapse, reveal, relabel) runs in place of the page's own click.
-      const behaviors=this.renderer.behaviors.forClick(event.composedPath()[0] instanceof Element?event.composedPath()[0] as Element:target);if(behaviors){event.preventDefault();event.stopImmediatePropagation();for(const b of behaviors)this.renderer.behaviors.run(b.effects,b.key);return;}
+      const clicked=event.composedPath()[0] instanceof Element?event.composedPath()[0] as Element:target;
+      const behaviors=this.renderer.behaviors.forClick(clicked);if(behaviors){event.preventDefault();event.stopImmediatePropagation();for(const b of behaviors)this.renderer.behaviors.run(b.effects,b.key);
+        // The app's own option of a switcher Wandel extended (General beside a copied Test) goes back to its screen from a screen a copy opened.
+        const group=this.renderer.behaviors.groupFor(clicked),siblings=group?this.siblingSources('',group):[],self=this.renderer.sourcesFor(clicked).find(source=>siblings.includes(source))||'',back=group?this.returnThrough(siblings,self):undefined;if(back)this.click(back.source,'click',back);
+        return;}
       const option=this.optionSource(target,'click',event);if(option){event.preventDefault();event.stopImmediatePropagation();this.click(option);return;}
       // A part with no connection of its own uses the nearest enclosing element that has one, such as the section it sits in.
       // A click inside a custom part's shadow root starts from the part itself, since parent links stop at the shadow boundary.
-      const root=target.getRootNode();let owned=this.renderer.findOwned(root instanceof ShadowRoot?root.host:target);const connected=(id:string)=>this.workflow.edges.some(edge=>edge.from===this.stateId&&edge.source===id&&(edge.event||'click')==='click');
+      const root=target.getRootNode();let owned=this.renderer.findOwned(root instanceof ShadowRoot?root.host:target);const connected=(id:string)=>!!this.lead(id,'click');
       for(let depth=0;owned&&!connected(owned.id)&&depth<6;depth++){const outer=owned.node.parentElement;owned=outer?this.renderer.findOwned(outer):null;}
       if(owned&&connected(owned.id)){event.preventDefault();event.stopImmediatePropagation();this.click(owned.id);return;}
       // A prototype control linked to an app control runs it wherever the page is live: Interact and Play.
@@ -317,7 +339,33 @@ export class Session {
     if(target.matches('[data-dx-field]'))return;
     if(!this.interacting&&!this.panelMinimized)this.renderer.captureClick(event);
   };
-  private connectionSource(target:Element,event:ConnectionEvent){return this.renderer.sourcesFor(target).find(source=>this.workflow.edges.some(edge=>edge.from===this.stateId&&edge.source===source&&(edge.event||'click')===event));}
+  private connectionSource(target:Element,event:ConnectionEvent){return this.renderer.sourcesFor(target).find(source=>this.lead(source,event));}
+  /** Where a connection source leads from the current screen.
+   * Navigation persists on the screens it opens: a menu, tab row or switcher that is
+   * still shown there keeps going to its other screens, and an option with no
+   * connection of its own (such as the original "General") returns to the screen on
+   * which it was the current option. A source that leads to the screen already shown leads nowhere. */
+  private lead(source:string,event:ConnectionEvent):Workflow['edges'][number]|undefined{
+    const edges=this.workflow.edges,on=(edge:Workflow['edges'][number])=>edge.source===source&&(edge.event||'click')===event;
+    const own=edges.find(edge=>edge.from===this.stateId&&on(edge));if(own)return own;
+    const chain=renderLineage(this.workflow,this.stateId).map(state=>state.id).reverse();
+    for(const id of chain.slice(1)){const inherited=edges.find(edge=>edge.from===id&&on(edge));if(inherited)return inherited.to===this.stateId?undefined:inherited;}
+    return event==='click'?this.returnThrough(this.siblingSources(source),source):undefined;
+  }
+  /** The other options of the same menu, tab row or pick-one group as a source. */
+  private siblingSources(source:string,group?:string){
+    if(!group&&source.includes('#')){const part=source.slice(0,source.indexOf('#')+1);return [...new Set(this.workflow.edges.map(edge=>edge.source).filter(other=>other.startsWith(part)))];}
+    const choices=renderLineage(this.workflow,this.stateId).flatMap(state=>state.operations).flatMap(op=>op.kind==='choice'?[op]:[]);
+    const key=group||choices.find(op=>op.target.owned===source)?.group;if(!key)return [];
+    return choices.filter(op=>op.group===key).flatMap(op=>op.target.owned?[op.target.owned]:[]);
+  }
+  /** Return to the screen a sibling option was picked on, when this screen (or one it sits on) was reached through it. */
+  private returnThrough(siblings:string[],self:string):Workflow['edges'][number]|undefined{
+    if(!siblings.length)return;
+    const chain=renderLineage(this.workflow,this.stateId).map(state=>state.id).reverse();
+    for(const id of chain){const came=this.workflow.edges.find(edge=>edge.to===id&&edge.from!==id&&edge.source!==self&&siblings.includes(edge.source));if(came)return came.from===this.stateId?undefined:{id:'return:'+came.id,from:this.stateId,source:self||came.source,to:came.from,event:'click'};}
+    return undefined;
+  }
   // A progress bar that finished filling moves its screen on through a finish connection.
   private watching=false;private watchError='';private stopWatch?:()=>void;
   private async enterInteract(){
@@ -330,21 +378,21 @@ export class Session {
   /** The connection source for one option of a composed switcher, dropdown, tab row or menu: its part id and the option's position. */
   private optionSource(target:Element,event:'click'|'change',origin?:Event){
     // Inside a custom part's shadow root, the clicked element is only visible through the event's path.
-    const inner=origin?.composedPath()[0];if(event==='click'&&inner instanceof Element&&inner.getRootNode() instanceof ShadowRoot){const root=inner.getRootNode() as ShadowRoot,host=root.host as HTMLElement,option=inner.closest('[data-option]');if(host.dataset.dxCustom&&option&&host.dataset.dxOwned){const label=option.getAttribute('data-option'),source=host.dataset.dxOwned+'#'+[...root.querySelectorAll('[data-option]')].findIndex(o=>o.getAttribute('data-option')===label);return this.workflow.edges.some(edge=>edge.from===this.stateId&&edge.source===source&&(edge.event||'click')==='click')?source:null;}}
+    const inner=origin?.composedPath()[0];if(event==='click'&&inner instanceof Element&&inner.getRootNode() instanceof ShadowRoot){const root=inner.getRootNode() as ShadowRoot,host=root.host as HTMLElement,option=inner.closest('[data-option]');if(host.dataset.dxCustom&&option&&host.dataset.dxOwned){const label=option.getAttribute('data-option'),source=host.dataset.dxOwned+'#'+[...root.querySelectorAll('[data-option]')].findIndex(o=>o.getAttribute('data-option')===label);return this.lead(source,'click')?source:null;}}
     const select=event==='change'&&target instanceof HTMLSelectElement?target:null,item=event==='click'?target.closest<HTMLElement>('[data-dx-tab],[data-dx-menu-item]'):null;if(!select&&!item)return null;
     const part=(select||item)!.closest<HTMLElement>('[data-dx-block] [data-dx-owned]');if(!part?.dataset.dxOwned)return null;
     const index=select?select.selectedIndex:[...item!.parentElement!.children].filter(child=>child.matches('[data-dx-tab],[data-dx-menu-item]')).indexOf(item!);
-    const source=part.dataset.dxOwned+'#'+index;return this.workflow.edges.some(edge=>edge.from===this.stateId&&edge.source===source&&(edge.event||'click')===event)?source:null;
+    const source=part.dataset.dxOwned+'#'+index;return this.lead(source,event)?source:null;
   }
   private connectionChange=(event:Event)=>{if(!this.runningConnections||!(event.target instanceof Element))return;const option=this.optionSource(event.target,'change');if(option){event.stopImmediatePropagation();this.click(option,'change');return;}const source=this.connectionSource(event.target,'change');if(source){event.stopImmediatePropagation();this.click(source,'change');}};
   private connectionEnter=(event:KeyboardEvent)=>{if(!this.runningConnections||event.key!=='Enter'||event.shiftKey||event.isComposing||event.repeat||!(event.target instanceof Element)||event.target.closest('[data-dx-ignore]'))return;const source=this.connectionSource(event.target,'enter');if(source){event.preventDefault();event.stopImmediatePropagation();this.click(source,'enter');}};
-  private click(source:string,event:ConnectionEvent='click') {
+  private click(source:string,event:ConnectionEvent='click',given?:Workflow['edges'][number]) {
     // An option with no connection of its own uses its whole part's.
-    if(source.includes('#')&&!this.workflow.edges.some(edge=>edge.from===this.stateId&&edge.source===source))source=source.slice(0,source.indexOf('#'));
+    if(!given&&source.includes('#')&&!this.lead(source,event))source=source.slice(0,source.indexOf('#'));
     // A part with no connection of its own uses the nearest enclosing element that has one.
-    const wired=(id:string)=>this.workflow.edges.some(edge=>edge.from===this.stateId&&edge.source===id&&(edge.event||'click')===event);
-    if(!wired(source))for(let node=this.renderer.owned.get(source)?.parentElement,depth=0;node&&depth<6;depth++){const outer=this.renderer.findOwned(node);if(!outer)break;if(wired(outer.id)){source=outer.id;break;}node=outer.node.parentElement;}
-    const edge=this.workflow.edges.find(edge=>edge.from===this.stateId&&edge.source===source&&(edge.event||'click')===event);
+    const wired=(id:string)=>!!this.lead(id,event);
+    if(!given&&!wired(source))for(let node=this.renderer.owned.get(source)?.parentElement,depth=0;node&&depth<6;depth++){const outer=this.renderer.findOwned(node);if(!outer)break;if(wired(outer.id)){source=outer.id;break;}node=outer.node.parentElement;}
+    const edge=given||this.lead(source,event);
     if(edge?.conditions?.some(condition=>!fieldFor(resolve(condition.target,this.root,this.renderer.owned)))){this.pageEditor.notify('A connection field is missing. Return to Edit and reconnect it.');return;}
     const passes=!!edge&&(edge.conditions||[]).every(condition=>conditionPasses(condition,fieldFor(resolve(condition.target,this.root,this.renderer.owned))));
     const next=edge?(passes?edge.to:edge.otherwise):undefined;
@@ -490,7 +538,7 @@ export class Session {
         const previousTarget=this.selected?resolve(this.selected.locator,this.root,this.renderer.owned):null;
         const previousOwned=[...this.renderer.owned].find(([,node])=>node===previousTarget)?.[0];
         const checkpoint={token:c.token,before:this.workflow,stateId:this.stateId,dirty:this.dirty,past:[...this.history.past],future:[...this.history.future]};
-        let flagged='';
+        let flagged='',planChecks:(()=>void)|undefined;
         const result=await this.assistant.apply(c.plan,c.token,this.workflow,this.stateId,async(next,stateId,verify)=>{
           const previous=this.workflow,previousState=this.stateId,dirty=this.dirty,past=[...this.history.past],future=[...this.history.future];
           // Cosmetic layout issues (clipping, spilling past a container, overlap) keep the change and flag it; only a change that did not render rolls back.
@@ -499,13 +547,11 @@ export class Session {
           // A menu or dialog that is still opening reports its contents as clipped; only a clip that remains once it settles is worth a warning.
           if(/clipped|beyond a clipping container/i.test(cosmetic)){await new Promise(resolve=>setTimeout(resolve,500));cosmetic=inspectLayout(this.renderer.owned.values()).find(issue=>/clipped|beyond a clipping container/i.test(issue))||'';}}
           catch(error){this.workflow=previous;this.stateId=previousState;this.dirty=dirty;this.history.past=past;this.history.future=future;this.render(true);throw new Error(rolledBackPreview+(error instanceof Error?error.message:'The preview did not pass verification.'));}
-          // A change that rendered but fails a layout check stays visible; the user decides to keep, fix or undo it.
-          try{verify();}catch(error){flagged=error instanceof Error?error.message:'A layout check did not pass.';
-            // A new item that does not match the items around it is undone so the assistant plans it again.
-            if(flagged.startsWith(neighbourMismatch)){this.workflow=previous;this.stateId=previousState;this.dirty=dirty;this.history.past=past;this.history.future=future;this.render(true);throw new Error(rolledBackPreview+flagged);}}
+          // Layout checks are evidence for AI review, not automatic rollback decisions.
+          planChecks=verify;try{verify();}catch(error){flagged=error instanceof Error?error.message:'A layout check did not pass.';}
           if(!flagged&&cosmetic)flagged=cosmetic;
         });
-        this.assistantCheckpoint={...checkpoint,after:JSON.stringify(this.workflow)};
+        this.assistantCheckpoint={...checkpoint,after:JSON.stringify(this.workflow)};this.revealChecks=planChecks?{verify:planChecks,workflow:this.assistantCheckpoint.after}:null;
         if(result.view){const heading=this.renderer.owned.get('heading:'+result.view);if(heading)this.select(heading);}
         const recent=result.view?null:this.assistant.collector.recent.at(-1);if(recent){try{this.select(this.assistant.collector.get(recent));}catch{this.selected=null;}}else if(!result.view){const retained=previousOwned?this.renderer.owned.get(previousOwned):previousTarget;if(retained?.isConnected)this.select(retained);else this.selected=null;}
         if(flagged){this.emit();throw new Error(keptPreview+flagged);}

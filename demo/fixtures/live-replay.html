@@ -1,0 +1,7 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Wandel · replay saved record</title></head><body><script type="module">
+// Loads the group-page fixture markup, then replays a saved account record through Session.
+const html=await (await fetch('/demo/fixtures/mirrortalk-group.html')).text();
+const doc=new DOMParser().parseFromString(html,'text/html');document.head.append(...doc.head.querySelectorAll('style,link'));document.body.innerHTML=doc.body.innerHTML.replace(/<script[\s\S]*?<\/script>/g,'');
+const {replay}=await import('/demo/fixtures/liveReplay.ts');
+window.probe=await (await import('/demo/fixtures/liveReplay.ts')).probe(await (await fetch('/demo/fixtures/data/myrecord-record.json')).json());window.result=await replay(await (await fetch('/demo/fixtures/data/myrecord-record.json')).json()).catch(e=>'ERR '+e.message);
+</script></body></html>

@@ -1,4 +1,5 @@
 import {visible} from '../content/nativeDesign';
+import {hiddenByDesign} from '../content/visibility';
 type ContentIssue={message:string;need?:number;have?:number};
 /** Pre-edit content issues by element, so verification fails regressions rather than an element's existing rendering. */
 export type ContentBaseline=(node:HTMLElement)=>ContentIssue|undefined;
@@ -41,6 +42,8 @@ export function verifyContent(root:HTMLElement,baseline?:ContentBaseline){
 const size=(rect:DOMRect)=>`${Math.round(rect.width)}×${Math.round(rect.height)} at ${Math.round(rect.left)},${Math.round(rect.top)}`;
 /** A same-size copy rendered next to its original on the same row, with nothing between them. */
 export function verifyBeside(node:HTMLElement,anchor:HTMLElement,before:DOMRect){
+ // Hidden until a click (or on request): its placement is checked when it is shown.
+ if(node.isConnected&&hiddenByDesign(node))return;
  const box=node.getBoundingClientRect(),reference=anchor.getBoundingClientRect();
  if(!node.isConnected||!anchor.isConnected||!box.width||!box.height)throw new Error('The copy or its original is missing.');
  if(Math.abs(reference.width-before.width)>2||Math.abs(reference.height-before.height)>2)throw new Error(`Adding the copy resized the original from ${size(before)} to ${size(reference)}.`);
@@ -66,6 +69,8 @@ export function verifyNoOverlap(node:HTMLElement){
 }
 /** A section directly under the cards it spans: aligned, as wide as them, cards unchanged, and one bar per point for a chart. */
 export function verifyChartSection(section:HTMLElement,cards:HTMLElement[],before:DOMRect[],points?:number){
+ // Hidden until a click (or on request): its placement is checked when it is shown.
+ if(section.isConnected&&hiddenByDesign(section))return;
  const box=section.getBoundingClientRect();if(!section.isConnected||!box.width||!box.height)throw new Error('The new section is not visible.');
  cards.forEach((card,i)=>{const rect=card.getBoundingClientRect();if(!card.isConnected||Math.abs(rect.width-before[i].width)>2||Math.abs(rect.height-before[i].height)>2)throw new Error(`Adding the section resized a card from ${size(before[i])} to ${size(rect)}.`);});
  const rects=cards.map(card=>card.getBoundingClientRect()),left=Math.min(...rects.map(r=>r.left)),right=Math.max(...rects.map(r=>r.right)),bottom=Math.max(...rects.map(r=>r.bottom));
@@ -77,6 +82,8 @@ export function verifyChartSection(section:HTMLElement,cards:HTMLElement[],befor
 }
 /** Verify the requested spatial relationship, not merely DOM sibling order. */
 export function verifyBelow(node:HTMLElement,anchor:HTMLElement,before:DOMRect,anchorBaseline?:ContentBaseline,nodeBaseline?:ContentBaseline){
+ // Hidden until a click (or on request): its placement is checked when it is shown.
+ if(node.isConnected&&hiddenByDesign(node))return;
  const box=node.getBoundingClientRect(),reference=anchor.getBoundingClientRect();
  if(!node.isConnected||!anchor.isConnected||!box.width||!box.height)throw new Error('The new block or its anchor is missing.');
  if(box.top<reference.bottom-2)throw new Error('The new block was not placed below the existing card.');

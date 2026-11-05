@@ -1,6 +1,6 @@
 import {mountPrototypePage,mountChartSection} from './prototypePage';
 import {mountBlock,blockInteract} from './block';
-import {Behaviors,safeDeclarations} from './behavior';
+import {Behaviors,safeDeclarations,choiceLabels} from './behavior';
 import {applyArrangement} from './arrangement';
 import {placeBelow,restoreInsertionStyles,type InsertionStyle} from './insertionPlacement';
 import {applyTheme,restoreTheme,type ThemeStyle} from './theme';
@@ -15,6 +15,7 @@ import type { Workflow, Operation, Locator } from '../shared/model';
 import { renderLineage, lineage } from '../prototype/engine';
 import { editableText } from './text';
 import { resolve } from './locator';
+import {expectHidden,deferOwned,clearExpectations,expectation} from './visibility';
 const buttonStyle='display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1px solid #b9c5f8;border-radius:8px;background:#edf0ff;color:#3446b3;font:600 13px/1.4 system-ui,sans-serif;padding:9px 14px;margin:4px;cursor:pointer;max-width:100%;white-space:normal;';
 const panelStyle='display:block;box-sizing:border-box;min-width:0;border:1px solid #d5dcf5;border-radius:12px;padding:20px;margin:12px 0;background:#fff;color:#202638;font:14px/1.5 system-ui,sans-serif;box-shadow:0 3px 14px #283d7610;';
 export class Renderer {
@@ -60,7 +61,14 @@ export class Renderer {
     }finally{this.forwarding=false;}
   }
 
-  constructor(public root:HTMLElement,private onClick:(id:string)=>void,private onChoice?:(id:string)=>void) {}
+  constructor(public root:HTMLElement,private onClick:(id:string)=>void,private onChoice?:(id:string)=>void) {this.behaviors.onReveal=revealed=>this.checkRevealed(revealed);}
+  /** Called with layout issues found in content a click or hover just revealed; an empty list means it rendered correctly. */
+  onReveal?:(issues:string[],revealed:HTMLElement[])=>void;
+  // Revealed content is validated like any other once it is on screen, after the browser has laid it out.
+  private checkRevealed(revealed:HTMLElement[]){
+    const settle=()=>{const live=revealed.filter(el=>el.isConnected&&!expectation(el));if(!live.length)return;const nodes=[...this.owned.values()].filter(node=>live.some(el=>el===node||el.contains(node)));this.onReveal?.(nodes.length?inspectLayout(nodes):[],live);};
+    requestAnimationFrame(()=>requestAnimationFrame(settle));
+  }
   idFor(el:Element) { for(const [id,node] of this.owned) if(node===el) return id; return undefined; }
   findOwned(el:Element) { let node:Element|null=el; while(node && node!==this.root.parentElement) { const id=this.idFor(node); if(id) return {id,node}; node=node.parentElement; } return null; }
   private make(id:string,kind:'button'|'panel'|'text'|'field',text:string,semanticTag?:'header'|'nav'|'a') {
@@ -87,7 +95,7 @@ export class Renderer {
   }
   readonly behaviors=new Behaviors();
   reset() {
-    this.behaviors.reset();
+    this.behaviors.reset();clearExpectations();
     for(const cleanup of this.widgetCleanup.values())cleanup();this.widgetCleanup.clear();
     for(const record of [...this.applied.values()].reverse()) {
       if(record.insertionStyles)restoreInsertionStyles(record.insertionStyles);
@@ -123,13 +131,24 @@ export class Renderer {
   reconcile(w:Workflow,stateId:string,data:Record<string,string>=Object.fromEntries((w.variables||[]).map(v=>[v.key,v.value]))):string[] {
     const errors:string[]=[];
     const chain=renderLineage(w,stateId);
+    const deferred=new Set<string>();
+    const popupClosed=(locator:Locator)=>{const popup=locator.popup;if(!popup)return false;return ![...this.root.querySelectorAll<HTMLElement>('[role=listbox],[role=menu]')].some(el=>el.getAttribute('role')===popup.role&&(!popup.id||el.id===popup.id)&&(!popup.label||el.getAttribute('aria-label')===popup.label)&&el.getBoundingClientRect().height>0);};
+    const choiceGroups=new Map<string,Set<string>>();for(const state of chain)for(const op of state.operations)if(op.kind==='choice'){const values=choiceGroups.get(op.group)||new Set<string>();values.add(op.text);choiceGroups.set(op.group,values);}
+    this.behaviors.syncChoices(w.id,choiceGroups);
+    const pageChoices=new Map<string,string>(),selectedChoices=new Map<string,string>();
+    for(const state of chain)for(const op of state.operations)if(op.kind==='choice'){
+      if(w.edges.some(edge=>edge.source===op.target.owned&&edge.from===chain.at(-1)?.id))pageChoices.set(op.group,op.originalText);
+      if(w.edges.some(edge=>edge.source===op.target.owned&&chain.some(s=>s.id===edge.to)))selectedChoices.set(op.group,op.text);
+    }
+    for(const [group,text] of [...pageChoices,...selectedChoices])this.behaviors.setChoice(group,text);
+
     // Bind native elements against one DOM snapshot. Earlier operations in the
     // batch can change ancestor structure or descendant labels; those changes
     // must not make a later operation lose its already identified element.
     const nativeTargets=new Map<Locator,HTMLElement>();
     for(const state of chain)for(const op of state.operations){
-      if(this.applied.get(op.id)?.target.isConnected)continue;
-      for(const locator of [op.target,...(op.kind==='reorder'?[op.anchor]:[])]){
+      if(op.kind!=='choice'&&this.applied.get(op.id)?.target.isConnected)continue;
+      for(const locator of [op.target,...(op.kind==='reorder'?[op.anchor]:op.kind==='choice'?[op.original,...(op.container?[op.container]:[]),...op.labels]:[])]){
         if(locator.owned||nativeTargets.has(locator))continue;
         const node=resolve(locator,this.root,this.owned);if(node)nativeTargets.set(locator,node);
       }
@@ -178,27 +197,51 @@ export class Renderer {
         if(existing?.insertionStyles)restoreInsertionStyles(existing.insertionStyles);
         if(existing?.node) { existing.node.remove(); if(op.kind==='insert'){this.owned.delete(op.node.id);this.owned.delete('wrap:'+op.id);} }
         this.applied.delete(op.id);
+        if(op.kind==='choice')this.behaviors.choiceTitle(op.group,op.labels.map(label=>resolve(label,this.root,this.owned)).filter((el):el is HTMLElement=>!!el&&!el.closest('[role=listbox],[role=menu],[role=option],[role=menuitemradio]')));
         const bound=nativeTargets.get(op.target),target=bound?.isConnected?bound:resolve(op.target,this.root,this.owned);
+        if(!target&&(popupClosed(op.target)||!!op.target.owned&&deferred.has(op.target.owned))){if(op.kind==='insert'){deferred.add(op.node.id);deferOwned(op.node.id);for(const part of op.node.copy||[]){deferred.add(part.id);deferOwned(part.id);}}continue;}
+        // A behavior that shows or hides content in a closed menu or unopened screen waits with that content; it is not missing.
+        if(op.kind==='behavior'&&op.effects.some(effect=>!resolve(effect.target,this.root,this.owned)&&(popupClosed(effect.target)||!!effect.target.owned&&deferred.has(effect.target.owned))))continue;
         if(!target) { errors.push(`${op.kind==='insert'?op.node.text:op.kind==='text'?op.text:op.kind}: target missing or ambiguous`);continue; }
-        try { this.apply(op,target,op.kind==='reorder'?nativeTargets.get(op.anchor):undefined); } catch(error) { errors.push(error instanceof Error?error.message:'Could not apply change.'); }
+        try { this.apply(op,target,op.kind==='reorder'?nativeTargets.get(op.anchor):undefined,nativeTargets); } catch(error) { errors.push(error instanceof Error?error.message:'Could not apply change.'); }
       }
     }
     this.updateData(data);this.raiseOverCovers();
-    const hidden=[...this.applied.values()].filter(record=>record.styles?.some(s=>s.key==='display'&&s.after==='none')).map(record=>record.target);
+    this.recordExpectations(chain);
     // Copied markup contains layout helpers, empty spans and line breaks. Their
     // zero-sized boxes are not failed controls. Validate the copied unit and its
     // actual controls while retaining every part as an individually editable node.
     const copyParts=new Set(chain.flatMap(state=>state.operations.flatMap(op=>op.kind==='insert'&&op.node.copy?op.node.copy.slice(1).map(part=>part.id):[])));
-    // Parts inside a collapsed block disclosure are hidden by design until expanded.
-    const inspected=[...this.owned].filter(([id,node])=>!hidden.some(parent=>parent.contains(node))&&!node.closest('[data-dx-disclosure="closed"] > [data-dx-body]')&&(!copyParts.has(id)||node.matches('button,a,input,textarea,select,[role=button],[role=link],[role=checkbox],[role=radio]'))).map(([,node])=>node);
+    // Intentionally hidden content (until a click, by request, or in a closed disclosure) is skipped by inspectLayout and checked once shown.
+    const inspected=[...this.owned].filter(([id,node])=>!copyParts.has(id)||node.matches('button,a,input,textarea,select,[role=button],[role=link],[role=checkbox],[role=radio]')).map(([,node])=>node);
     return [...errors,...inspectLayout(inspected)];
+  }
+  /** Tell layout inspection and the plan's checks which elements this prototype hides on purpose.
+   * A click or hover that shows or toggles an element makes it hidden until interaction;
+   * a requested hide keeps it hidden; a load-time hide that nothing ever reverses is reported. */
+  private recordExpectations(chain:Workflow['states']){
+    const revealed=new Set<HTMLElement>(),hiddenLater=new Set<HTMLElement>(),hiddenAtLoad=new Set<HTMLElement>();
+    for(const state of chain)for(const op of state.operations){
+      if(op.kind!=='behavior')continue;
+      for(const effect of op.effects){
+        if(effect.action!=='show'&&effect.action!=='hide'&&effect.action!=='toggle')continue;
+        const el=resolve(effect.target,this.root,this.owned);if(!el)continue;
+        if(op.event==='load'){if(effect.action!=='show')hiddenAtLoad.add(el);}
+        else if(effect.action==='hide')hiddenLater.add(el);else revealed.add(el);
+      }
+    }
+    for(const el of revealed)expectHidden(el,'interaction');
+    for(const el of hiddenLater)expectHidden(el,'hidden');
+    for(const el of hiddenAtLoad)expectHidden(el,'unrevealed');
+    // Hidden by a requested style or remove; a reveal behavior above already marked those it shows.
+    for(const record of this.applied.values())if(record.styles?.some(s=>s.key==='display'&&s.after==='none'))expectHidden(record.target,'hidden');
   }
   validateInputs(source:string){
     const button=this.owned.get(source)||[...this.triggers].find(([,id])=>id===source)?.[0];const view=button?.closest<HTMLElement>('form,article,section,[role=dialog],[data-dx-owned^="view:"]')||this.root;
     const inputs=[...view.querySelectorAll<HTMLInputElement|HTMLTextAreaElement|HTMLSelectElement>('[data-dx-field]')].filter(input=>!input.closest('form')||input.closest('form')===button?.closest('form'));
     for(const input of inputs){if(!input.checkValidity()){input.setAttribute('aria-invalid','true');input.reportValidity();return false;}input.removeAttribute('aria-invalid');}return true;
   }
-  private apply(op:Operation,target:HTMLElement,boundAnchor?:HTMLElement) {
+  private apply(op:Operation,target:HTMLElement,boundAnchor?:HTMLElement,bindings=new Map<Locator,HTMLElement>()) {
     if(op.kind==='theme'){this.applied.set(op.id,{target,theme:applyTheme(target,op.theme)});return;}
     if(op.kind==='reorder'){
       const anchor=boundAnchor?.isConnected?boundAnchor:resolve(op.anchor,this.root,this.owned);if(!anchor||anchor===target||target.contains(anchor))throw new Error('Choose a distinct destination outside the moved element.');
@@ -239,6 +282,12 @@ export class Renderer {
     if(op.kind==='css'){
       const styles=safeDeclarations(op.css).map(([key,value])=>{const before=target.style.getPropertyValue(key),priority=target.style.getPropertyPriority(key);target.style.setProperty(key,value,'important');return {key,before,priority,after:target.style.getPropertyValue(key)};});
       if(!styles.length)throw new Error('The style change had no usable CSS.');this.applied.set(op.id,{target,styles});return;
+    }
+    if(op.kind==='choice'){
+      // The original option and the title live in the app's own markup; when the menu is closed they are simply not there yet.
+      const original=bindings.get(op.original)||this.behaviors.choiceOriginal(op.group)||resolve(op.original,this.root,this.owned),carrier=resolve(op.carrier,this.root,this.owned)||target;
+      if(original){const container=op.container?resolve(op.container,this.root,this.owned)||undefined:undefined;const labels=op.labels.map(label=>resolve(label,this.root,this.owned)).filter((el):el is HTMLElement=>!!el&&!el.closest('[role=listbox],[role=menu],[role=option],[role=menuitemradio]'));this.behaviors.addChoice(op.group,{original,container,item:target,carrier,text:op.text,originalText:op.originalText,background:op.background,labels:labels.length?labels:container?choiceLabels(this.root,container,[op.originalText,op.text]):[]});}
+      this.applied.set(op.id,{target});return;
     }
     if(op.kind==='behavior'){
       const effects=op.effects.map(effect=>{const el=resolve(effect.target,this.root,this.owned);if(!el)throw new Error('An element this behavior changes is missing.');return {action:effect.action,el,...(effect.value!==undefined?{value:effect.value}:{})};});

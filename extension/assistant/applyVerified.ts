@@ -1,9 +1,10 @@
+import {resolveInspections} from './inspection';
 import {normalizePlan,validatePlanReferences} from './plan';
 import type {AssistantPlan,PageContext} from './schema';
 export const rolledBackPreview='Preview rolled back: ';
-/** A built change that failed a check but was left on the page for the user to judge. */
+/** A rendered change with diagnostic evidence for AI review and targeted correction. */
 export const keptPreview='Preview kept: ';
-/** A new item that does not look like the items around it is rolled back and planned again, never kept. */
+/** Diagnostic evidence that a new item differs from its neighbours; AI judges whether it matters. */
 export const neighbourMismatch='Does not match its neighbours: ';
 /** Retry only a confirmed preflight rejection or fully restored preview, and only with a changed plan. */
 export async function applyVerifiedPlan(instruction:string,initial:AssistantPlan,context:PageContext,options:{apply:(plan:AssistantPlan,c:PageContext)=>Promise<void>;refresh:()=>Promise<PageContext>;inspect?:(refs:string[])=>Promise<PageContext>;replan:(feedback:string,c:PageContext)=>Promise<AssistantPlan>;active:()=>boolean;repairing:()=>void}){
@@ -21,9 +22,9 @@ export async function applyVerifiedPlan(instruction:string,initial:AssistantPlan
    options.repairing();current=await options.refresh();
    if(!options.active()||current.workflowId!==context.workflowId||current.stateId!==context.stateId)throw new Error('The page changed. The failed preview was restored.');
    const feedback=message.slice(0,700);plan=normalizePlan(await options.replan(feedback,current));
-   for(let round=0;plan.status==='inspect'&&options.inspect&&round<4;round++){
-    current=await options.inspect(plan.candidates);if(!options.active())throw new Error('Request canceled.');
-    plan=normalizePlan(await options.replan(feedback,current));
+   if(plan.status==='inspect'||plan.status==='clarify'&&!plan.question?.trim()){
+    const resolved=await resolveInspections(plan,current,{active:options.active,inspect:refs=>options.inspect?options.inspect(refs):Promise.resolve(current),replan:(expanded,note)=>options.replan(feedback+'\n'+note,expanded)});
+    plan=resolved.plan;current=resolved.context;
    }
    if(!options.active())throw new Error('Request canceled.');validatePlanReferences(plan,current.elements.map(e=>e.ref));
    if(plan.status!=='edit')return plan;
