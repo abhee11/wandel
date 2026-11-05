@@ -64,7 +64,10 @@ const cases:Record<string,()=>Promise<Result>>={
   const applied=await apply([{kind:'duplicate',targets:[library],position:'after',text:'X',resultRef:'new:x'},{kind:'create',element:'panel',text:'Home Options',targets:[section],position:'below',resultRef:'new:card'},{kind:'behavior',targets:['new:card'],event:'load',effects:[{action:'hide',targets:['new:card'],value:null}]},{kind:'behavior',targets:['new:x'],event:'click',effects:[{action:'show',targets:['new:card'],value:null}]}]);
   if(applied!=='OK')return check(false,applied);
   const x=[...document.querySelectorAll<HTMLElement>('aside [data-dx-owned]')].find(n=>n.textContent?.trim()==='X');
-  if(!x)return check(false,'The copied item has no visible X label.');
+  if(!x)return check(false,'The copied item has no X label.');
+  const label=[...x.querySelectorAll<HTMLElement>('span')].find(n=>n.textContent==='X'),box=label?.getBoundingClientRect();
+  if(!label||!box||box.width<4||box.height<8||box.left<0||parseFloat(getComputedStyle(label).fontSize)<10)return check(false,'The X label is not visible.');
+  if(x.querySelector('svg'))return check(false,'The copy kept the original item’s icon.');
   if(shown(card()))return check(false,'The card is visible before X is clicked.');
   await session.dispatch({type:'interact'});press(x);await frames();
   return check(shown(card()),shown(card())?'X copied with a visible label; the card appears on click.':'Clicking X did not show the card.');

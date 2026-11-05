@@ -24,7 +24,13 @@ export function renameCopyHeading(source:HTMLElement,heading:string,copy:CopyNod
  // label to rename: the copy gets the new name as a visible label inside its control.
  if(!target&&source.getBoundingClientRect().height<140&&!copy.some(item=>item.tag==='#text'&&item.text.trim())){
   const control=source.matches(controls)?source:source.querySelector<HTMLElement>(controls),at=control?identities.get(control)??0:0;
-  copy.push({id:uid(),parent:at,tag:'#text',text:heading,style:{}});return copy.length-1;
+  // The source's icon stands for its own destination; on a new option it would mislead, so the name takes its place.
+  const inside=(index:number)=>{for(let i=index;i>=0;i=copy[i].parent)if(i===at)return true;return false;};
+  copy.forEach((item,index)=>{if(!inside(index))return;delete item.icon;if(item.tag==='img')item.style={...item.style,display:'none'};});
+  // Icon-only items often hide text with their own styling (no font size, off-screen indent); the label sets its own.
+  const css=getComputedStyle(control||source),ink=/rgba?\([^)]*,\s*0\)$/.test(css.color)||css.color==='transparent'?'#14131b':css.color;
+  copy.push({id:uid(),parent:at,tag:'span',text:'',style:{display:'inline-block',color:ink,'font-size':'14px','font-weight':'600','line-height':'20px','white-space':'nowrap','text-indent':'0','visibility':'visible',opacity:'1'}});
+  const label=copy.length-1;copy.push({id:uid(),parent:label,tag:'#text',text:heading,style:{}});return label;
  }
  if(!target)throw new Error('No clear heading was found. Select the card heading or a smaller section.');
  const texts:Text[]=[];
