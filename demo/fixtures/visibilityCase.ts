@@ -105,6 +105,8 @@ const cases:Record<string,()=>Promise<Result>>={
   await drag(first,at(document.querySelector<HTMLElement>('nav')!,.5,.5),true);
   const free=(await ops()).endsWith('style');
   await session.dispatch({type:'undo'});await frames();
+  await drag(first,at(document.querySelector<HTMLElement>('aside')!,.5,.5));
+  if(await ops())return check(false,`A card dropped on the sidebar was saved: ${await ops()}.`);
   await drag(first,{clientX:1250,clientY:850});
   return check(free&&(await ops())==='',`Moved beside, into a panel, freely with Shift (${free}); a drop with no slot saved nothing (“${await ops()}”).`);
  }

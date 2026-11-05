@@ -268,6 +268,8 @@ export class Session {
   private keyup=(e:KeyboardEvent)=>{const key=shortcutKey(e);if(!key)return;if(e.code==='KeyS'||key==='s')this.resizeHeld=false;};
   private blur=()=>{this.resizeHeld=false;this.cancelDrag();};
   private escape=(e:KeyboardEvent)=>{
+    // The Escape a choice sends to dismiss the app's menu is for the app, not a Wandel shortcut.
+    if(!e.isTrusted)return;
     const key=shortcutKey(e);if(!key)return;
     if(e.key==='Escape'&&this.closeLayouts){e.preventDefault();e.stopImmediatePropagation();this.closeLayouts();return;}
     const path=e.composedPath(),origin=path[0];const selected=this.selecting?this.findSelected():null;const editable=isTextEntry(origin)&&!(origin instanceof Element&&selected?.contains(origin)&&!path.includes(this.pageEditor.host));

@@ -14,7 +14,7 @@ import {renderIcon} from './copyIcon';
 import type { Workflow, Operation, Locator } from '../shared/model';
 import { renderLineage, lineage } from '../prototype/engine';
 import { editableText } from './text';
-import { resolve } from './locator';
+import { resolve,atStructure } from './locator';
 import {expectHidden,deferOwned,clearExpectations,expectation} from './visibility';
 const buttonStyle='display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1px solid #b9c5f8;border-radius:8px;background:#edf0ff;color:#3446b3;font:600 13px/1.4 system-ui,sans-serif;padding:9px 14px;margin:4px;cursor:pointer;max-width:100%;white-space:normal;';
 const panelStyle='display:block;box-sizing:border-box;min-width:0;border:1px solid #d5dcf5;border-radius:12px;padding:20px;margin:12px 0;background:#fff;color:#202638;font:14px/1.5 system-ui,sans-serif;box-shadow:0 3px 14px #283d7610;';
@@ -197,7 +197,7 @@ export class Renderer {
         if(existing?.insertionStyles)restoreInsertionStyles(existing.insertionStyles);
         if(existing?.node) { existing.node.remove(); if(op.kind==='insert'){this.owned.delete(op.node.id);this.owned.delete('wrap:'+op.id);} }
         this.applied.delete(op.id);
-        if(op.kind==='choice')this.behaviors.choiceTitle(op.group,op.labels.map(label=>resolve(label,this.root,this.owned)).filter((el):el is HTMLElement=>!!el&&!el.closest('[role=listbox],[role=menu],[role=option],[role=menuitemradio]')));
+        if(op.kind==='choice')this.behaviors.choiceTitle(op.group,op.labels.map(label=>resolve(label,this.root,this.owned)||atStructure(label,this.root)).filter((el):el is HTMLElement=>!!el&&!el.closest('[role=listbox],[role=menu],[role=option],[role=menuitemradio]')&&[op.originalText,op.text].some(text=>(el.textContent||'').includes(text))));
         const bound=nativeTargets.get(op.target),target=bound?.isConnected?bound:resolve(op.target,this.root,this.owned);
         if(!target&&(popupClosed(op.target)||!!op.target.owned&&deferred.has(op.target.owned))){if(op.kind==='insert'){deferred.add(op.node.id);deferOwned(op.node.id);for(const part of op.node.copy||[]){deferred.add(part.id);deferOwned(part.id);}}continue;}
         // A behavior that shows or hides content in a closed menu or unopened screen waits with that content; it is not missing.
@@ -286,7 +286,7 @@ export class Renderer {
     if(op.kind==='choice'){
       // The original option and the title live in the app's own markup; when the menu is closed they are simply not there yet.
       const original=bindings.get(op.original)||this.behaviors.choiceOriginal(op.group)||resolve(op.original,this.root,this.owned),carrier=resolve(op.carrier,this.root,this.owned)||target;
-      if(original){const container=op.container?resolve(op.container,this.root,this.owned)||undefined:undefined;const labels=op.labels.map(label=>resolve(label,this.root,this.owned)).filter((el):el is HTMLElement=>!!el&&!el.closest('[role=listbox],[role=menu],[role=option],[role=menuitemradio]'));this.behaviors.addChoice(op.group,{original,container,item:target,carrier,text:op.text,originalText:op.originalText,background:op.background,labels:labels.length?labels:container?choiceLabels(this.root,container,[op.originalText,op.text]):[]});}
+      if(original){const container=op.container?resolve(op.container,this.root,this.owned)||undefined:undefined;const labels=op.labels.map(label=>resolve(label,this.root,this.owned)||atStructure(label,this.root)).filter((el):el is HTMLElement=>!!el&&!el.closest('[role=listbox],[role=menu],[role=option],[role=menuitemradio]'));this.behaviors.addChoice(op.group,{original,container,item:target,carrier,text:op.text,originalText:op.originalText,background:op.background,labels:labels.length?labels:container?choiceLabels(this.root,container,[op.originalText,op.text]):[]});}
       this.applied.set(op.id,{target});return;
     }
     if(op.kind==='behavior'){

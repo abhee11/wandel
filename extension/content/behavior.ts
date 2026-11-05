@@ -101,6 +101,8 @@ export class Behaviors{
    for(const [x,y] of [[r.left+2,r.top+2],[r.right-2,r.top+2],[r.left+2,r.bottom-2],[r.right-2,r.bottom-2]]){if(x<0||y<0||x>=innerWidth||y>=innerHeight)continue;const hit=document.elementFromPoint(x,y);if(hit!==overlay)continue;
     for(const type of ['pointerdown','mousedown','pointerup','mouseup','click'])hit.dispatchEvent(new (type.startsWith('pointer')?PointerEvent:MouseEvent)(type,{bubbles:true,cancelable:true,view:window,clientX:x,clientY:y}));break;}
   };dismiss();
+  // A menu that ignores both closes through its own button.
+  const timer=setTimeout(()=>{this.choiceTimers.delete(timer);if(menu.isConnected&&menu.getBoundingClientRect().height)entry.labels.find(label=>label.isConnected&&label.matches('button,[role=button],[role=combobox]'))?.click();},80);this.choiceTimers.add(timer);
  }
  private showChoice(group:string){
   const entry=this.choices.get(group);if(!entry)return;const chosen=this.chosen.get(group)||entry.originalText;

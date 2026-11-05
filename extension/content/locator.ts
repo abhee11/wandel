@@ -29,6 +29,12 @@ function atAddress(l:Locator,root:ParentNode){
  if(anchors.length!==1)return undefined;
  let node:Element|undefined=anchors[0];for(const index of l.structure!.path)node=node&&pageChildren(node)[index];return node;
 }
+/** The element at a recorded address, for controls whose own name changes with their state, such as Open/Close on a menu button. */
+export function atStructure(l:Locator,root:ParentNode):HTMLElement|null{
+ if(!l.structure)return null;
+ const node=atAddress(l,root);
+ return node instanceof HTMLElement&&node.tagName.toLowerCase()===l.tag&&roleOf(node)===l.role&&JSON.stringify(ancestorTags(node))===JSON.stringify(l.ancestorTags)?node:null;
+}
 function ancestorTags(el:Element){const tags:string[]=[];for(let node=el.parentElement;node&&tags.length<32;node=node.parentElement)tags.push(node.tagName.toLowerCase());return tags;}
 export function structuralIdentity(el:Element):Locator['structure'] {
   const path:number[]=[];

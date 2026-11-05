@@ -76,9 +76,19 @@ function locate(dragged:HTMLElement,x:number,y:number,root:HTMLElement):Spot|nul
  }
  return null;
 }
+/** The page's frame: headers, navigation and pinned bars. It is sized for small controls, not for panels. */
+function pageFrame(el:HTMLElement,root:HTMLElement){
+ for(let node:HTMLElement|null=el;node&&node!==root;node=node.parentElement){
+  if(node.matches('header,nav,aside,[role=banner],[role=navigation],[role=complementary]')||['sticky','fixed'].includes(getComputedStyle(node).position))return node;
+ }
+ return null;
+}
 export function findDrop(dragged:HTMLElement,x:number,y:number,root:HTMLElement):Drop|null{
  const item=layoutItem(dragged,root),spot=locate(item,x,y,root);
- return spot&&!unchanged(item,spot)?{...spot,item}:null;
+ if(!spot||unchanged(item,spot))return null;
+ const size=item.getBoundingClientRect(),frame=pageFrame(spot.anchor,root);
+ if(size.width>=200&&size.height>=120&&frame&&!frame.contains(item))return null;
+ return {...spot,item};
 }
 /** Elements taken out of the page's flow have no slot to move to. */
 export const floats=(el:HTMLElement)=>['absolute','fixed'].includes(getComputedStyle(el).position);
