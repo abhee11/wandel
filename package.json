@@ -14,7 +14,8 @@
     "platform:seed": "node scripts/platform-build.mjs && node dist-platform/server/seed.js",
     "build:free": "tsc --noEmit && node scripts/build.mjs --free",
     "build:assistant": "npm run build",
-    "platform:access": "node scripts/platform-build.mjs && node dist-platform/server/accessAdmin.js"
+    "platform:access": "node scripts/platform-build.mjs && node dist-platform/server/accessAdmin.js",
+    "dev:local": "node scripts/local-dev.mjs"
   },
   "dependencies": {
     "@clerk/backend": "^3.22.0",

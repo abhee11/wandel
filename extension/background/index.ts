@@ -1,6 +1,9 @@
 import {openFloatingPanel,registerFloatingPanel} from './floating';
 import {accountConfig} from '../shared/accountConfig';
 registerFloatingPanel();
+import {reloadDevTab} from '../sidepanel/devReload';
+// Local development: reload the page whose panel restarted the extension (npm run dev:local).
+reloadDevTab();
 import {registerSharedWorkflow} from './sharedWorkflow';
 registerSharedWorkflow();
 import {registerWorkflowOpener} from './openWorkflow';
