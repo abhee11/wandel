@@ -1,7 +1,7 @@
 import {z} from 'zod';
 import {lineage} from '../prototype/engine';
 import type {Workflow} from './model';
-export const LiveContextSchema=z.object({workflowId:z.string().min(1).max(100),stateId:z.string().min(1).max(100),visits:z.array(z.string().min(1).max(100)).max(60),mode:z.enum(['edit','interact','replay']),minimized:z.boolean(),dialogs:z.record(z.string().max(100),z.string().max(120)).default({})}).strict();
+export const LiveContextSchema=z.object({workflowId:z.string().min(1).max(100),stateId:z.string().min(1).max(100),visits:z.array(z.string().min(1).max(100)).max(60),mode:z.enum(['edit','interact','replay']),minimized:z.boolean(),dialogs:z.record(z.string().max(100),z.string().max(120)).default({}),shared:z.boolean().optional()}).strict();
 export type LiveContext=z.infer<typeof LiveContextSchema>;
 /** The tab's active workflow when the current page is not one of its screens. */
 export type PausedWorkflow=LiveContext&{name:string;url:string};

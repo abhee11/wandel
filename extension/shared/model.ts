@@ -90,6 +90,8 @@ export const ConnectionSpecSchema=z.object({to:id.optional(),newTitle:label.opti
 export type ConnectionCondition=z.infer<typeof ConnectionConditionSchema>;
 export type ConnectionEvent=z.infer<typeof ConnectionEventSchema>;
 export const WorkflowSchema = z.object({
+  /** Edits that already weren't showing when a link was shared, so they don't stop someone opening it. */
+  shareBaseline:z.array(z.string().max(400)).max(300).optional(),
   assistantMemory:AssistantMemorySchema.optional(),schemaVersion: z.literal(1), id, name: label, origin: z.string(), route: z.string(), createdAt: z.string(), updatedAt: z.string(),
   variables:z.array(DataEntrySchema).max(100).optional(),
   entry: id, maxStates: z.number().int().min(2).max(30), states: z.array(StateSchema).min(1).max(30),
@@ -102,7 +104,7 @@ export type SavedRecord = z.infer<typeof RecordSchema>;
 export type Selection = { locator: Locator; label: string; tag: string; owned: boolean };
 export type ConnectionWorkspace = {busy?:boolean;pendingScreen?:Pick<VisitedScreen,'id'|'title'|'route'|'thumbnail'>;source:Selection;from:string;to:string;newTitle:string;event:ConnectionEvent;conditions:ConnectionCondition[];otherwise:string;saved:string;picking:boolean;fields:Selection[];events:ConnectionEvent[];message:string;error:boolean};
 export type ConnectionAction = {action:'close'|'pick'|'cancelPick'|'save'|'test'} | {action:'destination'|'title'|'event'|'otherwise';value:string} | {action:'remove';index:number} | {action:'condition';index:number;test:ConnectionCondition['test'];value?:string} | {action:'screen';screen:VisitedScreen};
-export type Snapshot = {publicSnapshot?:{html:string;workflow:Workflow;masked:boolean;skippedScreens:number;bytes:number};staleTab?:boolean;watching?:boolean;watched?:{id:string;kind:string;title:string;outline:string;trigger:string}|null;watchError?:string;revealed?:boolean;previewOriginal?:boolean;navigationError?:string;resumeChoice?:{name:string;page:string};assistant?:AssistantSnapshot;liveSession?:boolean;panelMinimized?:boolean;panelRestoring?:boolean;connectionWorkspace?:ConnectionWorkspace|null;visited?:string[];mode?:'edit'|'interact'|'replay'|'closed';styleSource?:Selection|null; workflow: Workflow; stateId: string; selected: Selection | null; picking: boolean; dragging:boolean; replay: boolean; enabled: boolean; dirty: boolean; canUndo: boolean; canRedo: boolean; canBack: boolean; unresolved: string[]; currentVersion: number; versions: { number: number; savedAt: string; name: string }[]; library: { id: string; name: string; versions: number }[] };
+export type Snapshot = {designEvidence?:import('../content/designEvidence').DesignEvidence;publicSnapshot?:{html:string;workflow:Workflow;masked:boolean;skippedScreens:number;bytes:number};staleTab?:boolean;watching?:boolean;watched?:{id:string;kind:string;title:string;outline:string;trigger:string}|null;watchError?:string;revealed?:boolean;previewOriginal?:boolean;navigationError?:string;resumeChoice?:{name:string;page:string};assistant?:AssistantSnapshot;liveSession?:boolean;panelMinimized?:boolean;panelRestoring?:boolean;connectionWorkspace?:ConnectionWorkspace|null;visited?:string[];mode?:'edit'|'interact'|'replay'|'closed';styleSource?:Selection|null; workflow: Workflow; stateId: string; selected: Selection | null; picking: boolean; dragging:boolean; replay: boolean; enabled: boolean; dirty: boolean; canUndo: boolean; canRedo: boolean; canBack: boolean; unresolved: string[]; currentVersion: number; versions: { number: number; savedAt: string; name: string }[]; library: { id: string; name: string; versions: number }[] };
 export type Command =
  | {type:'previewOriginal';value:boolean}
  | {type:'compareOriginal'}
@@ -118,7 +120,7 @@ export type Command =
  | {type:'assistantRollback';token:string}
  | {type:'assistantCandidate';ref:string}
  | {type:'assistantCandidates';refs:string[]}
- | { type: 'resumeWorkflow' | 'continueWorkflowHere' | 'dismissResumeChoice' | 'validateSelection' | 'snapshot' | 'pick' | 'undo' | 'redo' | 'replay' | 'edit' | 'back' | 'save' | 'saveTemporary' | 'duplicate' | 'delete' | 'remove' | 'reset' | 'drag' | 'pause' | 'duplicateElement' | 'escape' | 'mirror' | 'selectSection' | 'selectParent' | 'signIn' }
+ | { type: 'designEvidence' | 'resumeWorkflow' | 'continueWorkflowHere' | 'dismissResumeChoice' | 'validateSelection' | 'snapshot' | 'pick' | 'undo' | 'redo' | 'replay' | 'edit' | 'back' | 'save' | 'saveTemporary' | 'duplicate' | 'delete' | 'remove' | 'reset' | 'drag' | 'pause' | 'duplicateElement' | 'escape' | 'mirror' | 'selectSection' | 'selectParent' | 'signIn' }
  | {type:'new';discard?:boolean}
  | {type:'revealChange'}
  | {type:'openControl';ref:string;confirmed?:boolean}

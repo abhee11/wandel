@@ -1,3 +1,5 @@
+import {showSharedNotice,clearSharedNotice} from './sharedNotice';
+import {collectEvidence} from './designEvidence';
 import {sharedValues,onSharedValues,publishShared} from './sharedValues';
 import {AssistantMemorySchema} from '../shared/assistantMemory';
 import {watchNextClick,watched,clearWatched} from './watch';
@@ -158,12 +160,25 @@ export class Session {
     try{
     const context=await this.options.liveNavigation.read();this.pausedWorkflow=this.options.liveNavigation.paused||null;if(!context)return false;
     const record=await this.repository.get(context.workflowId);if(!record)throw new Error('The active workflow draft is unavailable. Restore it from Saved workflows.');
-    if(record.draft.origin!==this.url.origin||!samePage(stateURL(record.draft,context.stateId),this.url.href))throw new Error('Return to a connected screen and retry. The active workflow could not be matched to this page.');
+    if(record.draft.origin!==this.url.origin||!samePage(stateURL(record.draft,context.stateId),this.url.href)){
+     // Usually a sign-in page or an account without that page. When the right page loads this runs again and the experience starts.
+     if(context.shared){const target=stateURL(record.draft,context.stateId);showSharedNotice({title:'This shared prototype can’t open here yet',body:'It opens on a page you’re not on, usually because you’re signed out or using a different account. Sign in with the same account as the person who shared it, then try again.',actions:[{label:'Close',run:()=>clearSharedNotice()},{label:'Try again',primary:true,run:()=>location.assign(target)}]});return true;}
+     throw new Error('Return to a connected screen and retry. The active workflow could not be matched to this page.');
+    }
     this.navigationError='';
     this.workflow=clone(record.draft);this.record=record;this.stateId=context.stateId;this.enabled=record.enabled;this.visits=context.visits;this.liveDialogs=context.dialogs;this.liveSession=true;this.leaving=false;this.navigating=false;
     this.authoring=true;this.projectionActive=true;this.interacting=context.mode==='interact';this.replay=context.mode==='replay';this.picking=context.mode==='edit';this.panelMinimized=context.minimized;this.replayData=this.defaults();this.selected=null;this.dirty=false;this.history=await this.historyFor(this.workflow.id);
-    this.library=await this.repository.list(this.url.origin,this.workflow.route);this.render(true);this.restoreDialog();return true;
+    this.library=await this.repository.list(this.url.origin,this.workflow.route);this.render(true);this.restoreDialog();if(context.shared)this.checkSharedReady();return true;
     }catch(error){this.navigationError='Wandel could not resume your workflow. '+(error instanceof Error?error.message:'Retry from a connected screen.');this.suspend();this.emit();return true;}
+  }
+  /** A shared experience only runs when what it was built on is here. Apps load in stages, so the page gets a moment first. */
+  private checkSharedReady(deadline=Date.now()+12000){
+    const known=new Set(this.workflow.shareBaseline||[]),missing=()=>this.unresolved.filter(issue=>!known.has(issue.slice(0,400)));
+    if(!missing().length){clearSharedNotice();return;}
+    if(Date.now()<deadline){setTimeout(()=>{if(this.destroyed||this.leaving)return;this.render(true);this.checkSharedReady(deadline);},1500);return;}
+    const count=missing().length,wasReplay=this.replay;this.projectionActive=false;this.replay=false;this.render(true);this.emit();
+    const resume=()=>{clearSharedNotice();this.projectionActive=true;this.replay=wasReplay;this.render(true);this.emit();};
+    showSharedNotice({title:'This prototype doesn’t match what you can see',body:`${count===1?'One part of it isn’t':count+' parts of it aren’t'} on your page, so it didn’t start. Please use the same account as the person who shared it, or ask them for access to the same data, then check again.`,actions:[{label:'Open anyway',run:resume},{label:'Check again',primary:true,run:()=>{clearSharedNotice();this.projectionActive=true;this.replay=wasReplay;this.render(true);this.emit();this.checkSharedReady(Date.now()+3000);}}]});
   }
   private restoreDialog(){
     const title=this.liveDialogs[this.stateId];if(!title)return;
@@ -893,6 +908,7 @@ export class Session {
       this.stateId=c.id;this.selected=null;this.visits=visits;this.render(true);if(this.liveSession)await this.checkpoint();
     }
     else if(c.type==='rename') {const next=clone(this.workflow);next.name=c.text.trim();this.commit(next,this.stateId,undefined,false);}
+    else if(c.type==='designEvidence'){const evidence=collectEvidence(this.workflow,this.root,this.renderer.owned,id=>this.renderer.applied.get(id)?.target);this.emit();return {...this.snapshot(),designEvidence:evidence};}
     else if(c.type==='undo'||c.type==='redo') {const next=this.history[c.type](this.workflow,this.stateId);if(next){
       // A change made on another page is undone in the workflow while this page stays open.
       const elsewhere=!samePage(stateURL(next.workflow,next.stateId),this.url.href),here=next.workflow.states.find(s=>s.id===this.stateId);

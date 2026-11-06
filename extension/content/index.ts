@@ -42,7 +42,7 @@ if(isLocalDev())window.addEventListener('wandel:dev-publish',event=>{void ready.
 // Local development: run one session command (undo, interact, reset…) from the page, for automated checks.
 if(isLocalDev())window.addEventListener('wandel:dev-command',event=>{void (async()=>{
  let result:Record<string,unknown>;
- try{await ready;const s=await session.dispatch(JSON.parse(String((event as CustomEvent).detail)));result={mode:s.mode,unresolved:s.unresolved,canUndo:s.canUndo,stateId:s.stateId,...(s.assistant?.context?{context:{token:s.assistant.context.token,elements:s.assistant.context.elements.map(e=>({ref:e.ref,tag:e.tag,name:(e.name||e.text||'').slice(0,50)}))}}:{})};}catch(error){result={error:error instanceof Error?error.message:String(error)};}
+ try{await ready;const s=await session.dispatch(JSON.parse(String((event as CustomEvent).detail)));result={mode:s.mode,unresolved:s.unresolved,canUndo:s.canUndo,stateId:s.stateId,...(s.designEvidence?{designEvidence:s.designEvidence}:{}),...(s.assistant?.context?{context:{token:s.assistant.context.token,elements:s.assistant.context.elements.map(e=>({ref:e.ref,tag:e.tag,name:(e.name||e.text||'').slice(0,50)}))}}:{})};}catch(error){result={error:error instanceof Error?error.message:String(error)};}
  window.dispatchEvent(new CustomEvent('wandel:dev-command-result',{detail:JSON.stringify(result)}));
 })();},{signal:lifecycle.signal});
 // Local development: a chat request sent from the page runs the real context → plan → apply path; the result comes back as a page event.

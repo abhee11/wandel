@@ -201,6 +201,10 @@ Anyone on the Nov 2 zip (0.1.1) cannot read prototypes that use `logic`, so test
 | T18 | Copy an element between tabs | ⚠️ | Pick tested with a real click on example.org (link did not fire), real AI placed it on example.com. The panel's tab list and tab switching were not tried: the browser tool can't use a page with the panel open |
 | T19 | Older flow opens from Saved and keeps current work | ⬜ | Same reason. Owner to try |
 
+| T20 | Connect GitHub locked with Coming soon | ✅ | Free panel fixture: button disabled, yellow badge, no repository controls |
+| T21 | Implementation prompt carries exact styling and placement | ⚠️ | Free: measured styles, rendered markup and placement appear for added and restyled elements on the open screen. Not yet tried in a real coding agent. Screens not open at export fall back to the structured spec |
+| T22 | Shared link refuses to start when elements are missing | ⚠️ | Free fixture running the real check: starts when present, warns after 12s when missing, Check again starts it once the element appears, known gaps at share time don't block. In real Chrome the link opened a tab outside what the browser tool can see, so the banner there was not seen. The sign-in redirect case was not tried |
+
 ## Warnings
 
 | ID | Test | Status | Result |
