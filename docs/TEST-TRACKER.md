@@ -173,7 +173,7 @@ Anyone on the Nov 2 zip (0.1.1) cannot read prototypes that use `logic`, so test
 | ID | Test | Status | Result |
 |---|---|---|---|
 | I1 | Attach an image: composer stays usable | ✅ | Bug fixed: Your flow covered the composer by up to 334px. 0 at all heights in a layout test page; not yet seen in the real panel |
-| I2 | "Replicate this card" from an image builds without asking | 🚧 | Prompt changed; not retested because OpenAI credits ran out |
+| I2 | "Replicate this card" from an image builds without asking | ✅ | Both of the owner's wordings built with no question, using their real image, through the hooks. Very close match. The first run lost the card outline while its reply claimed the lavender surface; the run naming a place had it |
 
 ## Already tested
 

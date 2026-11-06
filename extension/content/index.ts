@@ -43,9 +43,9 @@ if(isLocalDev())window.addEventListener('wandel:dev-command',event=>{void (async
 if(isLocalDev())window.addEventListener('wandel:dev-chat',event=>{void (async()=>{
  let result:Record<string,unknown>;
  try{
-  const {instruction}=JSON.parse(String((event as CustomEvent).detail));await ready;
+  const {instruction,referenceURL}=JSON.parse(String((event as CustomEvent).detail));await ready;
   const snap=await session.dispatch({type:'assistantContext',chat:true,instruction}),context=snap.assistant?.context;if(!context)throw new Error('No page context: '+JSON.stringify({keys:Object.keys(snap),assistant:snap.assistant&&Object.keys(snap.assistant),mode:snap.mode,navigationError:snap.navigationError}).slice(0,400));
-  const reply=await send({type:'WANDEL_DEV_PLAN',body:{instruction,context,history:[],requestId:crypto.randomUUID()}});if(reply?.error)throw new Error(reply.error);
+  const reply=await send({type:'WANDEL_DEV_PLAN',referenceURL,body:{instruction,context,history:[],requestId:crypto.randomUUID()}});if(reply?.error)throw new Error(reply.error);
   const plan=reply.plan;result={plan};
   if(plan?.status==='edit'){try{await session.dispatch({type:'assistantApply',plan,token:context.token});result.applied='OK';}catch(error){result.applied=error instanceof Error?error.message:String(error);}}
   result.unresolved=session.snapshot().unresolved;
