@@ -26,6 +26,9 @@ All planned and finished tests, including the complex build requests, are in `do
 - Type check: `npx tsc --noEmit -p .`
 - The repo's `node_modules` are macOS builds; run builds on the Mac.
 
+## Hosted extension zip
+Pushing to `main` deploys the server and web page, not the extension. To release a zip, bump `version` in `extension/manifest.json`, then build into `dist-hosted` (never `dist`, which is the live local extension) with these set in the shell, where they override `.env`: `WANDEL_API_ORIGIN`, `WANDEL_APP_ORIGIN` and `CLERK_SYNC_HOST` as `https://wandel-production.up.railway.app`, plus `WANDEL_EXTENSION_KEY` taken from the previous `dist-hosted/manifest.json` so the extension ID stays the same. Run `node scripts/build.mjs --out=dist-hosted`, then zip the folder's contents into `releases/wandel-hosted-<version>.zip`. Current: 0.1.2.
+
 ## Free checks (no AI)
 `npx vite --port 5180 --host 127.0.0.1`, then open `http://127.0.0.1:5180/demo/fixtures/visibility-check.html`. Eleven cases, each in a fresh frame through the real context → compile → render → verify path. Storage is cleared at the start of each run. All pass:
 1. Card hidden until a click, shown below on click, removed by Undo
@@ -94,4 +97,4 @@ Note: Claude in Chrome cannot work in tabs holding another extension's iframe, s
 12. **Review after a new page is unconfirmed.** The false cancel is fixed in the fixture, but only the real panel can show the review running on the new page. In the owner's panel run, review also answered "uncertain" when the panel covered the changed controls.
 13. **Next panel test not run yet:** repeat the General request, follow-up "Add a graph with mock data to that page", switch back and forth, Undo from the panel, then save and reopen. Also untested in the panel: failure recovery. Conversation mode (hands-free turns on top of push-to-talk) is proposed for after that.
 14. Owner asked: on a menu item click, the highlight should move to the clicked item (and back), like a real sidebar. Not built; owner hasn't confirmed.
-15. Older gaps: nearest-style rule unconfirmed on a real page; neighbour check compares only size/position; core instructions not reviewed for contradictions; copies of tabs/toggles in their "on" state may copy the active look; pushing to `main` auto-deploys the server and web page to Railway, but the hosted extension zip is built separately and is still from Nov 2 (see `scripts/` and env vars `WANDEL_APP_ORIGIN`, `API_ORIGIN`, `CLERK_SYNC_HOST`, `WANDEL_EXTENSION_KEY`).
+15. Older gaps: nearest-style rule unconfirmed on a real page; neighbour check compares only size/position; core instructions not reviewed for contradictions; copies of tabs/toggles in their "on" state may copy the active look; pushing to `main` auto-deploys the server and web page to Railway, but the hosted extension zip is built separately.

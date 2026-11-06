@@ -1,6 +1,6 @@
 const free=process.argv.includes('--free');
 // The former --assistant entry point now builds the same regular extension.
-const out=free?'dist-free':'dist';
+const out=process.argv.find(arg=>arg.startsWith('--out='))?.slice(6)||(free?'dist-free':'dist');
 import {loadEnvFile} from 'node:process';
 try{if(!free)loadEnvFile('.env');}catch(e){if(e.code!=='ENOENT')throw e;}
 import { build } from 'esbuild';
