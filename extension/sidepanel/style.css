@@ -323,3 +323,5 @@
 .dx-shared-view>.dx-footer.dx-action-row,.dx-shared-view .dx-view-head button{display:none}
 .dx-shared-view .dx-project .dx-header-actions{display:none}
 .dx-shared-view .dx-view-head{display:none}
+
+.dx-shared-wait{min-height:100dvh;padding:14px;box-sizing:border-box}

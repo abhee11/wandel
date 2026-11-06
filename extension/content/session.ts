@@ -1,4 +1,5 @@
-import {showSharedNotice,clearSharedNotice} from './sharedNotice';
+import {showSharedNotice,clearSharedNotice,signInPage,sharedLeftKey} from './sharedNotice';
+import type {SharedWait} from '../shared/liveNavigation';
 import {collectEvidence} from './designEvidence';
 import {sharedValues,onSharedValues,publishShared} from './sharedValues';
 import {AssistantMemorySchema} from '../shared/assistantMemory';
@@ -158,7 +159,9 @@ export class Session {
   private async resumeLive(){
     if(!this.options.liveNavigation)return false;
     try{
-    const context=await this.options.liveNavigation.read();this.pausedWorkflow=this.options.liveNavigation.paused||null;if(!context)return false;
+    const context=await this.options.liveNavigation.read();this.pausedWorkflow=this.options.liveNavigation.paused||null;
+    const wait=this.options.liveNavigation.sharedWait;if(wait){this.waitForShared(wait);this.emit();return true;}
+    if(!context)return false;
     const record=await this.repository.get(context.workflowId);if(!record)throw new Error('The active workflow draft is unavailable. Restore it from Saved workflows.');
     if(record.draft.origin!==this.url.origin||!samePage(stateURL(record.draft,context.stateId),this.url.href)){
      // Usually a sign-in page or an account without that page. When the right page loads this runs again and the experience starts.
@@ -166,13 +169,23 @@ export class Session {
      throw new Error('Return to a connected screen and retry. The active workflow could not be matched to this page.');
     }
     this.navigationError='';
-    this.workflow=clone(record.draft);this.record=record;this.stateId=context.stateId;this.enabled=record.enabled;this.visits=context.visits;this.liveDialogs=context.dialogs;this.liveSession=true;this.sharedExperience=!!context.shared;this.leaving=false;this.navigating=false;
+    this.workflow=clone(record.draft);this.record=record;this.stateId=context.stateId;this.enabled=record.enabled;this.visits=context.visits;this.liveDialogs=context.dialogs;this.liveSession=true;this.sharedExperience=!!context.shared;this.sharedWaiting=false;if(context.shared){clearSharedNotice();try{sessionStorage.removeItem(sharedLeftKey);}catch{/* nothing to clear */}}this.leaving=false;this.navigating=false;
     this.authoring=true;this.projectionActive=true;this.interacting=context.mode==='interact';this.replay=context.mode==='replay';this.picking=context.mode==='edit';this.panelMinimized=context.minimized;this.replayData=this.defaults();this.selected=null;this.dirty=false;this.history=await this.historyFor(this.workflow.id);
     this.library=await this.repository.list(this.url.origin,this.workflow.route);this.render(true);this.restoreDialog();if(context.shared)this.checkSharedReady();return true;
     }catch(error){this.navigationError='Wandel could not resume your workflow. '+(error instanceof Error?error.message:'Retry from a connected screen.');this.suspend();this.emit();return true;}
   }
   /** A shared experience only runs when what it was built on is here. Apps load in stages, so the page gets a moment first. */
-  private sharedExperience=false;
+  private sharedExperience=false;private sharedWaiting=false;
+  /** A shared link landed somewhere else. On a sign-in page it waits; anywhere else it heads to the shared page, and only asks for the right account when the app sends it back. */
+  private waitForShared(wait:SharedWait){
+    this.sharedExperience=true;this.sharedWaiting=true;
+    const signIn=()=>showSharedNotice({title:'Sign in to see this prototype',body:`“${wait.name}” opens after you sign in. Use the same account as the person who shared it.`,actions:[{label:'I’ve signed in',primary:true,run:()=>location.assign(wait.url)}]});
+    if(!wait.sameSite||signInPage()){signIn();return;}
+    const here=location.pathname;let left='';try{left=sessionStorage.getItem(sharedLeftKey)||'';}catch{/* no memory: ask rather than loop */left=here;}
+    if(left===here){showSharedNotice({title:'Make sure you’re signed in with the right account',body:`“${wait.name}” opens on a page this account can’t reach. Sign in with the same account as the person who shared it, or ask them for access.`,actions:[{label:'Try again',primary:true,run:()=>location.assign(wait.url)}]});return;}
+    try{sessionStorage.setItem(sharedLeftKey,here);}catch{/* the app's next redirect still ends at the notice */}
+    location.assign(wait.url);
+  }
   private checkSharedReady(deadline=Date.now()+12000){
     const known=new Set(this.workflow.shareBaseline||[]),missing=()=>this.unresolved.filter(issue=>!known.has(issue.slice(0,400)));
     if(!missing().length){clearSharedNotice();return;}
@@ -199,7 +212,7 @@ export class Session {
   suspend(){this.closeComparison?.();this.previewOriginal=false;this.assistant?.reset();this.restoringPanel=false;this.panelMinimized=false;this.styleClipboard=null;this.replayData={};this.replayHistory=[];this.closeLayouts?.();this.resizeHeld=false;this.cancelDrag();this.projectionActive=false;this.picking=false;this.dragging=false;this.replay=false;this.selected=null;this.hovered=null;this.render(true);}
 
   subscribe(listener:(s:Snapshot)=>void) {this.listeners.add(listener);listener(this.snapshot());return()=>{this.listeners.delete(listener);};}
-  snapshot():Snapshot {this.seenViews.add(this.stateId);const capture=watched();return clone({...(this.sharedExperience?{sharedExperience:true}:{}),staleTab:this.staleTab,watching:this.watching,watched:capture?{id:capture.id,kind:capture.kind,title:capture.title,outline:capture.outline,trigger:capture.trigger}:null,...(this.watchError?{watchError:this.watchError}:{}),previewOriginal:this.previewOriginal,...(this.assistant?{assistant:this.assistant.snapshot()}:{}),navigationError:this.navigationError,...(this.pausedWorkflow?{resumeChoice:{name:this.pausedWorkflow.name,page:new URL(this.pausedWorkflow.url).pathname}}:{}),liveSession:this.liveSession,panelMinimized:this.panelMinimized,panelRestoring:this.restoringPanel,connectionWorkspace:this.connectionWorkspace,visited:[...new Set([...this.seenViews,...this.visits])],mode:this.mode(),styleSource:this.styleClipboard?.selection||null,workflow:this.workflow,stateId:this.stateId,selected:this.selected,picking:this.picking,dragging:this.dragging,replay:this.replay,enabled:this.enabled,dirty:this.dirty,canUndo:!!this.history.past.length,canRedo:!!this.history.future.length,canBack:!!this.visits.length,unresolved:[...this.unresolved.filter(issue=>!/clipped|beyond a clipping container|overlap/i.test(issue)),...this.revealIssues],currentVersion:this.record?.currentVersion||this.record?.versions.at(-1)?.number||0,versions:this.record?.versions.map(({number,savedAt,workflow})=>({number,savedAt,name:workflow.name}))||[],library:[...this.library.map(r=>({id:r.draft.id,name:this.routeDrafts.has(r.draft.id)?this.routeDrafts.get(r.draft.id)!.workflow.name+' (unsaved)':r.draft.name,versions:r.versions.length})),...[...this.routeDrafts.values()].filter(d=>d.workflow.origin===this.url.origin&&d.workflow.route===routeOf(this.url)&&!this.library.some(r=>r.draft.id===d.workflow.id)).map(d=>({id:d.workflow.id,name:d.workflow.name+' (unsaved)',versions:d.record?.versions.length||0}))]});}
+  snapshot():Snapshot {this.seenViews.add(this.stateId);const capture=watched();return clone({...(this.sharedExperience?{sharedExperience:true}:{}),...(this.sharedWaiting?{sharedWaiting:true}:{}),staleTab:this.staleTab,watching:this.watching,watched:capture?{id:capture.id,kind:capture.kind,title:capture.title,outline:capture.outline,trigger:capture.trigger}:null,...(this.watchError?{watchError:this.watchError}:{}),previewOriginal:this.previewOriginal,...(this.assistant?{assistant:this.assistant.snapshot()}:{}),navigationError:this.navigationError,...(this.pausedWorkflow?{resumeChoice:{name:this.pausedWorkflow.name,page:new URL(this.pausedWorkflow.url).pathname}}:{}),liveSession:this.liveSession,panelMinimized:this.panelMinimized,panelRestoring:this.restoringPanel,connectionWorkspace:this.connectionWorkspace,visited:[...new Set([...this.seenViews,...this.visits])],mode:this.mode(),styleSource:this.styleClipboard?.selection||null,workflow:this.workflow,stateId:this.stateId,selected:this.selected,picking:this.picking,dragging:this.dragging,replay:this.replay,enabled:this.enabled,dirty:this.dirty,canUndo:!!this.history.past.length,canRedo:!!this.history.future.length,canBack:!!this.visits.length,unresolved:[...this.unresolved.filter(issue=>!/clipped|beyond a clipping container|overlap/i.test(issue)),...this.revealIssues],currentVersion:this.record?.currentVersion||this.record?.versions.at(-1)?.number||0,versions:this.record?.versions.map(({number,savedAt,workflow})=>({number,savedAt,name:workflow.name}))||[],library:[...this.library.map(r=>({id:r.draft.id,name:this.routeDrafts.has(r.draft.id)?this.routeDrafts.get(r.draft.id)!.workflow.name+' (unsaved)':r.draft.name,versions:r.versions.length})),...[...this.routeDrafts.values()].filter(d=>d.workflow.origin===this.url.origin&&d.workflow.route===routeOf(this.url)&&!this.library.some(r=>r.draft.id===d.workflow.id)).map(d=>({id:d.workflow.id,name:d.workflow.name+' (unsaved)',versions:d.record?.versions.length||0}))]});}
   private lastEmission='';
   private emit() {if(this.destroyed)return;this.updateSelection();const s=this.snapshot(),serialized=JSON.stringify(s);if(serialized===this.lastEmission)return;this.lastEmission=serialized;this.listeners.forEach(fn=>fn(s));}
   private updateSelection(){

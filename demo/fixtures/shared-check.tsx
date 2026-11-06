@@ -12,5 +12,8 @@ if(new URL(location.href).searchParams.has('known'))workflow={...workflow,shareB
 if(!mine)button.remove();
 localStorage.clear();
 const repository=new Repository(new BrowserStorage());await repository.save(workflow,true);
-const session=new Session(main,repository,new URL(location.href),{liveNavigation:{read:async()=>({workflowId:workflow.id,stateId:workflow.entry,visits:[],mode:'replay',minimized:false,dialogs:{},shared:true}),go:async()=>{},clear:async()=>{}}} as never);
+// ?wait=1: the link landed on another page. ?password=1 makes it a sign-in page.
+const params=new URL(location.href).searchParams,waiting=params.has('wait');
+if(params.has('password'))main.append(Object.assign(document.createElement('input'),{type:'password'}));
+const session=new Session(main,repository,new URL(location.href),{liveNavigation:{sharedWait:waiting?{name:'Shared check',url:location.pathname+'?mine=1',sameSite:true}:null,read:async()=>waiting?null:({workflowId:workflow.id,stateId:workflow.entry,visits:[],mode:'replay',minimized:false,dialogs:{},shared:true}),go:async()=>{},clear:async()=>{}}} as never);
 await session.init();Object.assign(window,{session});

@@ -13,7 +13,10 @@ export function registerLiveNavigation(){
    let context=LiveContextSchema.parse(saved);const recordKey='dx:workflow:'+context.workflowId;
    // Drafts are kept in local storage; shared-link playback copies stay in the session store.
    const raw=(await chrome.storage.local.get(recordKey))[recordKey]??(await chrome.storage.session.get(recordKey))[recordKey];if(!raw)throw new Error('The active workflow draft is unavailable. Restore it from Saved workflows before continuing.');
-   const record=RecordSchema.parse(raw),w=validateWorkflow(record.draft);if(w.origin!==origin)return null;
+   const record=RecordSchema.parse(raw),w=validateWorkflow(record.draft);
+   // Someone opening a shared link is never asked about adding pages: they are signing in, or on their way to the right page.
+   if(m.action==='read'&&context.shared&&(w.origin!==origin||!contextAtURL(w,context,tab.url)))return {sharedWait:{name:w.name,url:stateURL(w,context.stateId),sameSite:w.origin===origin}};
+   if(w.origin!==origin)return null;
    if(!w.states.some(s=>s.id===context.stateId)||context.visits.some(id=>!w.states.some(s=>s.id===id)))throw new Error('This workflow destination is no longer available.');
    if(m.action==='read'){
     // Another page of the same app: the page asks whether to continue this workflow here or start anew.
@@ -23,7 +26,7 @@ export function registerLiveNavigation(){
    if(m.action!=='go')throw new Error('Unknown navigation action.');
    const url=sameApplicationURL(m.url,w.origin);if(url!==stateURL(w,context.stateId))throw new Error('The selected screen does not match this route.');
    const before=(await chrome.storage.session.get(key))[key],backup=(await chrome.storage.session.get(anchor))[anchor];await chrome.storage.session.set({[key]:context,[anchor]:context});try{await chrome.tabs.update(tabId,{url});}catch(error){for(const [name,value]of [[key,before],[anchor,backup]] as const){if(value)await chrome.storage.session.set({[name]:value});else await chrome.storage.session.remove(name);}throw error;}return context;
-  })().then(result=>reply(result&&'paused' in result?{context:null,paused:result.paused}:{context:result})).catch(e=>reply({error:e.message}));return true;
+  })().then(result=>reply(result&&'paused' in result?{context:null,paused:result.paused}:result&&'sharedWait' in result?{context:null,sharedWait:result.sharedWait}:{context:result})).catch(e=>reply({error:e.message}));return true;
  });
  chrome.tabs.onRemoved.addListener(id=>{void Promise.all([chrome.storage.session.remove('wandel:live:'+id),chrome.storage.session.remove('wandel:workflow-tab:'+id)]).catch(()=>{});});
 }

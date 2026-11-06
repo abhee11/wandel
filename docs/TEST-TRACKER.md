@@ -205,6 +205,8 @@ Anyone on the Nov 2 zip (0.1.1) cannot read prototypes that use `logic`, so test
 | T21 | Implementation prompt carries exact styling and placement | ⚠️ | Free: measured styles, rendered markup and placement appear for added and restyled elements on the open screen. Not yet tried in a real coding agent. Screens not open at export fall back to the structured spec |
 | T22 | Shared link refuses to start when elements are missing | ⚠️ | Free fixture running the real check: starts when present, warns after 12s when missing, Check again starts it once the element appears, known gaps at share time don't block. In real Chrome the link opened a tab outside what the browser tool can see, so the banner there was not seen. The sign-in redirect case was not tried |
 
+| T23 | Shared link walks the viewer through sign-in | ⚠️ | Fixture: waits on a sign-in page, heads to the shared page, asks for the right account when sent back. Real background code tested for right page, wrong page and other site. Owner confirmed the link starts in a second Chrome profile. Real MirrorTalk signed-out path not confirmed |
+
 ## Warnings
 
 | ID | Test | Status | Result |

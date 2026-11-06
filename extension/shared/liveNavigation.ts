@@ -5,7 +5,8 @@ export const LiveContextSchema=z.object({workflowId:z.string().min(1).max(100),s
 export type LiveContext=z.infer<typeof LiveContextSchema>;
 /** The tab's active workflow when the current page is not one of its screens. */
 export type PausedWorkflow=LiveContext&{name:string;url:string};
-export interface LiveNavigation{go(url:string,context:LiveContext):Promise<void>;read():Promise<LiveContext|null>;clear():Promise<void>;remember?(context:LiveContext):Promise<void>;paused?:PausedWorkflow|null}
+export type SharedWait={name:string;url:string;sameSite:boolean};
+export interface LiveNavigation{go(url:string,context:LiveContext):Promise<void>;read():Promise<LiveContext|null>;clear():Promise<void>;remember?(context:LiveContext):Promise<void>;paused?:PausedWorkflow|null;sharedWait?:SharedWait|null}
 export function stateURL(workflow:Workflow,id:string){return lineage(workflow,id).reverse().find(s=>s.liveURL)?.liveURL||workflow.origin+workflow.route;}
 /** Resolve known screens within the same workflow, including native app navigation. */
 /** One application page: a different #fragment or a trailing slash is the same page. */
@@ -23,7 +24,8 @@ export function sameApplicationURL(value:string,origin:string){const url=new URL
 export class ChromeLiveNavigation implements LiveNavigation{
  constructor(private send:(message:unknown)=>Promise<any>=message=>chrome.runtime.sendMessage(message)){}
  paused:PausedWorkflow|null=null;
- private async call(action:string,context?:LiveContext,url?:string){const result=await this.send({type:'WANDEL_LIVE_NAVIGATION',action,...(context?{context}:{}),...(url?{url}:{})});if(!result||result.error)throw new Error(result?.error||'Wandel could not open the connected page. Your draft is saved.');if(action==='read')this.paused=result.paused||null;return result.context||null;}
+ sharedWait:SharedWait|null=null;
+ private async call(action:string,context?:LiveContext,url?:string){const result=await this.send({type:'WANDEL_LIVE_NAVIGATION',action,...(context?{context}:{}),...(url?{url}:{})});if(!result||result.error)throw new Error(result?.error||'Wandel could not open the connected page. Your draft is saved.');if(action==='read'){this.paused=result.paused||null;this.sharedWait=result.sharedWait||null;}return result.context||null;}
  async go(url:string,context:LiveContext){await this.call('go',context,url);}
  read():Promise<LiveContext|null>{return this.call('read');}
  async remember(context:LiveContext){await this.call('remember',context);}

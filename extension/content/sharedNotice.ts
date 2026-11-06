@@ -1,4 +1,7 @@
 /** Tells someone who opened a shared link why it didn't start here and what to do, so they are never left on a half-working page. */
+export const sharedLeftKey='wandel:shared-left';
+/** Whether this page is part of signing in, so Wandel must not pull someone away from it. */
+export const signInPage=()=>/log-?in|sign-?in|sign-?up|register|auth|sso|saml|mfa|2fa|otp|verify|password|callback/i.test(location.pathname)||!!document.querySelector('input[type=password],input[autocomplete="one-time-code"],input[autocomplete="username"]');
 let host:HTMLElement|null=null;
 export const clearSharedNotice=()=>{host?.remove();host=null;};
 export function showSharedNotice(input:{title:string;body:string;actions:{label:string;primary?:boolean;run:()=>void}[]}){
