@@ -149,6 +149,13 @@ Anyone on the Nov 2 zip (0.1.1) cannot read prototypes that use `logic`, so test
 | D15 | Toolbar Duplicate, then drag the copy into place | ✅ | Bug fixed: copies lost text clipping, so text ran over buttons. Copy, drag, reload and undo pass on MirrorTalk |
 | D16 | Chat: duplicate a card twice beside it | ⚠️ | Exact placement, survives reload, one Undo removes all. But the plan wired the copies to the card's real click, and prototypes with those mirrored actions cannot be shared |
 
+## Headers and footers
+
+| ID | Scenario | Status | Result |
+|---|---|---|---|
+| D17 | Add a full-width header through chat | ✅ | Page moves down, nothing overlaps, survives reload, Undo removes it |
+| D18 | Add a footer with links through chat | ✅ | Bug fixed: the AI stopped to ask for URLs and a copyright name, and now uses placeholders and says so. The Help link was wired to the real Help control, so that prototype cannot be shared |
+
 ## Already tested
 
 Most ran through page hooks, not the real panel, so visual review and replanning were not exercised unless stated.
