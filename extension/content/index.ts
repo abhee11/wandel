@@ -29,6 +29,8 @@ const ready=session.init();
 if(isLocalDev())window.addEventListener('wandel:dev-open',()=>{void send({type:'WANDEL_OPEN_CONNECTIONS'}).catch(ignore);},{signal:lifecycle.signal});
 // Local development: the current workflow and its problems, for automated checks.
 if(isLocalDev())window.addEventListener('wandel:dev-state',()=>{void ready.then(()=>{const s=session.snapshot();window.dispatchEvent(new CustomEvent('wandel:dev-state-result',{detail:JSON.stringify({stateId:s.stateId,mode:s.mode,unresolved:s.unresolved,canUndo:s.canUndo,workflow:s.workflow})}));});},{signal:lifecycle.signal});
+// Local development: create a real share link for the current workflow.
+if(isLocalDev())window.addEventListener('wandel:dev-share',()=>{void ready.then(async()=>{const reply=await send({type:'WANDEL_DEV_SHARE',workflow:session.snapshot().workflow});window.dispatchEvent(new CustomEvent('wandel:dev-share-result',{detail:JSON.stringify(reply)}));}).catch(error=>window.dispatchEvent(new CustomEvent('wandel:dev-share-result',{detail:JSON.stringify({error:String(error)})})));},{signal:lifecycle.signal});
 // Local development: run one session command (undo, interact, reset…) from the page, for automated checks.
 if(isLocalDev())window.addEventListener('wandel:dev-command',event=>{void (async()=>{
  let result:Record<string,unknown>;

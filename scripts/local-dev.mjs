@@ -27,6 +27,8 @@ async function rebuild(reason){
   const extension=await step('Extension build','node',['scripts/build.mjs']);
   if(extension)writeFileSync('dist/dev-reload.json',JSON.stringify({at:Date.now()}));
   const platform=await step('Server build','node',['scripts/platform-build.mjs']);
+  // The share page validates workflows too, so it must stay in step with the extension.
+  await step('Web build','npx',['vite','build','--config','platform/vite.config.ts']);
   if(platform){await stop();await freePort();start();}else log('Server kept on its previous build.');
   log('Ready.'+(extension?' The extension reloads itself.':' Extension build failed; see above.'));
  })().finally(()=>{building=null;if(again){again=false;void rebuild('more changes');}});

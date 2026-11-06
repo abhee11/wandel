@@ -16,7 +16,7 @@ Run these first, on the deployed hosted build, in the real panel, on a clean Chr
 
 | ID | Test | Pass looks like | Status | Result |
 |---|---|---|---|---|
-| G1 | Deploy the server and rebuild the hosted zip | Friend's zip includes today's fixes, including the modal click block | ⬜ | Railway and the zip are from Nov 2 |
+| G1 | Rebuild the hosted zip | Friend's zip includes today's fixes, including the modal click block | ⬜ | Railway auto-deploys from `main` and is current; the zip is still from Nov 2 |
 | G2 | Fresh install and sign in on a clean Chrome profile | Works from written steps with no help | ⬜ | Never tested this way |
 | G3 | Five simple panel requests: change text, change a colour, hide something, add a card, undo | All five work first time, on two sites | ⬜ | Includes the second-site check (part of B18) |
 | G4 | D13: new page from a dropdown, with reply and review | No false failure | ⬜ | |
@@ -120,7 +120,7 @@ Each row is one request, typed as written. Pass means it works when clicked thro
 |---|---|---|---|---|---|
 | V1 | Save, close Chrome, reopen | Prototype and history return | Panel | ⬜ | |
 | V2 | Two tabs on one workflow | Edits don't collide | Free | ✅ | Fixed: a tab no longer overwrites newer work. It shows a banner with Reload this tab and blocks edits until reloaded. Tested with two real tabs and the free fixture |
-| V3 | Share with someone else | They see the same prototype | Panel | ⬜ | |
+| V3 | Share with someone else | They see the same prototype | Panel | ⚠️ | Partly. Local run in one Chrome profile: link created through the real API, recipient page and Open experience work, and the form’s logic is kept in the stored link. Not confirmed: the opened tab was outside the automated group, so nobody has used a shared prototype yet, and no second person or computer has tried it. Recipients need Wandel and their own app access |
 | V4 | Reach the 30-screen limit and the AI limit | Clear messages | Free | ⚠️ | Screen limit stops at 30 with a clear message. AI limit not tested |
 
 ## Prototype data
@@ -130,6 +130,17 @@ Block parts can read and write named values with `logic` (bind, when, set, requi
 ## Safety rule for testing
 
 Prototypes run on the real application. Before clicking a real control that a prototype takes over (New Activity, Delete, Send), confirm it is wired, and add a guard listener on that button that stops the event, so a missed intercept can never change real data.
+
+## Sharing and export
+
+| ID | Feature | Status | Result |
+|---|---|---|---|
+| E1 | File export and import (`.wandel.json`) | ✅ | Export, wipe, import on MirrorTalk: the form worked after import. Ran through the session command, not the panel buttons |
+| E2 | Coding-agent prompt and bundle | ✅ | Include changes, text and logic. Content not checked by a coding agent |
+| E3 | Recorded walkthrough video | ⬜ | Needs tab capture, which automation cannot do. The only option for people without Wandel |
+| E4 | Implement in GitHub | ⬜ | Not tested |
+
+The hosted zip is from Nov 2, so it cannot read prototypes that use `logic`.
 
 ## Already tested
 
