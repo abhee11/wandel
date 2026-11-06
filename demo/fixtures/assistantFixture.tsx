@@ -22,8 +22,12 @@ if(new URL(location.href).searchParams.get('stub')==='new-page'){
  // Talk mode runs on a real audio graph: window.voice(true) is someone speaking, and window.heard is what they said.
  const voiceContext=new AudioContext(),tone=voiceContext.createOscillator(),gain=voiceContext.createGain(),line=voiceContext.createMediaStreamDestination();gain.gain.value=0;tone.frequency.value=220;tone.connect(gain);gain.connect(line);tone.start();
  navigator.mediaDevices.getUserMedia=(async()=>{await voiceContext.resume();return line.stream;}) as typeof navigator.mediaDevices.getUserMedia;
+ // Live dictation in the test: window.liveWords('...') is what the browser hears so far.
+ class FakeRecognition{onresult:((event:unknown)=>void)|null=null;onerror=null;onend=null;continuous=false;interimResults=false;lang='';start(){Object.assign(window,{liveWords:(text:string)=>this.onresult?.({results:[[{transcript:text}]]})});}abort(){Object.assign(window,{liveWords:()=>{}});}}
+ Object.assign(window,{SpeechRecognition:FakeRecognition,webkitSpeechRecognition:FakeRecognition});
  const calls:string[]=[];Object.assign(window,{voice:(on:boolean)=>{gain.gain.value=on?.2:0;},heard:'',calls});sessionStorage.setItem('wandel:voice-sharing:v2','allowed');
  window.fetch=async(url,init)=>{if(!String(url).includes('/api/assistant/'))return real(url,init);
+  if(String(url).includes('/speak')){calls.push('speak');return answer({audio:'SUQzBAAAAAAAAA=='});}
   if(String(url).includes('/transcribe')){calls.push('transcribe');return answer({text:(window as unknown as {heard:string}).heard});}
   if(!String(url).endsWith('/plan'))return answer({ok:true,verdict:{status:'pass',message:'Stub.'}});
   const {context,instruction}=JSON.parse(String(init?.body)),target=context.elements.find((element:{tag:string})=>element.tag==='button');calls.push('plan: '+instruction);

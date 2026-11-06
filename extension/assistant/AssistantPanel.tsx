@@ -8,11 +8,11 @@ import {connectionRoute,connectionControls,matchingScreens,matchingStates,routeT
 import {readConversation,rememberConversation,type ChatTurn} from './conversation';
 import {liveSpeech} from './liveSpeech';
 import {prepareMicrophone,openMicrophoneSetup,voiceSharingAllowed,rememberVoiceSharing} from './microphonePermission';
-import {HandsFree,fillerSpeech,spokenReply,stopListening,stopWork,type HandsFreeState} from './handsFree';
+import {HandsFree,fillerSpeech,pickVoice,spokenReply,stopListening,stopWork,type HandsFreeState} from './handsFree';
 import {useEffect,useLayoutEffect,useRef,useState} from 'react';
 import type {Bridge} from '../sidepanel/bridge';
 import {uid,type Snapshot,type VisitedScreen,type ConnectionEvent,type ConnectionCondition} from '../shared/model';
-import {planConversation,verifyConversation,transcribeInstruction,reportFailure} from './client';
+import {planConversation,verifyConversation,transcribeInstruction,speakReply,reportFailure} from './client';
 import {samePage,stateURL} from '../shared/liveNavigation';
 import {PushToTalk} from './voice';
 import type {PageContext,AssistantPlan} from './schema';
@@ -45,23 +45,37 @@ export function AssistantPanel({bridge,snapshot,onSave,onBusyChange}:{bridge:Bri
  function updateTurn(id:string,patch:Partial<ChatTurn>){const next=conversation.current.map(turn=>turn.id===id?{...turn,...patch}:turn);conversation.current=next;setTurns(next);rememberConversation(snapshot.workflow.id,next);}
  // Every answer that carries a warning (the Fix it case) is logged with its plan, whichever path produced it.
  function speak(text:string){
-  if(!talkOn.current||!('speechSynthesis' in window))return;const line=spokenReply(text);if(!line)return;
+  if(!talkOn.current)return;const line=spokenReply(text);if(!line)return;
   // The microphone waits while Wandel talks, so it never answers itself.
-  const utterance=new SpeechSynthesisUtterance(line);let done=false;const finish=()=>{if(done)return;done=true;clearTimeout(limit);if(talkOn.current)talk.current?.resume();},limit=setTimeout(finish,15000);
-  utterance.onend=finish;utterance.onerror=finish;window.speechSynthesis.cancel();talk.current?.pause();window.speechSynthesis.speak(utterance);
+  stopSpeaking();talk.current?.pause();
+  let done=false;const line_id=++speakId.current,limit=setTimeout(()=>finish(),20000);
+  const finish=()=>{if(done)return;done=true;clearTimeout(limit);if(talkOn.current&&line_id===speakId.current)talk.current?.resume();};
+  const device=()=>{if(line_id!==speakId.current||!talkOn.current||!('speechSynthesis' in window)){finish();return;}const utterance=new SpeechSynthesisUtterance(line),voice=pickVoice(window.speechSynthesis.getVoices(),navigator.language);if(voice)utterance.voice=voice;utterance.onend=finish;utterance.onerror=finish;window.speechSynthesis.speak(utterance);};
+  // A natural server voice first; this device's best voice if that isn't reachable.
+  const controller=new AbortController();speakAbort.current=controller;
+  void speakReply(line,controller.signal).then(source=>{if(line_id!==speakId.current||!talkOn.current){finish();return;}const audio=new Audio(source);speakAudio.current=audio;audio.onended=finish;audio.onerror=device;return audio.play();}).catch(()=>device());
  }
- function stopTalk(note='Conversation mode is off.'){talkOn.current=false;talkPending.current=[];setTalkWaiting(0);talk.current?.stop();talk.current=null;setTalking(false);if('speechSynthesis' in window)window.speechSynthesis.cancel();setMessage(note);}
+ function stopSpeaking(){speakId.current++;speakAbort.current?.abort();speakAudio.current?.pause();speakAudio.current=null;if('speechSynthesis' in window)window.speechSynthesis.cancel();}
+ function stopTalk(note='Conversation mode is off.'){talkOn.current=false;talkPending.current=[];setTalkWaiting(0);talk.current?.stop();talk.current=null;setTalking(false);stopSpeaking();stopPreview.current?.();stopPreview.current=null;setTalkTyping(0);setInstruction('');setMessage(note);}
  async function startTalk(allowed=false){
   if(talkOn.current)return;if(!consent&&!allowed){talkConsent.current=true;setError('');setVoiceConsentOpen(true);setMessage('Allow voice sharing below to start talking.');return;}
   setError('');try{if(!await prepareMicrophone()){setMessage('Microphone setup opened in a separate window. Allow access there, then press Talk again.');return;}}catch(e){setError(e instanceof Error?e.message:'Could not open microphone setup.');return;}
   talkOn.current=true;setTalking(true);setTalkState('listening');
-  const listener=new HandsFree(wav=>{void hear(wav);},setTalkState,()=>stopTalk('Conversation mode turned off after 3 quiet minutes.'),failure=>{stopTalk(failure);setError(failure);});talk.current=listener;await listener.start();
+  const listener=new HandsFree(wav=>{void hear(wav);},talkChanged,()=>stopTalk('Conversation mode turned off after 3 quiet minutes.'),failure=>{stopTalk(failure);setError(failure);});talk.current=listener;await listener.start();
  }
- async function hear(wav:Blob){try{const text=await transcribeInstruction(wav,new AbortController().signal,uid());if(talkOn.current)onSpoken.current(text);}catch(e){const detail=e instanceof Error?e.message:'';if(talkOn.current&&!/No instruction was/i.test(detail))setError(detail||'That could not be heard. Try again.');}}
+ // Words appear in the box as they are spoken, then the exact transcript replaces them.
+ function talkChanged(state:HandsFreeState){
+  if(state==='hearing'){setInstruction('');stopPreview.current?.();stopPreview.current=liveSpeech(text=>{if(talkOn.current)setInstruction(text);},()=>{});}
+  else{stopPreview.current?.();stopPreview.current=null;}
+  if(state==='dropped'){setInstruction('');return;}
+  setTalkState(state);
+ }
+ async function hear(wav:Blob){setTalkTyping(count=>count+1);try{const text=await transcribeInstruction(wav,new AbortController().signal,uid());setTalkTyping(count=>Math.max(0,count-1));if(talkOn.current){setInstruction(text);onSpoken.current(text);}}catch(e){setTalkTyping(count=>Math.max(0,count-1));setInstruction('');const detail=e instanceof Error?e.message:'';if(talkOn.current&&!/No instruction was/i.test(detail))setError(detail||'That could not be heard. Try again.');}}
  function drainTalk(){if(!talkOn.current||sending.current)return;const next=talkPending.current.shift();setTalkWaiting(talkPending.current.length);if(next)void submit(next);}
  function answer(text:string,edited=false,review=''){if(review){const asked=[...conversation.current].reverse().find(turn=>turn.role==='user')?.text||'';reportFailure({detail:('kept with warning: '+review).slice(0,600),instruction:asked.slice(0,400),plan:lastPlan.current.slice(0,400),page:(snapshot.workflow.route||'').slice(0,300),applied:true});}setMessage(text);say('assistant',text,{...(edited?{edited:true}:{}),...(review?{review}:{})});speak(text);}
  async function history(type:'undo'|'redo'){if(sending.current)return;try{await bridge.send({type});setMessage(type==='undo'?'Undid the last change.':'Redid the change.');}catch(e){setError(e instanceof Error?e.message:'That change could not be '+(type==='undo'?'undone.':'redone.'));}}
  useEffect(()=>{setReferenceImage(undefined);const saved=readConversation(snapshot.workflow.id);conversation.current=saved;setTurns(saved);routeSource.current=null;pendingCopy.current=null;setRouteChoices([]);},[snapshot.workflow.id]);
+ const [talkTyping,setTalkTyping]=useState(0),speakId=useRef(0),speakAbort=useRef<AbortController|null>(null),speakAudio=useRef<HTMLAudioElement|null>(null);
  const [talking,setTalking]=useState(false),[talkState,setTalkState]=useState<HandsFreeState>('listening'),[talkWaiting,setTalkWaiting]=useState(0);
  const talk=useRef<HandsFree|null>(null),talkOn=useRef(false),talkPending=useRef<string[]>([]),talkConsent=useRef(false),onSpoken=useRef<(text:string)=>void>(()=>{});
  const [voiceTranscript,setVoiceTranscript]=useState(''),[startingVoice,setStartingVoice]=useState(false),[voiceConsentOpen,setVoiceConsentOpen]=useState(false),[microphoneReady,setMicrophoneReady]=useState(false);
@@ -100,13 +114,13 @@ export function AssistantPanel({bridge,snapshot,onSave,onBusyChange}:{bridge:Bri
  const watchedId=snapshot.watched?.id;
  useEffect(()=>{if(!watchedId)return;const waiting=watchRequest.current;watchRequest.current=null;void (async()=>{try{const shot=await capture(await context());if(shot){referenceRef.current=shot;setReferenceImage(shot);}}catch{/* the capture still works without a screenshot */}if(waiting)setTimeout(()=>void submit(waiting.text,undefined,false,undefined,waiting.id),0);})();},[watchedId]);
  useEffect(()=>{if(snapshot.watchError&&watchRequest.current){watchRequest.current=null;answer(snapshot.watchError+' Ask again when you’re ready, and click the control once.');}},[snapshot.watchError]);
- useEffect(()=>()=>{epoch.current++;abort.current?.abort();stopPreview.current?.();stopPreview.current=null;voice.current?.cancel();talkOn.current=false;talk.current?.stop();if('speechSynthesis' in window)window.speechSynthesis.cancel();},[]);
+ useEffect(()=>()=>{epoch.current++;abort.current?.abort();stopPreview.current?.();stopPreview.current=null;voice.current?.cancel();talkOn.current=false;talk.current?.stop();stopSpeaking();},[]);
  // Each finished utterance is a turn: stop and end act at once, and anything else waits for the current edit.
  onSpoken.current=text=>{
   setVoiceTranscript(text);
   if(stopListening(text)){stopTalk();return;}
-  if(stopWork(text)){talkPending.current=[];setTalkWaiting(0);if(sending.current||clarificationRequest.current){cancel();speak('Stopped.');}return;}
-  if(fillerSpeech(text)&&!clarificationRequest.current)return;
+  if(stopWork(text)){setInstruction('');talkPending.current=[];setTalkWaiting(0);if(sending.current||clarificationRequest.current){cancel();speak('Stopped.');}return;}
+  if(fillerSpeech(text)&&!clarificationRequest.current){setInstruction('');return;}
   talkPending.current.push(text);setTalkWaiting(talkPending.current.length);drainTalk();
  };
  useEffect(()=>{if(!busy)drainTalk();},[busy,talking]);
@@ -282,7 +296,7 @@ export function AssistantPanel({bridge,snapshot,onSave,onBusyChange}:{bridge:Bri
  {clarification?.candidates.map(ref=>{const element=c?.elements.find(e=>e.ref===ref);return <button key={ref} className="dx-small" onClick={()=>void resumeClarification(ref)}>{element?.attributes['wandel-heading']||element?.name||ref}</button>;})}
  {(snapshot.watching||snapshot.watchError||snapshot.watched)&&<div className="dx-reference-preview dx-watch" role="status">{snapshot.watching?<span>Watching: click the control in the page once. Wandel captures what it opens.</span>:snapshot.watchError?<span>{snapshot.watchError}</span>:<span><strong>Captured: {snapshot.watched!.title}</strong> · {snapshot.watched!.kind}{snapshot.watched!.outline?' · '+snapshot.watched!.outline:''}. Tell me which element should open it.</span>}{!snapshot.watching&&<button className="dx-small" disabled={busy} onClick={()=>void bridge.send({type:'watchClear'})}>Discard</button>}</div>}
  {referenceImage&&<div className="dx-reference-preview"><img src={referenceImage} alt="Attached design reference"/><span>Design reference · sent with your next messages</span><button className="dx-small" disabled={busy} onClick={()=>setReferenceImage(undefined)}>Remove</button></div>}
- {talking&&<div className="dx-talk-status" role="status"><span className={'dx-talk-dot '+talkState} aria-hidden="true"/><span>{talkState==='paused'?'Speaking…':talkState==='hearing'?'Hearing you…':busy?'Working on it. Keep talking if you like.':'Listening. Just talk.'}{talkWaiting?` · ${talkWaiting} waiting`:''}</span><button className="dx-small" onClick={()=>stopTalk()}>End talk</button></div>}
+ {talking&&<div className="dx-talk-status" role="status"><span className={'dx-talk-dot '+talkState} aria-hidden="true"/><span>{talkState==='paused'?'Speaking…':talkState==='hearing'?'Hearing you…':talkTyping?'Typing what you said…':busy?'Working on it. Keep talking if you like.':'Listening. Just talk.'}{talkWaiting?` · ${talkWaiting} waiting`:''}</span><button className="dx-small" onClick={()=>stopTalk()}>End talk</button></div>}
  <div className="dx-chat-composer">
  {(busy||listening||startingVoice||clarificationRequest.current)&&<div className="dx-chat-request-controls"><span className="dx-chat-progress" role="status" aria-live="polite">{(busy||listening||startingVoice)&&<i aria-hidden="true"/>}{listening?'Microphone on · Listening…':startingVoice?'Starting microphone…':busy?(progress||'Working on your request…'):'Waiting for your reply'}</span><button type="button" className="dx-chat-cancel" aria-label="Cancel request" onClick={cancel}>Cancel request</button></div>}
  <div className={'dx-chat-target '+(targetLabel?'has-selection':'')} title={targetLabel||'Describe any part of this page. Selection is optional.'}><span aria-hidden="true">{targetLabel?'↖':'◉'}</span><span>{targetLabel?<>Selection: <strong>{targetLabel.slice(0,80)}{targetLabel.length>80?'…':''}</strong></>:'This page · no selection'}{pinned&&<small>Style: {pinned.name}</small>}</span></div>

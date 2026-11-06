@@ -19,7 +19,7 @@ export class SpeechGate{
   return null;
  }
 }
-export type HandsFreeState='listening'|'hearing'|'paused';
+export type HandsFreeState='listening'|'hearing'|'paused'|'dropped';
 export class HandsFree{
  private stream:MediaStream|null=null;private audio:AudioContext|null=null;private processor:ScriptProcessorNode|null=null;
  private gate=new SpeechGate();private chunks:Float32Array[]=[];private held=false;private heard=0;
@@ -42,7 +42,7 @@ export class HandsFree{
   this.chunks.push(data);
   if(!this.gate.speaking&&event===null){const keep=Math.ceil(PRE_ROLL_MS/ms);if(this.chunks.length>keep)this.chunks.splice(0,this.chunks.length-keep);if(performance.now()-this.heard>IDLE_MS){this.idle();return;}}
   if(event==='start'){this.heard=performance.now();this.state('hearing');}
-  if(event==='drop'){this.chunks=[];this.state('listening');}
+  if(event==='drop'){this.chunks=[];this.state('dropped');this.state('listening');}
   if(event==='end'){const length=this.chunks.reduce((total,chunk)=>total+chunk.length,0),samples=new Float32Array(length);let at=0;for(const chunk of this.chunks){samples.set(chunk,at);at+=chunk.length;}this.chunks=[];this.heard=performance.now();this.state('listening');this.segment(pcmWav(samples,rate));}
  }
  /** Stops listening while Wandel speaks, so it never hears itself. */
@@ -56,3 +56,10 @@ export const stopListening=(text:string)=>/^(?:please )?(?:stop listening|turn (
 export const stopWork=(text:string)=>/^(?:stop|cancel|wait|hold on|never ?mind|forget it)[.!]?$/i.test(text.trim());
 /** The first sentence or two: enough to hear what happened without being read a paragraph. */
 export function spokenReply(text:string){const plain=text.replace(/\s+/g,' ').trim(),sentences=plain.match(/[^.!?]+(?:[.!?]+|$)/g)||[plain];let out='';for(const sentence of sentences){if((out+sentence).length>170&&out)break;out+=sentence;}return out.trim().slice(0,220);}
+/** The most natural voice this device has for a language; the novelty voices some systems ship never speak for Wandel. */
+const novelty=/albert|bad news|bahh|bells|boing|bubbles|cellos|good news|jester|junior|kathy|organ|ralph|superstar|trinoids|whisper|wobble|zarvox|fred|eddy|flo|grandma|grandpa|reed|rocko|sandy|shelley/i;
+export function pickVoice(voices:SpeechSynthesisVoice[],language='en-US'){
+ const base=language.split('-')[0]!.toLowerCase(),usable=voices.filter(voice=>voice.lang.toLowerCase().startsWith(base)&&!novelty.test(voice.name));
+ const score=(voice:SpeechSynthesisVoice)=>(/premium|enhanced|neural|natural/i.test(voice.name)?8:0)+(/^google/i.test(voice.name)?4:0)+(/samantha|ava|allison|zoe|evan|nathan|joelle|noelle|daniel|karen|moira|microsoft (aria|jenny|guy)/i.test(voice.name)?3:0)+(voice.lang===language?1:0);
+ return usable.sort((a,b)=>score(b)-score(a))[0]||null;
+}

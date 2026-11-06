@@ -92,7 +92,7 @@ export function createPlatform(options:{db:DB;config:Config;ai:AIProvider;mail:M
   if(path==='/api/ai/guest-plan'&&method==='POST'){rateLimit(db,`guest-request:${tokenHash(ip,config.pepper)}`,12,clock().getTime(),60000);const raw=await req.text();if(Buffer.byteLength(raw)>2400)throw new APIError(413,'BODY_TOO_LARGE','Free preview requests must be under 2.4 KB.');let data:unknown;try{data=JSON.parse(raw);}catch{throw new APIError(400,'INVALID_JSON','Invalid request.');}return json(await guestPlan(db,ai,config.pepper,ip,data,clock()));}
   const u=await user(req);
   if(path.startsWith('/api/github/')||path==='/api/implementations'||path.startsWith('/api/implementations/'))return implementation.handle(u.id,req);
-  if(['/api/assistant/plan','/api/assistant/transcribe','/api/assistant/verify','/api/assistant/diagnostic'].includes(path)&&method==='POST')return json(await assistant.handle(u.id,req));
+  if(['/api/assistant/plan','/api/assistant/transcribe','/api/assistant/speak','/api/assistant/verify','/api/assistant/diagnostic'].includes(path)&&method==='POST')return json(await assistant.handle(u.id,req));
   if(path==='/api/workflow-links'&&method==='GET')return json({links:links.list(u.id)});
   if(path==='/api/public-views'&&method==='GET')return json({views:views.list(u.id)});
   if(path==='/api/public-views'&&method==='POST'){rateLimit(db,'public-view-publish:'+u.id,5,clock().getTime(),60000);const raw=await req.text();if(Buffer.byteLength(raw)>MAX_PUBLIC_VIEW_BYTES+1048576)throw new APIError(413,'BODY_TOO_LARGE','This page is too large to publish.');return json({view:views.create(u.id,JSON.parse(raw))},201);}

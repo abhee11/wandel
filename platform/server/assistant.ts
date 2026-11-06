@@ -26,7 +26,7 @@ export function relevantInstructions(input:AssistantInput){
   has(/\b(block|section)\b/)&&blockInstructions,
   continuityInstructions,completionInstructions].filter(Boolean).join('\n');
 }
-export interface AssistantProvider{verify?(input:{instruction:string;plan:AssistantPlan;before:string;after:string;reference?:string}):Promise<VisualVerdict>;plan(input:AssistantInput):Promise<AssistantPlan>;transcribe(wav:Uint8Array):Promise<string>;}
+export interface AssistantProvider{speak?(text:string):Promise<string>;verify?(input:{instruction:string;plan:AssistantPlan;before:string;after:string;reference?:string}):Promise<VisualVerdict>;plan(input:AssistantInput):Promise<AssistantPlan>;transcribe(wav:Uint8Array):Promise<string>;}
 export class OpenAIAssistant implements AssistantProvider{
  constructor(private key:string,private model:string,private transcriptionModel='gpt-4o-mini-transcribe'){}
  private async request(path:string,body:BodyInit,headers:Record<string,string>={}){
@@ -69,6 +69,13 @@ export class OpenAIAssistant implements AssistantProvider{
   if(data.status!=='completed')return {status:'uncertain',message:'Visual review did not finish.'};
   return VisualVerdictSchema.parse(JSON.parse(data.output?.flatMap((o:any)=>o.content||[]).filter((c:any)=>c.type==='output_text').map((c:any)=>c.text).join('')||'{}'));
  }
+ /** A short reply spoken in a natural voice. Nothing is stored. */
+ async speak(text:string){
+  if(!this.key)throw new APIError(503,'ASSISTANT_UNAVAILABLE','Configure the assistant API on the server.');
+  const result=await fetch('https://api.openai.com/v1/audio/speech',{method:'POST',headers:{Authorization:'Bearer '+this.key,'Content-Type':'application/json'},body:JSON.stringify({model:'gpt-4o-mini-tts',voice:'coral',input:text,response_format:'mp3',instructions:'Speak naturally and warmly, like a helpful colleague in a relaxed conversation.'}),signal:AbortSignal.timeout(15000)});
+  if(!result.ok)throw new APIError(503,'ASSISTANT_UNAVAILABLE','The voice could not be reached.');
+  return Buffer.from(await result.arrayBuffer()).toString('base64');
+ }
  async transcribe(wav:Uint8Array){const form=new FormData();form.set('file',new Blob([wav as BlobPart],{type:'audio/wav'}),'instruction.wav');form.set('model',this.transcriptionModel);form.set('response_format','json');const data=await this.request('audio/transcriptions',form);return z.string().trim().min(1).max(1600).parse(data.text);}
 }
 export function validateWav(bytes:Uint8Array){
@@ -90,8 +97,14 @@ export function assistantService(db:DB,entitlements:Entitlements,provider:Assist
  }
  return {async handle(userId:string,req:Request){
   if(!provider)throw new APIError(503,'ASSISTANT_DISABLED','Voice and cloud interpretation are disabled on this server. Typed local edits remain available.');
-  rateLimit(db,'assistant:'+userId,10,clock().getTime(),60000);
   const path=new URL(req.url).pathname;
+  // A spoken reply belongs to a turn already counted, so it uses no AI action and has its own limit.
+  if(path.endsWith('/speak')){
+   if(!provider.speak)throw new APIError(503,'ASSISTANT_UNAVAILABLE','Voice replies are unavailable.');
+   rateLimit(db,'assistant-speak:'+userId,30,clock().getTime(),60000);entitlements.requireAI(userId);
+   const {text}=z.object({text:z.string().trim().min(1).max(200)}).parse(await req.json());return {audio:await provider.speak(text)};
+  }
+  rateLimit(db,'assistant:'+userId,10,clock().getTime(),60000);
   if(path.endsWith('/transcribe')){
    if(req.headers.get('content-type')!=='audio/wav')throw new APIError(415,'INVALID_AUDIO','Use WAV audio from Wandel.');
    const requestId=z.string().uuid().parse(new URL(req.url).searchParams.get('requestId')),turnId=z.string().uuid().optional().parse(new URL(req.url).searchParams.get('turnId')||undefined);const bytes=new Uint8Array(await req.arrayBuffer());validateWav(bytes);
