@@ -190,6 +190,16 @@ const cases:Record<string,()=>Promise<Result>>={
   button('Delete')?.click();await frames();
   if(said('Note: One')||!said('Note: Two')||!said('Total 1'))results.push('delete removed the wrong item');
   return check(!results.length,results.join('; ')||'Wizard, filter, required field and list all work from data.');
+ },
+ async 'A public copy keeps prototype text and leaks no real page text'(){
+  const general=await ref(e=>e.tag==='li'&&e.name==='General'),section=await ref(e=>e.tag==='section');
+  const applied=await apply([{kind:'create',element:'panel',text:'My prototype card',targets:[section],position:'below'},{kind:'duplicate',targets:[general],position:'end',text:'Test',resultRef:'new:test'},{kind:'connect',targets:['new:test'],newViewTitle:'Test',presentation:'page'}]);
+  if(applied!=='OK')return check(false,'Rolled back: '+applied);
+  await session.dispatch({type:'text',text:'x'}).catch(()=>{});
+  const snapshot=(await session.dispatch({type:'publicSnapshot',mask:true})).publicSnapshot!,data=JSON.stringify(snapshot.workflow);
+  const real=['Nothing yet','My Record','Plan and Setup','Customize the activity','General','Library'].filter(word=>snapshot.html.includes(word)||data.includes(word));
+  const unsafe=/<script|\son[a-z]+=|href=/i.test(snapshot.html.replace(/<style[\s\S]*?<\/style>/g,'')),kept=data.includes('My prototype card');
+  return check(!real.length&&!unsafe&&kept,`Real text left: ${real.join(', ')||'none'}; unsafe markup: ${unsafe}; prototype text kept: ${kept}.`);
  }
 };
 const name=new URL(location.href).searchParams.get('case')||'';

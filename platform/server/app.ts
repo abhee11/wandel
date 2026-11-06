@@ -12,6 +12,7 @@ import {provisionIdentity,type IdentityProvider} from './clerk';
 import {randomUUID,createHash} from 'node:crypto';
 import {z} from 'zod';
 import {WorkflowSchema,type Workflow} from '../../extension/shared/model';
+import {publicViews,MAX_PUBLIC_VIEW_BYTES} from './publicViews';
 import {validateWorkflow,createWorkflow,workflowDepth} from '../../extension/prototype/engine';
 import {BatchSchema} from '../../extension/ai/planSchema';
 import type {DB} from './db';
@@ -39,6 +40,7 @@ export function createPlatform(options:{db:DB;config:Config;ai:AIProvider;mail:M
  const recordings=recordingStore(db,config.publicAPIOrigin||config.origin,clock);
  const workflows=workflowStore(db,entitlements,clock);
  const links=workflowLinks(db,config.publicAPIOrigin||config.origin,config.pepper,clock);
+ const views=publicViews(db,config.publicAPIOrigin||config.origin,config.pepper,clock);
  const now=()=>clock().toISOString();
  const track=(name:string,id:string,properties:Record<string,string|number|boolean>={})=>analytics.track(name,id,properties);
  const cookie=(token:string,clear=false)=>`wandel_session=${token}; HttpOnly; Path=/; SameSite=Lax; Max-Age=${clear?0:2592000}${config.production?'; Secure':''}`;
@@ -56,6 +58,8 @@ export function createPlatform(options:{db:DB;config:Config;ai:AIProvider;mail:M
   if(path==='/api/github/callback'&&method==='GET')return implementation.callback(req);
   const playback=path.match(/^\/api\/playback\/([a-f0-9]{64})(\/video)?$/);
   if(playback&&['GET','HEAD'].includes(method)){rateLimit(db,`video-view:${tokenHash(ip,config.pepper)}`,120,clock().getTime(),60000);return recordings.public(req,playback[1],!!playback[2]);}
+  const publicView=path.match(/^\/view\/([a-f0-9]{64})$/);
+  if(publicView&&method==='GET'){rateLimit(db,'public-view:'+tokenHash(ip,config.pepper),60,clock().getTime(),60000);return views.page(publicView[1]);}
   const publicFlow=path.match(/^\/api\/shared-workflows\/([a-f0-9]{64})$/);
   if(publicFlow&&method==='GET'){rateLimit(db,'workflow-view:'+tokenHash(ip,config.pepper),60,clock().getTime(),60000);return json(links.read(publicFlow[1]));}
   if(path==='/api/plans'&&method==='GET')return json({plans:config.plans,proPriceCents:config.priceCents,currency:config.currency,mockBilling:!billing.mode&&config.mockBilling,billingMode:billing.mode||'mock',billing:billingCapabilities(billing.mode),authMode:config.authMode,aiMode:config.aiMode});
@@ -90,6 +94,9 @@ export function createPlatform(options:{db:DB;config:Config;ai:AIProvider;mail:M
   if(path.startsWith('/api/github/')||path==='/api/implementations'||path.startsWith('/api/implementations/'))return implementation.handle(u.id,req);
   if(['/api/assistant/plan','/api/assistant/transcribe','/api/assistant/verify','/api/assistant/diagnostic'].includes(path)&&method==='POST')return json(await assistant.handle(u.id,req));
   if(path==='/api/workflow-links'&&method==='GET')return json({links:links.list(u.id)});
+  if(path==='/api/public-views'&&method==='GET')return json({views:views.list(u.id)});
+  if(path==='/api/public-views'&&method==='POST'){rateLimit(db,'public-view-publish:'+u.id,5,clock().getTime(),60000);const raw=await req.text();if(Buffer.byteLength(raw)>MAX_PUBLIC_VIEW_BYTES+1048576)throw new APIError(413,'BODY_TOO_LARGE','This page is too large to publish.');return json({view:views.create(u.id,JSON.parse(raw))},201);}
+  if(path.startsWith('/api/public-views/')&&method==='DELETE'){views.revoke(u.id,decodeURIComponent(path.slice('/api/public-views/'.length)));return json({ok:true});}
   if(path==='/api/workflow-links'&&method==='POST'){rateLimit(db,'workflow-publish:'+u.id,5,clock().getTime(),60000);return json({link:links.create(u.id,await body(req))},201);}
   const workflowLink=path.match(/^\/api\/workflow-links\/([a-f0-9-]{36})$/);
   if(workflowLink&&method==='DELETE'){links.revoke(u.id,workflowLink[1]);return json({ok:true});}
@@ -164,6 +171,6 @@ export function createPlatform(options:{db:DB;config:Config;ai:AIProvider;mail:M
    else {if(!['GET','HEAD'].includes(req.method)&&!req.headers.get('authorization')&&!allowed&&new URL(req.url).pathname!=='/api/billing/webhook')throw new APIError(403,'CSRF_REJECTED','A trusted Origin header is required.');response=await route(req,ip);}
   }catch(error){if(error instanceof APIError&&error.status>=500)console.warn(JSON.stringify({event:'api_error',requestId,path:new URL(req.url).pathname,code:error.code,message:error.message.slice(0,500)}));if(error instanceof APIError)response=json({error:{code:error.code,message:error.message,...error.details},requestId},error.status,error.status===429?{'Retry-After':String(error.details.retryAfter||60)}:{});else if(error instanceof z.ZodError){console.warn(JSON.stringify({event:'invalid_input',requestId,path:new URL(req.url).pathname,fields:error.issues.slice(0,8).map(x=>x.path.join('.')+': '+x.message.slice(0,120))}));response=json({error:{code:'INVALID_INPUT',message:'Check the request fields.',fields:error.issues.map(x=>({path:x.path.join('.'),message:x.message}))},requestId},400);}else{console.error(JSON.stringify({requestId,error:'unhandled_api_error'}));response=json({error:{code:'INTERNAL_ERROR',message:'Something went wrong. Please retry.'},requestId},500);}}
   response.headers.set('X-Request-Id',requestId);response.headers.set('X-Content-Type-Options','nosniff');response.headers.set('Referrer-Policy','no-referrer');if(allowed&&origin){response.headers.set('Access-Control-Allow-Origin',origin);if(!publicRead)response.headers.set('Access-Control-Allow-Credentials','true');response.headers.set('Vary','Origin');response.headers.set('Access-Control-Allow-Headers','Content-Type, Authorization');response.headers.set('Access-Control-Allow-Methods','GET, POST, PUT, PATCH, DELETE, OPTIONS');}
-  console.info(JSON.stringify({requestId,method:req.method,path:new URL(req.url).pathname.replace(/^(\/api\/(?:playback|shared-workflows)\/)[^/]+/,'$1[redacted]'),status:response.status}));return response;
+  console.info(JSON.stringify({requestId,method:req.method,path:new URL(req.url).pathname.replace(/^(\/api\/(?:playback|shared-workflows)\/|\/view\/)[^/]+/,'$1[redacted]'),status:response.status}));return response;
  }};
 }

@@ -27,10 +27,10 @@ All planned and finished tests, including the complex build requests, are in `do
 - The repo's `node_modules` are macOS builds; run builds on the Mac.
 
 ## Hosted extension zip
-Pushing to `main` deploys the server and web page, not the extension. To release a zip, bump `version` in `extension/manifest.json`, then build into `dist-hosted` (never `dist`, which is the live local extension) with these set in the shell, where they override `.env`: `WANDEL_API_ORIGIN`, `WANDEL_APP_ORIGIN` and `CLERK_SYNC_HOST` as `https://wandel-production.up.railway.app`, plus `WANDEL_EXTENSION_KEY` taken from the previous `dist-hosted/manifest.json` so the extension ID stays the same. Run `node scripts/build.mjs --out=dist-hosted`, then zip the folder's contents into `releases/wandel-hosted-<version>.zip`. Current: 0.1.3.
+Pushing to `main` deploys the server and web page, not the extension. To release a zip, bump `version` in `extension/manifest.json`, then build into `dist-hosted` (never `dist`, which is the live local extension) with these set in the shell, where they override `.env`: `WANDEL_API_ORIGIN`, `WANDEL_APP_ORIGIN` and `CLERK_SYNC_HOST` as `https://wandel-production.up.railway.app`, plus `WANDEL_EXTENSION_KEY` taken from the previous `dist-hosted/manifest.json` so the extension ID stays the same. Run `node scripts/build.mjs --out=dist-hosted`, then zip the folder's contents into `releases/wandel-hosted-<version>.zip`. Current: 0.1.4.
 
 ## Free checks (no AI)
-`npx vite --port 5180 --host 127.0.0.1`, then open `http://127.0.0.1:5180/demo/fixtures/visibility-check.html`. Eleven cases, each in a fresh frame through the real context → compile → render → verify path. Storage is cleared at the start of each run. All pass:
+`npx vite --port 5180 --host 127.0.0.1`, then open `http://127.0.0.1:5180/demo/fixtures/visibility-check.html`. Twelve cases, each in a fresh frame through the real context → compile → render → verify path. Storage is cleared at the start of each run. All pass:
 1. Card hidden until a click, shown below on click, removed by Undo
 2. Toggle
 3. Hidden at load with nothing that shows it → reported (rolled back)
@@ -42,6 +42,7 @@ Pushing to `main` deploys the server and web page, not the extension. To release
 9. A save from another tab is not overwritten; banner shown, edits blocked
 10. A click behind a prototype modal never reaches the page; a closed modal reopens empty
 11. Prototype data: values cross steps, filters switch, required fields hold, lists grow and shrink
+12. A public copy keeps prototype text and leaks no real page text
 Older fixture: `demo/fixtures/mirrortalk-group.html` (globals `context()` and `apply(actions)`).
 
 Real panel with no AI: open `demo/fixtures/assistant.html?stub=new-page`, clear storage, then call `sendToPanel(text)` from a timer and read the result in a second call (long awaits can detach Claude in Chrome). The plan call is stubbed. This fixture has no screenshot capture, so visual review does not run there.
@@ -80,6 +81,7 @@ Note: Claude in Chrome cannot work in tabs holding another extension's iframe, s
 - **Two tabs no longer overwrite each other** (`session.ts changedElsewhere`, `warnStale`): before saving, a tab checks that storage still holds the version it last read or wrote. If not, it does not save, shows its own banner with Reload this tab, and blocks edits. The check also runs when a tab regains focus.
 - **Prototype modals block the page behind them** (`session.ts modalGuard`): the dimming is only a box-shadow, so clicks used to reach the real app through it. Prototype screen changes also save their position, so a closed modal does not return on reload.
 - **Prototype data** (`content/blockData.ts`, `logic` and `data` in `shared/block.ts`): block parts can bind fields, show `{{name}}` and `{{list.count}}`, show on a condition, set values on click, require values, and repeat, add and remove list items. It builds on `replayData`, and values are shared across screens. Cancel or X on a modal discards that modal's values; moving on through a connection keeps them. The prompt tells the planner to use this and never `custom` for anything that changes.
+- **Link for anyone** (`content/publicSnapshot.ts`, `extension/public/player.ts`, `platform/server/publicViews.ts`, `/view/<token>`): publishes a sanitized copy of the page with the real runtime on top, so no extension or login is needed. References are rewritten to stamped `data-testid` values, so edits land even with text masked. Masking is on by default and covers the page, references, copied content and group keys. The page is served with `CSP: sandbox allow-scripts`, no network, and an embedded nonce player, because a sandboxed page's script requests can be blocked. Treat stored pages as untrusted.
 - The 05:25 plans were one turn with retries of a real request ("add an option to expand… the checkbox contents in the My record"), not a mystery.
 
 ## Open issues (not yet resolved)
@@ -92,10 +94,11 @@ Note: Claude in Chrome cannot work in tabs holding another extension's iframe, s
 7. **Test 5 rough edges.** The expand/collapse control is small text on a pale ellipse. This transcript has one checklist item, so "each item" is untested with several.
 8. **`status: open` plans.** `wandel:dev-chat` stops at them; the panel opens the control and replans. For a closed dropdown, open it with a real click and resend. The panel's own flow was not exercised.
 9. **MirrorTalk data moved during testing.** The quote carousel beside My Record disappeared (with zero Wandel edits on the page) and Takeaways regenerated, so saved targets there can change between runs.
-10. **Mirrored actions block sharing.** Chat often wires copies and links to real controls (`mirror`), and `shareRecord` rejects those prototypes. Seen on duplicated cards and a footer Help link. Not fixed.
-11. **Prototype data limits.** Charts and `custom` parts cannot use it, values are lost on reload, and there is no sort or text filtering of a list yet (B3, B4).
-12. **Tabs warn but do not sync.** A stale tab keeps its unsaved edit on screen until reloaded, and that edit is lost. Live sync between tabs was not built.
-13. **Review after a new page is unconfirmed.** The false cancel is fixed in the fixture, but only the real panel can show the review running on the new page. In the owner's panel run, review also answered "uncertain" when the panel covered the changed controls.
-14. **Next panel test not run yet:** repeat the General request, follow-up "Add a graph with mock data to that page", switch back and forth, Undo from the panel, then save and reopen. Also untested in the panel: failure recovery. Conversation mode (hands-free turns on top of push-to-talk) is proposed for after that.
-15. Owner asked: on a menu item click, the highlight should move to the clicked item (and back), like a real sidebar. Not built; owner hasn't confirmed.
-16. Older gaps: nearest-style rule unconfirmed on a real page; neighbour check compares only size/position; core instructions not reviewed for contradictions; copies of tabs/toggles in their "on" state may copy the active look; pushing to `main` auto-deploys the server and web page to Railway, but the hosted extension zip is built separately.
+10. **Link for anyone limits.** The app's own dropdowns don't open in the copy (a screen bar stands in for them), screens on other URLs aren't included, app fonts may fall back, and the review step in the panel has never been seen rendered. Unmasked links publish real content.
+11. **Mirrored actions block sharing.** Chat often wires copies and links to real controls (`mirror`), and `shareRecord` rejects those prototypes. Seen on duplicated cards and a footer Help link. Not fixed.
+12. **Prototype data limits.** Charts and `custom` parts cannot use it, values are lost on reload, and there is no sort or text filtering of a list yet (B3, B4).
+13. **Tabs warn but do not sync.** A stale tab keeps its unsaved edit on screen until reloaded, and that edit is lost. Live sync between tabs was not built.
+14. **Review after a new page is unconfirmed.** The false cancel is fixed in the fixture, but only the real panel can show the review running on the new page. In the owner's panel run, review also answered "uncertain" when the panel covered the changed controls.
+15. **Next panel test not run yet:** repeat the General request, follow-up "Add a graph with mock data to that page", switch back and forth, Undo from the panel, then save and reopen. Also untested in the panel: failure recovery. Conversation mode (hands-free turns on top of push-to-talk) is proposed for after that.
+16. Owner asked: on a menu item click, the highlight should move to the clicked item (and back), like a real sidebar. Not built; owner hasn't confirmed.
+17. Older gaps: nearest-style rule unconfirmed on a real page; neighbour check compares only size/position; core instructions not reviewed for contradictions; copies of tabs/toggles in their "on" state may copy the active look; pushing to `main` auto-deploys the server and web page to Railway, but the hosted extension zip is built separately.

@@ -16,7 +16,7 @@ Run these first, on the deployed hosted build, in the real panel, on a clean Chr
 
 | ID | Test | Pass looks like | Status | Result |
 |---|---|---|---|---|
-| G1 | Rebuild the hosted zip | Friend's zip includes today's fixes, including the modal click block | ⚠️ | `releases/wandel-hosted-0.1.3.zip` built and its contents checked, with the same extension ID. Not yet installed or run; G2 covers that |
+| G1 | Rebuild the hosted zip | Friend's zip includes today's fixes, including the modal click block | ⚠️ | `releases/wandel-hosted-0.1.4.zip` built and its contents checked, with the same extension ID. Not yet installed or run; G2 covers that |
 | G2 | Fresh install and sign in on a clean Chrome profile | Works from written steps with no help | ⬜ | Never tested this way |
 | G3 | Five simple panel requests: change text, change a colour, hide something, add a card, undo | All five work first time, on two sites | ⬜ | Includes the second-site check (part of B18) |
 | G4 | D13: new page from a dropdown, with reply and review | No false failure | ⬜ | |
@@ -140,7 +140,7 @@ Prototypes run on the real application. Before clicking a real control that a pr
 | E3 | Recorded walkthrough video | ⬜ | Needs tab capture, which automation cannot do. The only option for people without Wandel |
 | E4 | Implement in GitHub | ⬜ | Not tested |
 
-Anyone on the Nov 2 zip (0.1.1) cannot read prototypes that use `logic`, so testers need 0.1.2 or later (0.1.3 is current).
+Anyone on the Nov 2 zip (0.1.1) cannot read prototypes that use `logic`, so testers need 0.1.2 or later (0.1.4 is current).
 
 ## Duplicating
 
@@ -155,6 +155,18 @@ Anyone on the Nov 2 zip (0.1.1) cannot read prototypes that use `logic`, so test
 |---|---|---|---|
 | D17 | Add a full-width header through chat | ✅ | Page moves down, nothing overlaps, survives reload, Undo removes it |
 | D18 | Add a footer with links through chat | ✅ | Bug fixed: the AI stopped to ask for URLs and a copyright name, and now uses placeholders and says so. The Help link was wired to the real Help control, so that prototype cannot be shared |
+
+## Link for anyone (no Wandel needed)
+
+| ID | Test | Status | Result |
+|---|---|---|---|
+| N1 | Opens with no extension and no login | ✅ | Built-in browser, local server. Not yet tried on production or another computer |
+| N2 | Prototype works there: form, required field, list, screen switch | ✅ | Real clicks and typing in that browser |
+| N3 | Masking leaves no real text in the page or embedded data | ✅ | Search found real text in the data twice; both fixed, and a fixture now fails if it returns. One copied date fix is confirmed by reading the code and the fixture, not by a fresh MirrorTalk search |
+| N4 | Sandbox: no origin, cookies, storage or network | ✅ | Measured from inside the page |
+| N5 | Removed link stops working | ✅ | Row deleted directly; 404 afterwards. The panel's Remove button is untested |
+| N6 | Review and publish in the real panel | ⬜ | Built, and never seen rendered. Automation cannot load the panel |
+| N7 | Dropdowns inside the shared page | ❌ | The app's own dropdowns don't open in the copy, so copied options are unreachable. Use the screen bar |
 
 ## Already tested
 

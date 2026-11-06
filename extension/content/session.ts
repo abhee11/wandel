@@ -20,6 +20,7 @@ import {sectionOperations} from '../ai/section';
 import {sectionTarget} from './selection';
 import {findDrop,floats,type Drop} from './dropTarget';
 import {screenDataKeys} from './blockData';
+import {publicSnapshot} from './publicSnapshot';
 const behindModal=['pointerdown','mousedown','pointerup','mouseup','click'];
 const staleTabMessage='This prototype changed in another tab. Reload this tab to continue. Changes made here since then were not saved.';
 import {compileFlow,buttonTheme} from '../ai/flow';
@@ -81,7 +82,7 @@ export class Session {
   private draftPending=false;
   private dropMark:HTMLElement;
   private listeners=new Set<(s:Snapshot)=>void>(); private outline:HTMLElement; private queue:Promise<unknown>=Promise.resolve();
-  constructor(public root:HTMLElement,public repository:Repository,public url:URL, private options:{ historyStore?:{read(id:string):Promise<unknown>;write(id:string,value:unknown):Promise<void>};assistantEnabled?:boolean;liveNavigation?:LiveNavigation;connectionViewport?:()=>{width:number;height:number};externalConnections?:boolean;requestConnections?:()=>void|Promise<void>;directSelection?:boolean;requestSectionChat?:(rect:DOMRect,label:string)=>void;requestSave?:()=>void;requestSignIn?:()=>Promise<void>;requestClose?:()=>Promise<void>;requestPlan?:(prompt:string,selection:Selection)=>Promise<unknown> } = {}) {
+  constructor(public root:HTMLElement,public repository:Repository,public url:URL, private options:{ historyStore?:{read(id:string):Promise<unknown>;write(id:string,value:unknown):Promise<void>};assistantEnabled?:boolean;liveNavigation?:LiveNavigation;connectionViewport?:()=>{width:number;height:number};externalConnections?:boolean;requestConnections?:()=>void|Promise<void>;directSelection?:boolean;requestSectionChat?:(rect:DOMRect,label:string)=>void;requestSave?:()=>void;viewer?:boolean;requestSignIn?:()=>Promise<void>;requestClose?:()=>Promise<void>;requestPlan?:(prompt:string,selection:Selection)=>Promise<unknown> } = {}) {
     this.projectionActive=!!options.directSelection;this.workflow=createWorkflow(url);this.stateId=this.workflow.entry;
     this.renderer=new Renderer(root,id=>this.click(id),id=>{if(this.runningConnections)this.click(id);else{const node=this.renderer.owned.get(id);if(node)this.select(node);}});
     this.renderer.onReveal=issues=>this.revealed(issues);
@@ -472,7 +473,9 @@ export class Session {
   }
   /** Returning to a tab shows the warning before any work is done here. */
   private checkStale=()=>{if(document.visibilityState!=='visible'||this.destroyed||this.staleTab)return;void this.changedElsewhere().then(changed=>{if(changed&&!this.destroyed)this.warnStale();}).catch(()=>{/* A failed check is repeated by the next save. */});};
+  get viewer(){return !!this.options.viewer;}
   private async checkpoint(remember=true){
+    if(this.options.viewer)return;
     if(this.destroyed||this.navigating||this.leaving)return;clearTimeout(this.draftTimer);
     if(await this.changedElsewhere()){this.warnStale();return;}
     const record:SavedRecord={draft:clone(this.workflow),enabled:this.enabled,currentVersion:this.record?.currentVersion||0,versions:this.record?.versions||[]};
@@ -553,6 +556,12 @@ export class Session {
     const editing=['appearance','alignText','insertElement','fieldSettings','pasteStyle','image','prompt','text','child','link','undo','redo','style','remove','move','drag','duplicateElement','copyPrompt','mirror'];
     if(this.staleTab&&[...editing,'assistantApply','connect'].includes(c.type))throw new Error(staleTabMessage);
     if(c.type==='reloadTab'){location.reload();return this.snapshot();}
+    if(c.type==='publicSnapshot'){
+      // The copy is the page itself; the prototype's own changes run on top of it when viewed.
+      const showing=this.previewOriginal;this.previewOriginal=true;this.render(true);
+      try{return {...this.snapshot(),publicSnapshot:publicSnapshot(document,this.workflow,this.renderer.owned,c.mask,this.url.href)};}
+      finally{this.previewOriginal=showing;this.render(true);}
+    }
     if(editing.includes(c.type)&&this.replay)throw new Error('Return to Edit to change the workflow.');
     if(['appearance','alignText','insertElement','fieldSettings','pasteStyle','image','prompt','text','child','link','style','remove','move','drag','duplicateElement','copyPrompt','mirror'].includes(c.type)&&!this.enabled)throw new Error('Enable the workflow before editing.');
     if(c.type==='connectionAnchor'){this.pageEditor.connectionAnchor(c.ratio);return this.snapshot();}

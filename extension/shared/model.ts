@@ -102,7 +102,7 @@ export type SavedRecord = z.infer<typeof RecordSchema>;
 export type Selection = { locator: Locator; label: string; tag: string; owned: boolean };
 export type ConnectionWorkspace = {busy?:boolean;pendingScreen?:Pick<VisitedScreen,'id'|'title'|'route'|'thumbnail'>;source:Selection;from:string;to:string;newTitle:string;event:ConnectionEvent;conditions:ConnectionCondition[];otherwise:string;saved:string;picking:boolean;fields:Selection[];events:ConnectionEvent[];message:string;error:boolean};
 export type ConnectionAction = {action:'close'|'pick'|'cancelPick'|'save'|'test'} | {action:'destination'|'title'|'event'|'otherwise';value:string} | {action:'remove';index:number} | {action:'condition';index:number;test:ConnectionCondition['test'];value?:string} | {action:'screen';screen:VisitedScreen};
-export type Snapshot = {staleTab?:boolean;watching?:boolean;watched?:{id:string;kind:string;title:string;outline:string;trigger:string}|null;watchError?:string;revealed?:boolean;previewOriginal?:boolean;navigationError?:string;resumeChoice?:{name:string;page:string};assistant?:AssistantSnapshot;liveSession?:boolean;panelMinimized?:boolean;panelRestoring?:boolean;connectionWorkspace?:ConnectionWorkspace|null;visited?:string[];mode?:'edit'|'interact'|'replay'|'closed';styleSource?:Selection|null; workflow: Workflow; stateId: string; selected: Selection | null; picking: boolean; dragging:boolean; replay: boolean; enabled: boolean; dirty: boolean; canUndo: boolean; canRedo: boolean; canBack: boolean; unresolved: string[]; currentVersion: number; versions: { number: number; savedAt: string; name: string }[]; library: { id: string; name: string; versions: number }[] };
+export type Snapshot = {publicSnapshot?:{html:string;workflow:Workflow;masked:boolean;skippedScreens:number;bytes:number};staleTab?:boolean;watching?:boolean;watched?:{id:string;kind:string;title:string;outline:string;trigger:string}|null;watchError?:string;revealed?:boolean;previewOriginal?:boolean;navigationError?:string;resumeChoice?:{name:string;page:string};assistant?:AssistantSnapshot;liveSession?:boolean;panelMinimized?:boolean;panelRestoring?:boolean;connectionWorkspace?:ConnectionWorkspace|null;visited?:string[];mode?:'edit'|'interact'|'replay'|'closed';styleSource?:Selection|null; workflow: Workflow; stateId: string; selected: Selection | null; picking: boolean; dragging:boolean; replay: boolean; enabled: boolean; dirty: boolean; canUndo: boolean; canRedo: boolean; canBack: boolean; unresolved: string[]; currentVersion: number; versions: { number: number; savedAt: string; name: string }[]; library: { id: string; name: string; versions: number }[] };
 export type Command =
  | {type:'previewOriginal';value:boolean}
  | {type:'compareOriginal'}
@@ -148,6 +148,7 @@ export type Command =
  | { type: 'restore'; version: number }
  | { type:'style'; style:StylePatch; group?:string }
  | { type:'reloadTab' }
+ | { type:'publicSnapshot'; mask:boolean }
  | { type:'move'; target:Locator; anchor:Locator; position:'before'|'after'|'inside' }
  | { type: 'enabled'; value: boolean };
 export const uid = () => crypto.randomUUID();
