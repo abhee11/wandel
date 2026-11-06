@@ -1,3 +1,4 @@
+import {sharedValues,onSharedValues,publishShared} from './sharedValues';
 import {AssistantMemorySchema} from '../shared/assistantMemory';
 import {watchNextClick,watched,clearWatched} from './watch';
 import {captureScreen,type CaptureRect} from './screenCapture';
@@ -51,7 +52,9 @@ export class Session {
   private seenViews=new Set<string>();
   private replayData:Record<string,string>={};
   private replayHistory:Record<string,string>[]=[];
-  private defaults(){return Object.fromEntries((this.workflow.variables||[]).map(v=>[v.key,v.value]));}
+  private defaults(){return {...Object.fromEntries((this.workflow.variables||[]).map(v=>[v.key,v.value])),...sharedValues()};}
+  /** A shared value changed in another tab, so this page follows it. */
+  private stopShared=onSharedValues(()=>{Object.assign(this.replayData,sharedValues());if(this.projectionActive)this.renderer.updateData(this.replayData);});
   private authoring=false;
   private interacting=false;
   private previewOriginal=false;
@@ -306,7 +309,7 @@ export class Session {
   };
   private get runningConnections(){return this.projectionActive&&this.enabled&&(this.replay||this.interacting||this.panelMinimized);}
   connectionSaved(){this.pageEditor.success("Connected. Switch to Interact to use it.");}
-  private inputMirror=(event:Event)=>{if(this.runningConnections)try{const update=this.renderer.readPrototypeInput(event);if(update){this.replayData[update.key]=update.value;this.renderer.updateData(this.replayData);event.stopImmediatePropagation();return;}if(this.replay)this.renderer.forwardInput(event);}catch(error){this.gestureError(error);}};
+  private inputMirror=(event:Event)=>{if(this.runningConnections)try{const update=this.renderer.readPrototypeInput(event);if(update){this.replayData[update.key]=update.value;this.renderer.updateData(this.replayData);publishShared(this.replayData);event.stopImmediatePropagation();return;}if(this.replay)this.renderer.forwardInput(event);}catch(error){this.gestureError(error);}};
   /** Problems found in content a click or hover just showed. They last until the next render. */
   private revealIssues:string[]=[];
   /** The last applied plan's own checks, re-run against content once it is shown; only while that plan's result is the current workflow. */
@@ -322,7 +325,7 @@ export class Session {
     if(this.renderer.forwarding)return;
     if(this.suppressClick){event.preventDefault();event.stopImmediatePropagation();return;}
     // A click can change prototype data and still follow its connection.
-    if(this.runningConnections&&event.target instanceof Element&&this.renderer.dataClick(event.target,this.replayData))this.renderer.updateData(this.replayData);
+    if(this.runningConnections&&event.target instanceof Element&&this.renderer.dataClick(event.target,this.replayData)){this.renderer.updateData(this.replayData);publishShared(this.replayData);}
     const original=(this.assistant||assistantEnabled||this.options.assistantEnabled)?(event.composedPath()[0]||event.target):event.target;let target=original instanceof HTMLElement?original:original instanceof Element?original.closest<HTMLElement>('button,a,[role=button]'):null;if(target instanceof HTMLElement&&this.selecting)target=beneathCover(target,event.clientX,event.clientY);if(!(target instanceof HTMLElement)||!((this.assistant||assistantEnabled||this.options.assistantEnabled)?inScope(this.root,target):this.root.contains(target))||target.closest('[data-dx-ignore]'))return;
     if(target.closest('[data-dx-interactive]'))return;
     if(this.selecting&&(event.ctrlKey||event.metaKey||this.styleClipboard)){
@@ -437,7 +440,7 @@ export class Session {
       if(this.navigating)return;const from=this.stateId,workflow=this.workflow.id;this.navigating=true;
       const work=this.queue.then(async()=>{if(this.stateId!==from||this.workflow.id!==workflow){this.navigating=false;return;}try{await this.navigateState(next,[...this.visits,from]);}catch(error){this.navigating=false;this.pageEditor.notify(error instanceof Error?error.message:'Could not open the connected page.');}});this.queue=work;return;
     }
-    if(next){this.replayHistory.push(clone(this.replayData));for(const effect of (passes?edge?.effects:[])||[])this.replayData[effect.key]=effect.value;
+    if(next){this.replayHistory.push(clone(this.replayData));for(const effect of (passes?edge?.effects:[])||[])this.replayData[effect.key]=effect.value;publishShared(this.replayData);
       // Cancel or close means start over; moving on through a connection keeps what was entered.
       if(source==='modal:'+this.stateId+':close')for(const key of screenDataKeys(this.workflow.states.find(state=>state.id===this.stateId)?.operations||[]))delete this.replayData[key];
       this.visits.push(this.stateId);this.stateId=next;this.selected=null;this.render(true);this.renderer.owned.get(`view:${next}`)?.scrollIntoView?.({behavior:'smooth',block:'center'});void this.rememberLivePosition().catch(()=>{/* The position is saved again at the next change. */});}

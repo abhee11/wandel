@@ -1,3 +1,4 @@
+import {copiedElement} from '../content/tabClipboard';
 import {verifyNewButton,verifyReadableText} from './controlVerification';
 import {verifyArrangement} from '../content/arrangement';
 import {namedIcon} from '../content/copyIcon';
@@ -291,6 +292,11 @@ export function compileAssistant(workflow:Workflow,stateId:string,planInput:unkn
     insert.node.choices={options:action.labels,selected:0,headingTag:'h3',headingStyle:heading?readStyle(heading):design.heading,buttonStyle:appearance||insert.node.choices!.buttonStyle,sectionStyle:{display:'block',margin:'20px 0',padding:'0',border:'0','box-shadow':'none','background-color':'transparent'}};
     created.push(...action.labels.map((_,i)=>id+':choice:'+i));group=id;
    }
+  }else if(action.kind==='paste'){
+   const held=copiedElement();if(!held)throw new Error('Nothing has been copied from another tab yet.');
+   if(!targets[0])throw new Error('Say where the copied element should go.');
+   const id=uid(),copy=held.copy.map(part=>({...part,id:uid()})),place=action.position==='before'||action.position==='inside'?action.position:'after';
+   add({id:uid(),kind:'insert',target:targets[0].locator,position:place,node:{id,kind:'panel',text:action.text||held.label,copy}});created.push(id);
   }else if(action.kind==='restore'){
    // Wandel takes back its own looks by dropping those edits, so what was there before returns exactly, gradients included. Sizes, moves and arrangements stay.
    const roots=targets.map(target=>target.node),within=(locator:Locator)=>{let node:HTMLElement|null=null;try{node=resolveLayoutSource(locator)||null;}catch{/* an edit for a view that is not open */}return !!node&&roots.some(root=>root.contains(node));};
@@ -311,8 +317,10 @@ export function compileAssistant(workflow:Workflow,stateId:string,planInput:unkn
    const effects=action.effects.flatMap(effect=>(effect.action==='toast'?[action.targets[0]]:effect.targets).map(ref=>({action:effect.action,target:locate(ref).locator,...(effect.value!=null?{value:effect.value}:{}),...(effect.action==='toast'?{...(effect.seconds?{seconds:effect.seconds}:{}),...(look?{look}:{})}:{})})));
    if(action.effects.some(effect=>effect.action!=='toast'&&!effect.targets.length))throw new Error('Say which elements the behavior changes.');
    if(action.effects.some(effect=>effect.action==='toast'&&!effect.value?.trim()))throw new Error('Say what the toast should say.');
-   const condition=action.condition,when=condition&&(condition.ref||condition.text?.trim())?{...(condition.ref?{target:locate(condition.ref).locator}:{text:condition.text!.trim()}),present:condition.present}:undefined;
-   if(when&&(action.event||'click')!=='click')throw new Error('Only a click can depend on a condition.');
+   const condition=action.condition,when=condition&&(condition.key?.trim()||condition.ref||condition.text?.trim())?{...(condition.key?.trim()?{key:condition.key.trim(),...(condition.is!=null?{is:condition.is}:{})}:condition.ref?{target:locate(condition.ref).locator}:{text:condition.text!.trim()}),present:condition.present}:undefined;
+   const byValue=!!condition?.key?.trim();
+   if(when&&!byValue&&(action.event||'click')!=='click')throw new Error('Only a click can depend on a condition.');
+   if(byValue&&action.event!=='load')throw new Error('A value condition needs the load event.');
    for(const target of targets)add({id:uid(),kind:'behavior',target:target.locator,event:action.event||'click',...(when?{when}:{}),effects});
   }else if(action.kind==='connect'&&action.destination&&/^e_/.test(action.destination)){
    // An existing application control as the destination: clicks on the trigger are forwarded to it, so its real modal, menu or action runs.

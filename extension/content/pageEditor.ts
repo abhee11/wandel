@@ -94,11 +94,10 @@ export class PageEditor {
     if(key!==this.selectionKey){this.scope='element';this.message.hidden=true;}
     this.selectionKey=key;this.bar.replaceChildren();this.handles.replaceChildren();
     if(s.mode==='interact'){
-      const status=document.createElement('span');status.textContent='Interact · page clicks work';status.style.padding='0 6px';this.bar.append(status);
-      if(s.canBack)this.button('← Back','Previous workflow step',()=>{void this.run({type:'back'});});
-      this.button('−','Minimize Wandel panel',()=>{void this.run({type:'minimizePanel'});});
-      this.button('Edit','Edit the page · page keys stay with the app while interacting',()=>{void this.run({type:'edit'});});
-      this.button('×','Close Wandel and keep draft',()=>{void this.run({type:'closeEditor'});});this.bar.hidden=false;this.position();return;
+      // The panel holds Edit, minimize and close, so the page stays clear. Only stepping back through a flow belongs here.
+      if(!s.canBack){this.bar.hidden=true;return;}
+      this.button('← Back','Previous workflow step',()=>{void this.run({type:'back'});});
+      this.bar.hidden=false;this.position();return;
     }
     if(!active&&!s.replay)return;
     // A selection opens the full toolbar directly; it already offers Chat here and Interact.

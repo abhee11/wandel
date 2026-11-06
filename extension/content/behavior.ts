@@ -1,3 +1,4 @@
+import {remoteCss} from './customMarkup';
 import {appToastLook} from './appToast';
 /** General prototype behavior: when something happens on one element, show, hide, toggle, relabel or restyle others. Every change is reversible from a snapshot. */
 export type Effect={action:'show'|'hide'|'toggle'|'text'|'style'|'choose'|'toast';el:HTMLElement;value?:string;seconds?:number;look?:Record<string,string>};
@@ -25,7 +26,7 @@ export function choiceChecks(root:Element):SVGElement[]{return [...root.querySel
 /** Declarations the assistant writes for any element, kept only when they are plain properties with safe values. */
 export function safeDeclarations(css:string):[string,string][]{
  return css.split(';').map(part=>{const at=part.indexOf(':');return at<0?null:[part.slice(0,at).trim().toLowerCase(),part.slice(at+1).replace(/!important/gi,'').trim()] as [string,string];})
-  .filter((pair):pair is [string,string]=>!!pair&&/^-?[a-z][a-z-]*$/.test(pair[0])&&!!pair[1]&&pair[1].length<=400&&!/[<>{}]|expression\s*\(|javascript:|@import|url\s*\((?!\s*['"]?data:image\/)/i.test(pair[1]));
+  .filter((pair):pair is [string,string]=>!!pair&&/^-?[a-z][a-z-]*$/.test(pair[0])&&!!pair[1]&&pair[1].length<=400&&!/[<>{}]|expression\s*\(|javascript:|@import|url\s*\((?!\s*['"]?data:image\/)/i.test(pair[1])&&!remoteCss.test(pair[1]));
 }
 interface Snapshot{css:string;texts:[Text,string][];attrs:[string,string|null][]}
 export class Behaviors{
@@ -81,6 +82,10 @@ export class Behaviors{
   });
   if(revealed.length)this.onReveal?.(revealed);
  }
+ /** Effects that follow a prototype value: they apply while it matches and undo when it stops. */
+ private following:{effects:Effect[];key:string;test:(data:Record<string,string>)=>boolean;on:boolean}[]=[];
+ follow(effects:Effect[],key:string,test:(data:Record<string,string>)=>boolean){if(this.keys.has(key))return;this.keys.add(key);this.following.push({effects,key,test,on:false});}
+ syncFollowing(data:Record<string,string>){for(const entry of this.following){const on=entry.test(data);if(on===entry.on)continue;entry.on=on;if(on)this.run(entry.effects,entry.key);else{for(const effect of entry.effects)this.restore(effect.el);entry.effects.forEach((_,index)=>this.styled.delete(entry.key+':'+index));}}}
  /** Registers a behavior; load effects run at once, hover effects undo themselves when the pointer leaves. */
  add(source:HTMLElement,event:'click'|'hover'|'load',effects:Effect[],key:string,when?:()=>boolean){
   // A page re-render applies operations again; a behavior registers once until the next reset, so a list the user expanded stays expanded.
@@ -135,5 +140,5 @@ export class Behaviors{
  private restore(el:HTMLElement){const before=this.snapshots.get(el);if(!before)return;if(before.css)el.setAttribute('style',before.css);else el.removeAttribute('style');for(const [node,data] of before.texts)if(node.isConnected)node.data=data;for(const [key,value] of before.attrs){if(value===null)el.removeAttribute(key);else el.setAttribute(key,value);}this.snapshots.delete(el);}
  /** The click behaviors of the element a click landed in, nearest first. */
  forClick(target:Element|null){for(let el=target;el;){const found=this.click.get(el as HTMLElement)?.filter(entry=>!entry.when||entry.when());if(found?.length)return found;const root=el.getRootNode();el=el.parentElement||(root instanceof ShadowRoot?root.host:null);}return null;}
- reset(){this.clearToast();for(const timer of this.choiceTimers)clearTimeout(timer);this.choiceTimers.clear();for(const check of this.addedChecks.values())check.remove();this.addedChecks.clear();this.keys.clear();for(const cleanup of this.cleanups)cleanup();this.cleanups=[];for(const el of [...this.snapshots.keys()].reverse())this.restore(el);this.click.clear();this.styled.clear();this.choices.clear();}
+ reset(){this.following=[];this.clearToast();for(const timer of this.choiceTimers)clearTimeout(timer);this.choiceTimers.clear();for(const check of this.addedChecks.values())check.remove();this.addedChecks.clear();this.keys.clear();for(const cleanup of this.cleanups)cleanup();this.cleanups=[];for(const el of [...this.snapshots.keys()].reverse())this.restore(el);this.click.clear();this.styled.clear();this.choices.clear();}
 }

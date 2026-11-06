@@ -1,6 +1,6 @@
 import {mountPrototypePage,mountChartSection} from './prototypePage';
 import {mountBlock,blockInteract} from './block';
-import {fill,fieldOf,dataClick,syncBlocks} from './blockData';
+import {fill,fieldOf,dataClick,syncBlocks,passes} from './blockData';
 import {Behaviors,safeDeclarations,choiceLabels} from './behavior';
 import {applyArrangement} from './arrangement';
 import {placeBelow,restoreInsertionStyles,type InsertionStyle} from './insertionPlacement';
@@ -38,6 +38,7 @@ export class Renderer {
     for(const [node,template] of this.templates){if(!node.isConnected){this.templates.delete(node);continue;}const value=fill(template,data);if(node.data!==value)node.data=value;}
     for(const [input,key] of this.bindings){const value=Object.hasOwn(data,key)?data[key]:'';if(input instanceof HTMLInputElement&&['checkbox','radio'].includes(input.type))input.checked=value==='true';else if(input.value!==value)input.value=value;}
     syncBlocks([...this.owned.values()].filter(node=>node.isConnected&&node.dataset.dxBlock==='true'),data);
+    this.behaviors.syncFollowing(data);
   }
   /** Connects a block's fields to prototype data and fills in its starting values. */
   private bindBlock(host:HTMLElement,block:NonNullable<Extract<Operation,{kind:'insert'}>['node']['block']>){
@@ -305,6 +306,7 @@ export class Renderer {
     if(op.kind==='behavior'){
       const effects=op.effects.map(effect=>{const el=resolve(effect.target,this.root,this.owned);if(!el)throw new Error('An element this behavior changes is missing.');return {action:effect.action,el,...(effect.value!==undefined?{value:effect.value}:{}),...(effect.seconds?{seconds:effect.seconds}:{}),...(effect.look?{look:effect.look}:{})};});
       // A conditional click is taken over only when its condition holds; otherwise the page's own click runs untouched.
+      if(op.when?.key){const {key,is,present}=op.when;this.behaviors.follow(effects,op.id,data=>passes({key,is:is??null},data)===present);this.applied.set(op.id,{target});return;}
       const when=op.when,holds=when?()=>{const on=when.target?!!resolve(when.target,this.root,this.owned)?.getClientRects().length:(this.root.textContent||'').toLowerCase().includes(when.text!.toLowerCase());return on===when.present;}:undefined;
       this.behaviors.add(target,op.event,effects,op.id,holds);this.applied.set(op.id,{target});return;
     }

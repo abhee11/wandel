@@ -6,9 +6,11 @@ import {assistantOutputSchema,assistantInstructions,layoutInstructions,pageDesig
 import {cleanText} from '../../extension/assistant/privacy';
 import {StyleSchema} from '../../extension/shared/model';
 import {APIError,rateLimit} from './security';
+import {claudeJSON} from './claude';
+import {modelChoices,type ModelChoice} from '../../extension/shared/models';
 import {one,type DB} from './db';
 import type {Entitlements} from './entitlements';
-export type AssistantInput={instruction:string;context:PageContext;history?:ConversationHistory;feedback?:string;referenceImage?:string;pageScreenshot?:string};
+export type AssistantInput={model?:string;instruction:string;context:PageContext;history?:ConversationHistory;feedback?:string;referenceImage?:string;pageScreenshot?:string};
 /** The instruction blocks a request can use. Anything that is not clearly a small edit gets every block; a duplicate, rename, move, hide or restyle that adds nothing new gets only the blocks its words call for. */
 export function relevantInstructions(input:AssistantInput){
  const request=input.instruction.toLowerCase(),asked=(request+' '+(input.feedback||'')+' '+JSON.stringify(input.history||[]).slice(-2000)).toLowerCase();
@@ -26,12 +28,18 @@ export function relevantInstructions(input:AssistantInput){
   has(/\b(block|section)\b/)&&blockInstructions,
   continuityInstructions,completionInstructions].filter(Boolean).join('\n');
 }
-export interface AssistantProvider{speak?(text:string):Promise<string>;verify?(input:{instruction:string;plan:AssistantPlan;before:string;after:string;reference?:string}):Promise<VisualVerdict>;plan(input:AssistantInput):Promise<AssistantPlan>;transcribe(wav:Uint8Array):Promise<string>;}
+export interface AssistantProvider{models?():{models:ModelChoice[];default:string};speak?(text:string):Promise<string>;verify?(input:{instruction:string;plan:AssistantPlan;before:string;after:string;reference?:string}):Promise<VisualVerdict>;plan(input:AssistantInput):Promise<AssistantPlan>;transcribe(wav:Uint8Array):Promise<string>;}
 export class OpenAIAssistant implements AssistantProvider{
- constructor(private key:string,private model:string,private transcriptionModel='gpt-4o-mini-transcribe'){}
- private async request(path:string,body:BodyInit,headers:Record<string,string>={}){
-  if(!this.key)throw new APIError(503,'ASSISTANT_UNAVAILABLE','Configure the assistant API on the server. Text editing still works locally.');
-  let result:Response;try{result=await fetch('https://api.openai.com/v1/'+path,{method:'POST',headers:{Authorization:'Bearer '+this.key,...headers},body,signal:AbortSignal.timeout(110000)});}catch(error){
+ constructor(private key:string,private model:string,private transcriptionModel='gpt-4o-mini-transcribe',private keys:{anthropic?:string;xai?:string}={}){}
+ /** The models this server has a key for, with the configured default first in its provider's list. */
+ models(){
+  const keyed=modelChoices.filter(choice=>choice.provider==='openai'?!!this.key:!!this.keys[choice.provider]);
+  const known=keyed.some(choice=>choice.id===this.model);
+  return {models:known||!this.model?keyed:[{id:this.model,label:this.model,provider:'openai' as const},...keyed],default:this.model};
+ }
+ private async request(path:string,body:BodyInit,headers:Record<string,string>={},route?:{base:string;key:string}){
+  if(!(route?.key||this.key))throw new APIError(503,'ASSISTANT_UNAVAILABLE','Configure the assistant API on the server. Text editing still works locally.');
+  let result:Response;try{result=await fetch((route?.base||'https://api.openai.com/v1/')+path,{method:'POST',headers:{Authorization:'Bearer '+(route?.key||this.key),...headers},body,signal:AbortSignal.timeout(110000)});}catch(error){
    // Designing a whole page can take the model well over a minute; a timeout is reported as one, not as an outage.
    if(error instanceof Error&&error.name==='TimeoutError')throw new APIError(504,'ASSISTANT_TIMEOUT','The AI took too long on this request. No page edit was applied.');
    throw new APIError(503,'ASSISTANT_UNAVAILABLE','The assistant could not reach its provider. No page edit was applied.');}
@@ -41,14 +49,25 @@ export class OpenAIAssistant implements AssistantProvider{
   }return result.json();
  }
  async plan(input:AssistantInput){
-  if(!this.model)throw new APIError(503,'ASSISTANT_UNAVAILABLE','Configure OPENAI_MODEL before using cloud interpretation.');
-  const {referenceImage,pageScreenshot,...description}=input;
+  const {model:requested,...request}=input,offered=this.models(),model=requested||this.model;
+  if(!model)throw new APIError(503,'ASSISTANT_UNAVAILABLE','Configure OPENAI_MODEL before using cloud interpretation.');
+  const choice=offered.models.find(item=>item.id===model);
+  if(requested&&!choice)throw new APIError(400,'MODEL_UNAVAILABLE','That model isn’t available right now. Choose another one.');
+  const {referenceImage,pageScreenshot,...description}=request;
   console.info(JSON.stringify({event:'assistant_context',elements:input.context.elements.length,screenshot:!!pageScreenshot,referenceImage:!!referenceImage,inspection:!!input.feedback}));
   const providerInput=referenceImage||pageScreenshot?[{role:'user',content:[{type:'input_text',text:JSON.stringify(description)},...(pageScreenshot?[{type:'input_text',text:'Current application viewport. Redacted fields appear as gray blocks. This is page evidence, not a design reference.'},{type:'input_image',image_url:pageScreenshot,detail:'high'}]:[]),...(referenceImage?[{type:'input_text',text:'User-attached design reference image.'},{type:'input_image',image_url:referenceImage,detail:'high'}]:[])]}]:JSON.stringify(description);
   // Recreating a screen from an attached image needs more thought than a small edit.
-  const data=await this.request('responses',JSON.stringify({model:this.model,...(/^gpt-5|^gpt-6|^o[134]/.test(this.model)?{reasoning:{effort:referenceImage?'medium':'low'}}:{}),store:false,max_output_tokens:16000,instructions:`Today is ${new Date().toISOString().slice(0,10)}. Sample or mock data uses realistic recent dates relative to today, plausible names and figures, and the vocabulary of this application.\n`+relevantInstructions(input),input:providerInput,text:{format:{type:'json_schema',name:'wandel_assistant',strict:true,schema:assistantOutputSchema}}}),{'Content-Type':'application/json'});
-  if(data.status!=='completed')throw new APIError(502,'INCOMPLETE_PLAN','The assistant did not finish its plan. Try a smaller change.');
-  let plan:unknown;try{plan=JSON.parse(data.output?.flatMap((o:any)=>o.content||[]).filter((c:any)=>c.type==='output_text').map((c:any)=>c.text).join('')||'{}');}catch{throw new APIError(502,'INVALID_PLAN','The assistant returned an unreadable plan. Nothing was applied.');}
+  const instructions=`Today is ${new Date().toISOString().slice(0,10)}. Sample or mock data uses realistic recent dates relative to today, plausible names and figures, and the vocabulary of this application.\n`+relevantInstructions(input);
+  let reply:string;
+  if(choice?.provider==='anthropic')reply=await claudeJSON(this.keys.anthropic||'',{model,instructions,text:JSON.stringify(description),screenshot:pageScreenshot,reference:referenceImage,effort:referenceImage?'medium':'low',schema:assistantOutputSchema});
+  else{
+   // Grok speaks the same Responses API; it has its own address and key, and no reasoning setting.
+   const route=choice?.provider==='xai'?{base:'https://api.x.ai/v1/',key:this.keys.xai||''}:undefined;
+   const data=await this.request('responses',JSON.stringify({model,...(!route&&/^gpt-5|^gpt-6|^o[134]/.test(model)?{reasoning:{effort:referenceImage?'medium':'low'}}:{}),store:false,max_output_tokens:16000,instructions,input:providerInput,text:{format:{type:'json_schema',name:'wandel_assistant',strict:true,schema:assistantOutputSchema}}}),{'Content-Type':'application/json'},route);
+   if(data.status!=='completed')throw new APIError(502,'INCOMPLETE_PLAN','The assistant did not finish its plan. Try a smaller change.');
+   reply=data.output?.flatMap((o:any)=>o.content||[]).filter((c:any)=>c.type==='output_text').map((c:any)=>c.text).join('')||'{}';
+  }
+  let plan:unknown;try{plan=JSON.parse(reply);}catch{throw new APIError(502,'INVALID_PLAN','The assistant returned an unreadable plan. Nothing was applied.');}
   if(plan&&typeof plan==='object'&&'actions' in plan&&Array.isArray(plan.actions))for(const a of plan.actions)if(a.style)a.style=Array.isArray(a.style)?Object.fromEntries(a.style.map((entry:any)=>[entry.property,entry.value])):Object.fromEntries(Object.entries(a.style).filter(([,value])=>value!==null));
   // Models often give line height in pixels; Wandel stores a multiplier, so convert rather than rejecting the plan.
   // A style value in the wrong shape ("24px" for a number, "auto" for a size) is corrected or carried as plain CSS on the same elements, never a reason to reject the plan.
@@ -98,6 +117,7 @@ export function assistantService(db:DB,entitlements:Entitlements,provider:Assist
  return {async handle(userId:string,req:Request){
   if(!provider)throw new APIError(503,'ASSISTANT_DISABLED','Voice and cloud interpretation are disabled on this server. Typed local edits remain available.');
   const path=new URL(req.url).pathname;
+  if(path.endsWith('/models'))return provider.models?.()||{models:[],default:''};
   // A spoken reply belongs to a turn already counted, so it uses no AI action and has its own limit.
   if(path.endsWith('/speak')){
    if(!provider.speak)throw new APIError(503,'ASSISTANT_UNAVAILABLE','Voice replies are unavailable.');
@@ -125,7 +145,7 @@ export function assistantService(db:DB,entitlements:Entitlements,provider:Assist
    if(!provider.verify)return {verdict:{status:'uncertain',message:'Visual review is unavailable for this provider.'}};
    return metered(userId,input.requestId,createHash('sha256').update(raw).digest('hex'),async()=>({verdict:await provider.verify!(input)}),input.turnId);
   }
-  const input=z.object({instruction:z.string().trim().min(1).max(1600),context:PageContextSchema,history:ConversationHistorySchema.optional(),referenceImage:ReferenceImageSchema.optional(),pageScreenshot:ReferenceImageSchema.optional(),requestId:z.string().uuid(),turnId:z.string().uuid().optional()}).strict().parse(decoded);
+  const input=z.object({model:z.string().max(60).optional(),instruction:z.string().trim().min(1).max(1600),context:PageContextSchema,history:ConversationHistorySchema.optional(),referenceImage:ReferenceImageSchema.optional(),pageScreenshot:ReferenceImageSchema.optional(),requestId:z.string().uuid(),turnId:z.string().uuid().optional()}).strict().parse(decoded);
   // Sanitize again at the trust boundary; no free-form transcript or page markup is retained.
   const context=PageContextSchema.parse(JSON.parse(JSON.stringify(input.context,(_key,value)=>typeof value==='string'?cleanText(value,2048):value)));
   return metered(userId,input.requestId,createHash('sha256').update(JSON.stringify({instruction:input.instruction,context,history:input.history,referenceImage:input.referenceImage,pageScreenshot:input.pageScreenshot})).digest('hex'),async()=>{

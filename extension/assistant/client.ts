@@ -3,6 +3,7 @@ import {accountConfig} from '../shared/accountConfig';
 import {accountToken} from '../sidepanel/accountClient';
 import {conversationHistory,type ChatTurn} from './conversation';
 import {AssistantPlanSchema,VisualVerdictSchema,type AssistantPlan,type PageContext} from './schema';
+import type {ModelChoice} from '../shared/models';
 async function request(path:string,body:BodyInit,contentType:string,signal:AbortSignal){
  return withDeadline(async bounded=>{
  const token=await accountToken();if(bounded.aborted)throw new Error('Request canceled.');const result=await fetch(accountConfig.apiOrigin+'/api/assistant/'+path,{method:'POST',credentials:'omit',headers:{'Content-Type':contentType,Authorization:'Bearer '+token},body,signal:bounded});
@@ -13,7 +14,12 @@ async function request(path:string,body:BodyInit,contentType:string,signal:Abort
  },signal);
 }
 // turnId groups every call for one chat message, which counts as one AI action.
-export async function planConversation(instruction:string,context:PageContext,signal:AbortSignal,history:ChatTurn[]=[],referenceImage?:string,pageScreenshot?:string,turnId?:string){const data=await request('plan',JSON.stringify({instruction,context,history:conversationHistory(history),...(referenceImage?{referenceImage}:{}),...(pageScreenshot?{pageScreenshot}:{}),requestId:crypto.randomUUID(),...(turnId?{turnId}:{})}),'application/json',signal);return AssistantPlanSchema.parse(data.plan);}
+/** The models this server offers. An older server, or none signed in, simply shows no switcher. */
+export async function availableModels(){const token=await accountToken();const result=await fetch(accountConfig.apiOrigin+'/api/assistant/models',{credentials:'omit',headers:{Authorization:'Bearer '+token}});if(!result.ok)return {models:[] as ModelChoice[],default:''};return await result.json() as {models:ModelChoice[];default:string};}
+const modelKey='wandel:model';
+export const chosenModel=()=>localStorage.getItem(modelKey)||undefined;
+export const chooseModel=(id:string)=>localStorage.setItem(modelKey,id);
+export async function planConversation(instruction:string,context:PageContext,signal:AbortSignal,history:ChatTurn[]=[],referenceImage?:string,pageScreenshot?:string,turnId?:string){const model=chosenModel();const data=await request('plan',JSON.stringify({...(model?{model}:{}),instruction,context,history:conversationHistory(history),...(referenceImage?{referenceImage}:{}),...(pageScreenshot?{pageScreenshot}:{}),requestId:crypto.randomUUID(),...(turnId?{turnId}:{})}),'application/json',signal);return AssistantPlanSchema.parse(data.plan);}
 export async function transcribeInstruction(wav:Blob,signal:AbortSignal,turnId?:string){const data=await request('transcribe?requestId='+crypto.randomUUID()+(turnId?'&turnId='+turnId:''),wav,'audio/wav',signal);if(typeof data.text!=='string'||!data.text.trim())throw new Error('No instruction was recognized. Try again or type instead.');return data.text as string;}
 
 /** A natural spoken version of a short reply, as playable audio. */

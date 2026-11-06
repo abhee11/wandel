@@ -27,6 +27,7 @@ if(new URL(location.href).searchParams.get('stub')==='new-page'){
  Object.assign(window,{SpeechRecognition:FakeRecognition,webkitSpeechRecognition:FakeRecognition});
  const calls:string[]=[];Object.assign(window,{voice:(on:boolean)=>{gain.gain.value=on?.2:0;},heard:'',calls});sessionStorage.setItem('wandel:voice-sharing:v2','allowed');
  window.fetch=async(url,init)=>{if(!String(url).includes('/api/assistant/'))return real(url,init);
+  if(String(url).includes('/models'))return answer({default:'gpt-6.1-sol',models:[{id:'gpt-6.1-sol',label:'GPT-6.1 Sol',provider:'openai'},{id:'claude-opus-5-5',label:'Claude Opus 5.5',provider:'anthropic'},{id:'grok-4.7',label:'Grok 4.7',provider:'xai'}]});
   if(String(url).includes('/speak')){calls.push('speak');return answer({audio:'SUQzBAAAAAAAAA=='});}
   if(String(url).includes('/transcribe')){calls.push('transcribe');return answer({text:(window as unknown as {heard:string}).heard});}
   if(!String(url).endsWith('/plan'))return answer({ok:true,verdict:{status:'pass',message:'Stub.'}});

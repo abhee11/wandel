@@ -9,7 +9,7 @@ const list=(data:Data,key:string):Item[]=>{try{const value=JSON.parse(data[key]|
 export function readValue(data:Data,key:string){return key.endsWith('.count')?String(list(data,key.slice(0,-6)).length):Object.hasOwn(data,key)?data[key]:'';}
 const token=/\{\{([a-zA-Z][a-zA-Z0-9_.]*)\}\}/g;
 export const fill=(text:string,data:Data)=>text.replace(token,(whole,key:string)=>key.startsWith('item.')?whole:readValue(data,key));
-const passes=(when:NonNullable<BlockLogic['when']>,data:Data)=>{const value=readValue(data,when.key),match=when.is===null||when.is===undefined?!!value.trim():value===when.is;return when.not?!match:match;};
+export const passes=(when:NonNullable<BlockLogic['when']>,data:Data)=>{const value=readValue(data,when.key),match=when.is===null||when.is===undefined?!!value.trim():value===when.is;return when.not?!match:match;};
 /** The element a part's logic acts on: its field, for a labelled input or select. */
 export const fieldOf=(part:HTMLElement)=>part.matches('input,textarea,select')?part as HTMLInputElement:part.querySelector<HTMLInputElement|HTMLTextAreaElement|HTMLSelectElement>('input,textarea,select');
 function fillItem(clone:HTMLElement,item:Item){

@@ -2,7 +2,7 @@
 import {act,useEffect,useState} from 'react';import {createRoot,type Root} from 'react-dom/client';
 import {beforeEach,afterEach,it,expect,vi} from 'vitest';
 import {AssistantPanel} from '../extension/assistant/AssistantPanel';import {Session} from '../extension/content/session';import {Repository,BrowserStorage} from '../extension/storage/store';import type {Snapshot} from '../extension/shared/model';import type {Bridge} from '../extension/sidepanel/bridge';import {planConversation,transcribeInstruction} from '../extension/assistant/client';import {action,response,type AssistantPlan} from '../extension/assistant/schema';
-vi.mock('../extension/assistant/client',()=>({planConversation:vi.fn(),transcribeInstruction:vi.fn()}));
+vi.mock('../extension/assistant/client',()=>({planConversation:vi.fn(),transcribeInstruction:vi.fn(),availableModels:vi.fn(async()=>({models:[],default:''})),chosenModel:vi.fn(),chooseModel:vi.fn()}));
 const microphone=vi.hoisted(()=>({denied:false}));
 vi.mock('../extension/assistant/voice',()=>({PushToTalk:class{constructor(private active:(v:boolean)=>void,private completed:(blob:Blob)=>void,private failed:(message:string)=>void){}async start(){if(microphone.denied){this.active(false);this.failed('Microphone permission was denied.');return;}this.active(true);}stop(){this.active(false);this.completed(new Blob(['synthetic audio'],{type:'audio/wav'}));}cancel(){this.active(false);}}}));
 let root:Root,session:Session,element:HTMLElement;const save=vi.fn();

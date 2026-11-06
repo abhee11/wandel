@@ -196,6 +196,11 @@ Anyone on the Nov 2 zip (0.1.1) cannot read prototypes that use `logic`, so test
 | T14 | Ctrl+V pastes an image into the panel | ✅ | Free fixture with a simulated paste event; text paste untouched. Not tried with a real clipboard in the installed panel |
 | T15 | Breadcrumbs from a screenshot | ⚠️ | One real request with a simple mock-up: wording, order and slashes right, purple links came out dark. The friend's screenshot was not available, so their failure is not reproduced |
 
+| T16 | Model switcher sends each model to its provider | ✅ | Real local requests: Claude Opus 5.5, Claude Sonnet 5.5, Grok 4.7, Grok 4.6 and GPT-6 Astra each planned and applied an edit in 6-8s. Sonnet and Grok 4.7 also worked from a reference image in about 20s. Not yet tried on the deployed server or from the panel's dropdown |
+| T17 | Shared values across sites | ✅ | Two real Chrome tabs, example.org and example.com: a switch on one showed new text and hid an existing paragraph on the other, and undid both when turned off. One real plan chose a shared key. Both tabs had a flow running |
+| T18 | Copy an element between tabs | ⚠️ | Pick tested with a real click on example.org (link did not fire), real AI placed it on example.com. The panel's tab list and tab switching were not tried: the browser tool can't use a page with the panel open |
+| T19 | Older flow opens from Saved and keeps current work | ⬜ | Same reason. Owner to try |
+
 ## Warnings
 
 | ID | Test | Status | Result |

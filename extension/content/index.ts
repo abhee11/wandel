@@ -1,3 +1,4 @@
+import {pickElement} from './tabClipboard';
 import {resolveInspections} from '../assistant/inspection';
 import {rememberAppToasts} from './appToast';
 import {FloatingPanel} from './floatingPanel';
@@ -30,6 +31,8 @@ const floatingPanel=new FloatingPanel(()=>{void send({type:'WANDEL_INLINE_CLOSE'
 const ready=session.init();
 // Local development: a page event opens the Wandel panel, so browser automation can test end to end.
 if(isLocalDev())window.addEventListener('wandel:dev-open',()=>{void send({type:'WANDEL_OPEN_CONNECTIONS'}).catch(ignore);},{signal:lifecycle.signal});
+// Local development: starts a pick on this page, so browser automation can test copying between tabs.
+if(isLocalDev())window.addEventListener('wandel:dev-pick',()=>{void pickElement().then(result=>window.dispatchEvent(new CustomEvent('wandel:dev-pick-result',{detail:JSON.stringify(result)})));},{signal:lifecycle.signal});
 // Local development: the current workflow and its problems, for automated checks.
 if(isLocalDev())window.addEventListener('wandel:dev-state',()=>{void ready.then(()=>{const s=session.snapshot();window.dispatchEvent(new CustomEvent('wandel:dev-state-result',{detail:JSON.stringify({stateId:s.stateId,mode:s.mode,unresolved:s.unresolved,canUndo:s.canUndo,workflow:s.workflow})}));});},{signal:lifecycle.signal});
 // Local development: create a real share link for the current workflow.
@@ -46,9 +49,9 @@ if(isLocalDev())window.addEventListener('wandel:dev-command',event=>{void (async
 if(isLocalDev())window.addEventListener('wandel:dev-chat',event=>{void (async()=>{
  let result:Record<string,unknown>;
  try{
-  const {instruction,referenceURL,talk}=JSON.parse(String((event as CustomEvent).detail));await ready;
+  const {instruction,referenceURL,talk,model}=JSON.parse(String((event as CustomEvent).detail));await ready;
   const snap=await session.dispatch({type:'assistantContext',chat:true,instruction});let context=snap.assistant?.context;if(!context)throw new Error('No page context: '+JSON.stringify({keys:Object.keys(snap),assistant:snap.assistant&&Object.keys(snap.assistant),mode:snap.mode,navigationError:snap.navigationError}).slice(0,400));
-  const ask=async(request:string,page:NonNullable<typeof context>)=>{const reply=await send({type:'WANDEL_DEV_PLAN',referenceURL,body:{instruction:request,context:talk?{...page,talk}:page,history:[],requestId:crypto.randomUUID()}});if(reply?.error)throw new Error(reply.error);return reply.plan;};
+  const ask=async(request:string,page:NonNullable<typeof context>)=>{const reply=await send({type:'WANDEL_DEV_PLAN',referenceURL,body:{...(model?{model}:{}),instruction:request,context:talk?{...page,talk}:page,history:[],requestId:crypto.randomUUID()}});if(reply?.error)throw new Error(reply.error);return reply.plan;};
   // As in the real panel, a plan may ask to look closer at part of the page first.
   const start=context,resolved=await resolveInspections(await ask(instruction,start),start,{active:()=>true,inspect:async refs=>{const next=await session.dispatch({type:'assistantContext',chat:true,inspect:refs,instruction});return next.assistant?.context||null;},replan:(expanded,note)=>ask(instruction+'\n'+note,expanded)});
   const plan=resolved.plan;context=resolved.context;result={plan};
@@ -74,6 +77,7 @@ const onMessage=(message:any,_sender:chrome.runtime.MessageSender,reply:(value:u
   if(message.type==='WANDEL_INLINE_CAPTURE'&&_sender.id===chrome.runtime.id){floatingPanel.captureHidden(!!message.hidden);respond({ok:true});return;}
   if(message.type==='DX_NAVIGATED'){void ready.then(()=>{if(channel.available())return session.navigate(new URL(location.href));}).catch(ignore);return;}
   if(message.type==='WANDEL_CAPTURE_SCREEN'){void ready.then(()=>{if(channel.available())respond({screen:captureScreen()});}).catch(error=>respond({error:error.message}));return true;}
+  if(message.type==='WANDEL_COPY_PICK'&&_sender.id===chrome.runtime.id){void pickElement().then(respond);return true;}
   if(message.type!=='DX_COMMAND')return;
   if(message.command?.type==='save'){send({type:'WANDEL_SAVE_REQUEST'}).catch(()=>{});void ready.then(()=>respond({snapshot:session.snapshot()})).catch(ignore);return true;}
   void ready.then(()=>{if(!channel.available())return;return session.dispatch(message.command);}).then(snapshot=>{if(message.command?.type==='minimizePanel')floatingPanel.collapse(true);if(message.command?.type==='restorePanel')floatingPanel.collapse(false);respond({snapshot,capabilities:['designer-experience-v5','native-copy-v1','workflow-view-v1','live-routes-v1','panel-lifecycle-v1','connection-wire-v3','connection-panel-v2','connections-v1','settings-widgets-v1','selection-preflight-v1','native-design-v1','manual-editor-v1']});}).catch(error=>respond({error:error.message}));return true;

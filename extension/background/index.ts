@@ -16,7 +16,9 @@ if(isLocalDev())chrome.runtime.onMessage.addListener((message,sender,reply)=>{
  (async()=>{const token=await backgroundAccountToken();if(!token)throw new Error('Sign in to Wandel first.');const response=await fetch(devAccount.apiOrigin+'/api/assistant/plan',{method:'POST',credentials:'omit',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({...message.body,...(message.referenceURL?{referenceImage:await devImage(message.referenceURL)}:{})})});const data=await response.json();if(!response.ok)throw new Error(data.error?.message||'Plan request failed.');return {plan:data.plan};})().then(reply).catch(error=>reply({error:error instanceof Error?error.message:String(error)}));return true;
 });
 import {registerSharedWorkflow} from './sharedWorkflow';
+import {registerTabCopy} from './tabCopy';
 registerSharedWorkflow();
+registerTabCopy();
 import {registerWorkflowOpener} from './openWorkflow';
 registerWorkflowOpener();
 import {registerRecordingLauncher} from './recording';
