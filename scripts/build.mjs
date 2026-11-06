@@ -25,6 +25,8 @@ const {readFile}=await import('node:fs/promises');
 const manifest=JSON.parse(await readFile('extension/manifest.json','utf8'));
 if(!free&&!manifest.permissions.includes('cookies'))manifest.permissions.push('cookies');
 const origins=new Set([publicConfig.API_ORIGIN]);
+// A build for the live server is useless without sign-in, so it fails here rather than reaching someone as a broken zip.
+if(!free&&/^https:/.test(process.env.WANDEL_API_ORIGIN||'')&&!publicConfig.CLERK_KEY)throw new Error('This build targets a live server but has no Clerk publishable key. Set VITE_CLERK_PUBLISHABLE_KEY.');
 if(!free&&publicConfig.CLERK_KEY){const host=Buffer.from(publicConfig.CLERK_KEY.split('_').slice(2).join('_'),'base64').toString().replace(/\$$/,'');if(!/^[a-z0-9.-]+$/.test(host))throw new Error('Invalid Clerk publishable key');origins.add('https://'+host);}
 if(free){manifest.name='Wandel — Local Workflow Prototyper';manifest.version='0.2.1';delete manifest.content_scripts;delete manifest.host_permissions;manifest.content_security_policy.extension_pages="script-src 'self'; object-src 'none'; connect-src 'none'";}else manifest.content_security_policy.extension_pages+=' '+[...origins].join(' ');
 if(!free)manifest.externally_connectable={matches:[new URL(publicConfig.APP_ORIGIN).origin+'/*']};

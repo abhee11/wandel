@@ -107,3 +107,4 @@ Note: Claude in Chrome cannot work in tabs holding another extension's iframe, s
 
 - Talk: types words live, replies with OpenAI voice Marin (`/api/assistant/speak`, no AI action) in one short `spoken` line. Prototypes can take over a click conditionally and show a toast that learns the app's look from any real toast. Earlier edits on a closed view no longer block new changes.
 - Talk turn-taking: the microphone stays open while Wandel speaks, a clear voice interrupts it, replies wait until the person stops, commands said during work show at once and queue. Own speech coming back is ignored by `echoOf`.
+- Hosted zip: `.env` has an empty `CLERK_PUBLISHABLE_KEY=` above the real `VITE_CLERK_PUBLISHABLE_KEY`, so read the VITE one. 0.1.8 and 0.1.9 went out with no sign-in key this way. `scripts/build.mjs` now refuses a live-server build without a key.
