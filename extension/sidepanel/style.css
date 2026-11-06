@@ -93,7 +93,11 @@
 .dx-panel .dx-visual-help .dx-selected strong{max-width:100%;font-size:12px}
 
 /* The empty state is a compact introduction, not a full-height message. */
+/* An empty chat takes its natural height and the panel scrolls, so its content never slides under Your flow. An attached image replaces the welcome, leaving room for the composer. */
 .dx-panel-chat .dx-chat-empty{flex:0 0 auto;gap:8px}
+.dx-panel-chat .dx-create:has(>.dx-chat-empty){flex:0 0 auto}
+.dx-panel-chat>.dx-main:has(.dx-chat-empty){overflow-y:auto}
+.dx-panel-chat .dx-chat-empty:has(>.dx-reference-preview) .dx-chat{display:none}
 .dx-panel-chat .dx-chat-empty .dx-chat{flex:0 0 auto!important;min-height:0;max-height:none;padding:0}
 .dx-panel-chat .dx-chat-empty .dx-chat-thread{min-height:0;justify-content:flex-start}
 .dx-panel-chat .dx-chat-empty .dx-chat-welcome{margin:0;padding:4px 0 8px}

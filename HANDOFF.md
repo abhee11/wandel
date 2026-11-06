@@ -27,7 +27,7 @@ All planned and finished tests, including the complex build requests, are in `do
 - The repo's `node_modules` are macOS builds; run builds on the Mac.
 
 ## Hosted extension zip
-Pushing to `main` deploys the server and web page, not the extension. To release a zip, bump `version` in `extension/manifest.json`, then build into `dist-hosted` (never `dist`, which is the live local extension) with these set in the shell, where they override `.env`: `WANDEL_API_ORIGIN`, `WANDEL_APP_ORIGIN` and `CLERK_SYNC_HOST` as `https://wandel-production.up.railway.app`, plus `WANDEL_EXTENSION_KEY` taken from the previous `dist-hosted/manifest.json` so the extension ID stays the same. Run `node scripts/build.mjs --out=dist-hosted`, then zip the folder's contents into `releases/wandel-hosted-<version>.zip`. Current: 0.1.4.
+Pushing to `main` deploys the server and web page, not the extension. To release a zip, bump `version` in `extension/manifest.json`, then build into `dist-hosted` (never `dist`, which is the live local extension) with these set in the shell, where they override `.env`: `WANDEL_API_ORIGIN`, `WANDEL_APP_ORIGIN` and `CLERK_SYNC_HOST` as `https://wandel-production.up.railway.app`, plus `WANDEL_EXTENSION_KEY` taken from the previous `dist-hosted/manifest.json` so the extension ID stays the same. Run `node scripts/build.mjs --out=dist-hosted`, then zip the folder's contents into `releases/wandel-hosted-<version>.zip`. Current: 0.1.5.
 
 ## Free checks (no AI)
 `npx vite --port 5180 --host 127.0.0.1`, then open `http://127.0.0.1:5180/demo/fixtures/visibility-check.html`. Twelve cases, each in a fresh frame through the real context → compile → render → verify path. Storage is cleared at the start of each run. All pass:
