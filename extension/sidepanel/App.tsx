@@ -30,9 +30,8 @@ export function generationPrompt(prompt:string,intent:'feature'|'edit'){
 function UnresolvedNotice({issues,busy,onUndo,onHide}:{issues:string[];busy:boolean;onUndo:()=>void;onHide:()=>void}){
   const groups=groupIssues(issues);
   return <section className="dx-unresolved" role="status">
-    <p><strong>{issueHeadline(issues)}.</strong> {groups.length===1?groups[0].hint:'Open Details for what to do about each.'}</p>
-    <details><summary>Details</summary>{groups.map(group=><div key={group.kind}><p><strong>{group.title}</strong></p><ul>{group.items.map((item,index)=><li key={index}>{item}</li>)}</ul>{groups.length>1&&<p className="dx-muted">{group.hint}</p>}</div>)}</details>
-    <div className="dx-row"><button className="dx-small" disabled={busy} onClick={onUndo}>Undo last change</button><button className="dx-small" onClick={onHide}>Hide</button></div>
+    <details><summary>{issueHeadline(issues)}</summary>{groups.map(group=><div key={group.kind}>{groups.length>1&&<p><strong>{group.title}</strong></p>}<p className="dx-muted">{group.hint}</p><ul>{group.items.map((item,index)=><li key={index}>{item}</li>)}</ul></div>)}<button className="dx-small" disabled={busy} onClick={onUndo}>Undo last change</button></details>
+    <button className="dx-unresolved-hide" aria-label="Hide this message" title="Hide" onClick={onHide}>×</button>
   </section>;
 }
 export function App({bridge,demo=false}:{bridge:Bridge;demo?:boolean}) {
@@ -41,7 +40,7 @@ export function App({bridge,demo=false}:{bridge:Bridge;demo?:boolean}) {
   useEffect(()=>{if(demo)return;const listener=(message:any,sender:chrome.runtime.MessageSender)=>{if(message?.type!=='WANDEL_SAVE_REQUEST')return;const owner=new URL(location.href).searchParams.get('tabId');if(owner&&String(sender.tab?.id)!==owner)return;setSaving(true);};chrome.runtime.onMessage.addListener(listener);return()=>chrome.runtime.onMessage.removeListener(listener);},[demo]);
   const [assistantBusy,setAssistantBusy]=useState(false);
   // Unresolved changes the user hid stay hidden until the set changes.
-  const [hiddenIssues,setHiddenIssues]=useState('');
+  const [hiddenIssues,setHiddenIssues]=useState<string[]>([]);
   const [s,setS]=useState<Snapshot|null>(null),[error,setError]=useState(''),[notice,setNotice]=useState(''),[busy,setBusy]=useState(false);
   const pageEpoch=useRef(0);
   const [prompt,setPrompt]=useState(''),[name,setName]=useState('');
@@ -166,7 +165,7 @@ export function App({bridge,demo=false}:{bridge:Bridge;demo?:boolean}) {
           {!s.replay?<details className="dx-flow-disclosure"><summary>Your flow <span>{s.workflow.states.length} {s.workflow.states.length===1?'screen':'screens'} · {s.workflow.edges.length} connections</span></summary><FlowNavigation snapshot={s} busy={busy} onNavigate={id=>void run({type:'state',id})}/></details>:<FlowNavigation snapshot={s} busy={busy} onNavigate={id=>void run({type:'state',id})}/>}
 
           {/* While Wandel asks whether this page belongs to the workflow, edits made on another page are expected to be absent. */}
-          {s.unresolved.length>0&&!s.resumeChoice&&s.unresolved.join('|')!==hiddenIssues&&<UnresolvedNotice issues={s.unresolved} busy={busy} onUndo={()=>void run({type:'undo'},'Undid the last change.')} onHide={()=>setHiddenIssues(s.unresolved.join('|'))}/>}
+          {s.unresolved.length>0&&!s.resumeChoice&&s.unresolved.some(issue=>!hiddenIssues.includes(issue))&&<UnresolvedNotice issues={s.unresolved} busy={busy} onUndo={()=>void run({type:'undo'},'Undid the last change.')} onHide={()=>setHiddenIssues(items=>[...new Set([...items,...s.unresolved])])}/>}
         </>}
       </main><footer className="dx-footer"><details className="dx-secondary-actions"><summary>Workflow tools</summary><label className="dx-enable"><input aria-label="Enable prototype" type="checkbox" checked={s.enabled} onChange={e=>void run({type:'enabled',value:e.target.checked})}/> On</label><button className="dx-secondary" disabled={busy} onClick={()=>{setTab('build');setAssistantOpen(false);setIntent('feature');}}>Create a connected flow</button><button className="dx-small" title="Undo last change" disabled={!s.canUndo||s.replay||busy} onClick={()=>void run({type:'undo'})}>Undo</button><button className="dx-small" title="Redo last change" disabled={!s.canRedo||s.replay||busy} onClick={()=>void run({type:'redo'})}>Redo</button><button className="dx-restore" disabled={busy} onClick={()=>{if(confirm('Restore the original page? All states and edits in this draft will be cleared. Saved versions are kept, and Undo can recover this draft.'))void run({type:'reset'},'Original page restored. Saved versions are still available.');}}>Restore original page</button></details><div className="dx-row dx-flow-actions"><button className="dx-secondary" disabled={busy||!s.enabled} onClick={()=>{setTab('build');void run({type:s.replay?'edit':'replay'});}}>{s.replay?'Back to editing':'Play flow'}</button><button className="dx-secondary" aria-pressed={tab==='share'} disabled={busy} onClick={()=>setTab(tab==='share'?'build':'share')}>Share &amp; playback</button></div><div className="dx-row"><button title="Undo" aria-label="Undo" className="dx-icon-button" disabled={!s.canUndo||s.replay||busy} onClick={()=>void run({type:'undo'})}>↶</button><button title="Redo" aria-label="Redo" className="dx-icon-button" disabled={!s.canRedo||s.replay||busy} onClick={()=>void run({type:'redo'})}>↷</button><button className="dx-primary dx-save" disabled={busy} onClick={()=>{if(demo)void run({type:'save'},'Saved in this demo browser.');else setSaving(true);}}>Save {s.versions.length?'new version':'workflow'} <span>↗</span></button></div><small><span>●</span> {demo?'Demo · saved in this browser':s.liveSession?'Live app · original controls perform real actions':s.workflow.states.some(st=>st.operations.some(op=>op.kind==='mirror'))?'Mirrored controls can run live app actions':'Local prototype · no backend changes'}</small></footer>
     </>}

@@ -16,7 +16,7 @@ export function groupIssues(issues:string[]):IssueGroup[]{
  const by=new Map<IssueKind,string[]>();for(const issue of issues){const kind=issueKind(issue);by.set(kind,[...(by.get(kind)||[]),clean(issue)]);}
  const groups:IssueGroup[]=[];
  const add=(kind:IssueKind,title:(n:number)=>string,hint:string)=>{const items=by.get(kind);if(items?.length)groups.push({kind,title:title(items.length),hint,items});};
- add('missing',n=>plural(n,'edit couldn’t find its element','edits couldn’t find their elements'),'The page no longer has what these edits changed (content reloaded, a menu or dialog is closed, or text changed). Open that part of the page, or select the element and ask again. Undo removes the last change.');
+ add('missing',n=>plural(n,'edit isn’t showing here','edits aren’t showing here'),'What they changed isn’t on screen right now, such as a card that rotates or a closed menu. They should return when it does. If not, select the element and ask again.');
  add('hidden',n=>plural(n,'new element can’t be seen','new elements can’t be seen'),'They were added but nothing on the page shows them. Ask Wandel to place them in a visible section, or to show them on a click.');
  add('shown',n=>plural(n,'problem appeared','problems appeared')+' when content was shown','The content a click revealed doesn’t render correctly. Ask Wandel to fix it, or Undo.');
  add('page',()=>'This step belongs to another page','Open its connected page before editing.');

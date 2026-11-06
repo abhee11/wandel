@@ -16,7 +16,7 @@ Run these first, on the deployed hosted build, in the real panel, on a clean Chr
 
 | ID | Test | Pass looks like | Status | Result |
 |---|---|---|---|---|
-| G1 | Rebuild the hosted zip | Friend's zip includes today's fixes, including the modal click block | ⚠️ | `releases/wandel-hosted-0.1.6.zip` built and its contents checked, with the same extension ID. Not yet installed or run; G2 covers that |
+| G1 | Rebuild the hosted zip | Friend's zip includes today's fixes, including the modal click block | ⚠️ | `releases/wandel-hosted-0.1.7.zip` built and its contents checked, with the same extension ID. Not yet installed or run; G2 covers that |
 | G2 | Fresh install and sign in on a clean Chrome profile | Works from written steps with no help | ⬜ | Never tested this way |
 | G3 | Five simple panel requests: change text, change a colour, hide something, add a card, undo | All five work first time, on two sites | ⬜ | Includes the second-site check (part of B18) |
 | G4 | D13: new page from a dropdown, with reply and review | No false failure | ⬜ | |
@@ -140,7 +140,7 @@ Prototypes run on the real application. Before clicking a real control that a pr
 | E3 | Recorded walkthrough video | ⬜ | Needs tab capture, which automation cannot do. The only option for people without Wandel |
 | E4 | Implement in GitHub | ⬜ | Not tested |
 
-Anyone on the Nov 2 zip (0.1.1) cannot read prototypes that use `logic`, so testers need 0.1.2 or later (0.1.6 is current).
+Anyone on the Nov 2 zip (0.1.1) cannot read prototypes that use `logic`, so testers need 0.1.2 or later (0.1.7 is current).
 
 ## Duplicating
 
@@ -184,6 +184,14 @@ Anyone on the Nov 2 zip (0.1.1) cannot read prototypes that use `logic`, so test
 | T3 | Talking over an edit queues the next turn | ✅ | Same |
 | T4 | "Stop" cancels, "stop listening" turns it off | ✅ | Same |
 | T5 | Real voice, in the real panel | ⬜ | Needs a person and a microphone. Not tried with room noise, or with a real spoken reply |
+
+## Warnings
+
+| ID | Test | Status | Result |
+|---|---|---|---|
+| W1 | Message box never covered | ✅ | Up to 271px of overlap with a chat history and a notice, now 0 at all heights, even with details open. Test page, not yet seen in the real panel |
+| W2 | One calm line, no page toast while the panel is open | ⬜ | Built; needs a look in the real panel |
+| W3 | Why 11 edits were not found | ⬜ | Likely carousel edits, unconfirmed: the owner's draft isn't visible from a test tab |
 
 ## Already tested
 

@@ -163,3 +163,8 @@
 .dx-talk-status{display:flex;align-items:center;gap:8px;flex-shrink:0;padding:8px 10px;border:1px solid #dcd5ff;border-radius:10px;background:#f7f5ff;color:#3f3a58;font-size:12px}.dx-talk-status>span:nth-child(2){flex:1;min-width:0}
 .dx-talk-dot{width:9px;height:9px;flex:none;border-radius:50%;background:#6d5ae6}.dx-talk-dot.hearing{background:#d92d5b;box-shadow:0 0 0 4px #d92d5b26}.dx-talk-dot.paused{background:#b8b3cc}
 .dx-talk[aria-pressed="true"]{background:#efedff;border-color:#bcb5ff;color:#5145bb}
+/* Edits off screen are not an error: one calm line that opens on request, and never in the composer's way. */
+.dx-unresolved{flex-direction:row;align-items:flex-start;gap:8px;margin:6px 0;padding:5px 8px 5px 10px;border-color:#e6e3f0;border-radius:9px;background:#f7f6fb;font-size:12px;line-height:1.4;color:#5b566e}
+.dx-unresolved details{flex:1;min-width:0}.dx-unresolved summary{color:#5b566e}.dx-unresolved ul{margin:4px 0;padding-left:16px}.dx-unresolved>.dx-unresolved-hide{flex:none;width:20px;height:20px;padding:0;border:0;background:none;color:#7d7892;font-size:15px;line-height:1;cursor:pointer}
+.dx-panel-chat>.dx-main{overflow-y:auto}
+.dx-panel-chat .dx-create{min-height:min-content}
