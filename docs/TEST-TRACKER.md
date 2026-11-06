@@ -16,7 +16,7 @@ Run these first, on the deployed hosted build, in the real panel, on a clean Chr
 
 | ID | Test | Pass looks like | Status | Result |
 |---|---|---|---|---|
-| G1 | Rebuild the hosted zip | Friend's zip includes today's fixes, including the modal click block | ⚠️ | `releases/wandel-hosted-0.1.5.zip` built and its contents checked, with the same extension ID. Not yet installed or run; G2 covers that |
+| G1 | Rebuild the hosted zip | Friend's zip includes today's fixes, including the modal click block | ⚠️ | `releases/wandel-hosted-0.1.6.zip` built and its contents checked, with the same extension ID. Not yet installed or run; G2 covers that |
 | G2 | Fresh install and sign in on a clean Chrome profile | Works from written steps with no help | ⬜ | Never tested this way |
 | G3 | Five simple panel requests: change text, change a colour, hide something, add a card, undo | All five work first time, on two sites | ⬜ | Includes the second-site check (part of B18) |
 | G4 | D13: new page from a dropdown, with reply and review | No false failure | ⬜ | |
@@ -140,7 +140,7 @@ Prototypes run on the real application. Before clicking a real control that a pr
 | E3 | Recorded walkthrough video | ⬜ | Needs tab capture, which automation cannot do. The only option for people without Wandel |
 | E4 | Implement in GitHub | ⬜ | Not tested |
 
-Anyone on the Nov 2 zip (0.1.1) cannot read prototypes that use `logic`, so testers need 0.1.2 or later (0.1.5 is current).
+Anyone on the Nov 2 zip (0.1.1) cannot read prototypes that use `logic`, so testers need 0.1.2 or later (0.1.6 is current).
 
 ## Duplicating
 
@@ -174,6 +174,16 @@ Anyone on the Nov 2 zip (0.1.1) cannot read prototypes that use `logic`, so test
 |---|---|---|---|
 | I1 | Attach an image: composer stays usable | ✅ | Bug fixed: Your flow covered the composer by up to 334px. 0 at all heights in a layout test page; not yet seen in the real panel |
 | I2 | "Replicate this card" from an image builds without asking | ✅ | Both of the owner's wordings built with no question, using their real image, through the hooks. Very close match. The first run lost the card outline while its reply claimed the lavender surface; the run naming a place had it |
+
+## Talk mode (hands-free conversation)
+
+| ID | Test | Status | Result |
+|---|---|---|---|
+| T1 | Silence and short noise send nothing | ✅ | Real audio path with simulated sound; transcription and planning stubbed |
+| T2 | Pause ends a turn; filler words are ignored | ✅ | Same |
+| T3 | Talking over an edit queues the next turn | ✅ | Same |
+| T4 | "Stop" cancels, "stop listening" turns it off | ✅ | Same |
+| T5 | Real voice, in the real panel | ⬜ | Needs a person and a microphone. Not tried with room noise, or with a real spoken reply |
 
 ## Already tested
 

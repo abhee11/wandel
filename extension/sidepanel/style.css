@@ -160,3 +160,6 @@
 .dx-chat-layout>.dx-main>*:not(.dx-chat-workspace){flex-shrink:0}
 .dx-chat-layout>.dx-main>.dx-chat-workspace{min-height:220px}
 .dx-chat-layout .dx-unresolved{max-height:28vh;overflow:auto}
+.dx-talk-status{display:flex;align-items:center;gap:8px;flex-shrink:0;padding:8px 10px;border:1px solid #dcd5ff;border-radius:10px;background:#f7f5ff;color:#3f3a58;font-size:12px}.dx-talk-status>span:nth-child(2){flex:1;min-width:0}
+.dx-talk-dot{width:9px;height:9px;flex:none;border-radius:50%;background:#6d5ae6}.dx-talk-dot.hearing{background:#d92d5b;box-shadow:0 0 0 4px #d92d5b26}.dx-talk-dot.paused{background:#b8b3cc}
+.dx-talk[aria-pressed="true"]{background:#efedff;border-color:#bcb5ff;color:#5145bb}
