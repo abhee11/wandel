@@ -10,6 +10,21 @@ Test page unless stated: https://mirrortalk.ai/groups/102949?activityContainerId
 
 Record failures with their real cause. Keep testing cheap: free checks first, then at most 1–2 AI requests per fix.
 
+## Stage 0 gate: before sending to a friend
+
+Run these first, on the deployed hosted build, in the real panel, on a clean Chrome profile. The rest of this tracker can wait.
+
+| ID | Test | Pass looks like | Status | Result |
+|---|---|---|---|---|
+| G1 | Deploy the server and rebuild the hosted zip | Friend's zip includes today's fixes, including the modal click block | ⬜ | Railway and the zip are from Nov 2 |
+| G2 | Fresh install and sign in on a clean Chrome profile | Works from written steps with no help | ⬜ | Never tested this way |
+| G3 | Five simple panel requests: change text, change a colour, hide something, add a card, undo | All five work first time, on two sites | ⬜ | Includes the second-site check (part of B18) |
+| G4 | D13: new page from a dropdown, with reply and review | No false failure | ⬜ | |
+| G5 | P7 and P8: follow-up on that page, save, reopen | The right page changes and comes back | ⬜ | |
+| G6 | F6 and F7: a rejected request, and Cancel | Clear message, page stays consistent | ⬜ | |
+| G7 | Two prototype data requests in the panel (B2, B9) | Work when clicked, review runs | ⬜ | |
+| G8 | L4: watch a drag | Drop line and highlight make sense | ⬜ | |
+
 ## 1. Build requests
 
 Each row is one request, typed as written. Pass means it works when clicked through, not just that it appears. Try each one in a single message; if that fails, note it, then try it in steps.
