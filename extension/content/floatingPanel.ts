@@ -37,7 +37,7 @@ export class FloatingPanel {
   const edge=document.createElement('div');edge.className='edge';edge.hidden=true;edge.setAttribute('aria-hidden','true');this.edge=edge;
   const logo=document.createElement('img');logo.src=chrome.runtime.getURL('brand/wandel-mark.svg');logo.alt='';logo.onerror=()=>logo.remove();
   bar.append(logo,title,pageButton,dock,collapse,close);
-  const frame=document.createElement('iframe');frame.title='Wandel — '+location.hostname;frame.src=chrome.runtime.getURL('sidepanel.html')+'?tabId='+tabId+'&embedded=1';frame.allow='microphone';
+  const frame=document.createElement('iframe');frame.title='Wandel — '+location.hostname;frame.src=chrome.runtime.getURL('sidepanel.html')+'?tabId='+tabId+'&embedded=1';frame.allow='microphone; clipboard-write';
   const pill=document.createElement('button');pill.className='pill';pill.hidden=true;pill.setAttribute('aria-label','Open Wandel · '+location.hostname);pill.title='Wandel · '+location.hostname;
   // A compact launcher: a sparkle mark, draggable away from the page's own floating controls.
   const mark=document.createElementNS('http://www.w3.org/2000/svg','svg');mark.setAttribute('viewBox','0 0 24 24');mark.setAttribute('aria-hidden','true');const path=document.createElementNS(mark.namespaceURI,'path');path.setAttribute('d','M12 3l2 6 6 2-6 2-2 6-2-6-6-2 6-2z');path.setAttribute('fill','currentColor');mark.append(path);pill.append(mark);

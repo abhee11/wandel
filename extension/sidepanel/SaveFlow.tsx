@@ -1,5 +1,4 @@
 import {defaultWorkflowName} from '../prototype/engine';
-import {WorkflowShare} from './WorkflowShare';
 import {useRef,useState} from 'react';
 import {accountAPI,AccountError,signIn,startUpgrade} from './accountClient';
 import type {Bridge} from './bridge';
@@ -45,5 +44,5 @@ export function SaveFlow({snapshot,bridge,onClose}:{snapshot:Snapshot;bridge:Bri
  {gates.has(code)&&<button className="dx-primary" disabled={busy} onClick={()=>void run(async()=>{await startUpgrade();setNotice('Stripe test checkout opened. Return to this app tab after payment, then save again. Canceled checkout leaves your draft unchanged.');})}>Upgrade with Stripe test checkout ↗</button>}
  <hr/><button className="dx-secondary" disabled={busy} onClick={()=>void run(async()=>{await namedSnapshot();await bridge.send({type:'saveTemporary'});setNotice('Saved on this computer as a version. It stays after Chrome restarts, but is not in your account or on other devices.');})}>Save on this computer · Free</button>
  <p className="dx-muted">Kept in this Chrome profile, including after restarts. Not synced to your account. No sign-in required.</p>
- <WorkflowShare snapshot={snapshot} bridge={bridge} expanded prepare={namedSnapshot} disabled={busy}/><button className="dx-small" disabled={busy} onClick={onClose}>Keep editing</button></section>;
+ <button className="dx-small" disabled={busy} onClick={onClose}>Keep editing</button></section>;
 }

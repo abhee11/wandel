@@ -41,8 +41,8 @@ it('saves the name typed in the dialog before either storage destination, withou
 it('keeps an empty name editable and rejects saving it before touching storage or accounts',async()=>{
  await mount();await rename('   ');await click('Save temporarily');expect(send).not.toHaveBeenCalled();expect(accountAPI).not.toHaveBeenCalled();expect(element.textContent).toContain('Give your flow a name');
 });
-it('shows sharing and interactive preview directly in the save dialog',async()=>{
- await mount();expect(element.querySelector('details')?.open).toBe(true);await click('Try flow on app');expect(send).toHaveBeenCalledWith({type:'replay'});expect(element.textContent).toContain('Record walkthrough');
+it('keeps the save dialog to saving: sharing lives in the Share view',async()=>{
+ await mount();expect(element.textContent).toContain('Save to my account');expect(element.querySelector('.dx-workflow-share')).toBeNull();expect(element.textContent).not.toContain('Create link');
 });
 it('does not rename or save a different workflow if the active app changed',async()=>{
  await mount();send.mockResolvedValue({...snapshot,workflow:{...snapshot.workflow,id:'different'}});await rename('My flow');await click('Save to my account');expect(accountAPI).not.toHaveBeenCalled();expect(element.textContent).toContain('active workflow changed');expect(send).not.toHaveBeenCalledWith(expect.objectContaining({type:'rename'}));

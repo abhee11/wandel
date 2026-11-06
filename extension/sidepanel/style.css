@@ -251,3 +251,75 @@
 
 .dx-locked{display:inline-flex;align-items:center;gap:8px;cursor:not-allowed;opacity:1;color:#8a90a0}
 .dx-soon{padding:2px 7px;border-radius:999px;background:#fdf0c4;color:#7a5a00;font-size:10px;font-weight:600}
+
+/* First visit: the welcome sits right above the chat box, and the box itself asks to be used. */
+.dx-panel-chat .dx-chat-empty{flex:1 1 0;gap:10px}
+.dx-panel-chat .dx-chat-empty .dx-chat{display:flex;flex:1 1 0!important;overflow-y:auto}
+.dx-panel-chat .dx-chat-empty .dx-chat-thread{flex:1;min-height:0;justify-content:flex-end}
+.dx-panel-chat>.dx-main:has(.dx-chat-empty){background:radial-gradient(120% 60% at 50% 100%,#efeaff 0%,#f7f3ff00 70%)}
+.dx-panel-chat .dx-chat-empty .dx-hero{margin:auto 0 0;padding:12px 2px 6px;text-align:center;animation:dx-rise .5s ease-out both}
+.dx-hero-mark{display:inline-flex;width:48px;height:48px;margin-bottom:12px;border-radius:14px;box-shadow:0 10px 26px #6155db55}
+.dx-hero-mark img{width:100%;height:100%;border-radius:14px}
+.dx-panel-chat .dx-chat-empty .dx-hero h2{font-size:22px!important;font-weight:700;line-height:1.2;letter-spacing:-.6px;margin:0 0 6px;color:#232635}
+.dx-hero h2 em{display:block;font-style:normal;background:linear-gradient(90deg,#6155db,#a855d8 55%,#f0785a);-webkit-background-clip:text;background-clip:text;color:transparent}
+.dx-panel-chat .dx-chat-empty .dx-hero p{max-width:300px;margin:0 auto;font-size:13px;line-height:1.5;color:#5e6677}
+.dx-starters{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:16px;text-align:left}
+.dx-starters button{display:flex;align-items:flex-start;gap:8px;min-width:0;padding:10px;border:1px solid #e4e0f3;border-radius:12px;background:#ffffffd9;color:#2c3040;cursor:pointer;font:inherit;transition:transform .15s,border-color .15s,box-shadow .15s}
+.dx-starters button:hover:not(:disabled),.dx-starters button:focus-visible{transform:translateY(-1px);border-color:#b7a9ec;box-shadow:0 6px 16px #6155db1f}
+.dx-starters i{flex:none;display:grid;place-items:center;width:24px;height:24px;border-radius:8px;background:#f0edfb;color:#6155db;font-style:normal;font-size:13px}
+.dx-starters span{display:flex;flex-direction:column;gap:1px;min-width:0}
+.dx-starters strong{font-size:12px;font-weight:600}
+.dx-starters small{font-size:10px;line-height:1.3;color:#79808e}
+.dx-panel-chat .dx-chat-empty .dx-chat-composer{border-color:transparent;background:linear-gradient(#fff,#fff) padding-box,linear-gradient(120deg,#6155db,#a855d8,#f0785a,#6155db) border-box;background-size:100% 100%,300% 100%;box-shadow:0 8px 28px #6155db2e;animation:dx-sheen 6s linear infinite}
+.dx-panel-chat .dx-chat-empty .dx-chat-composer textarea::placeholder{color:#6d6890}
+@keyframes dx-rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes dx-sheen{to{background-position:0 0,300% 0}}
+@media(prefers-reduced-motion:reduce){.dx-panel-chat .dx-chat-empty .dx-hero,.dx-panel-chat .dx-chat-empty .dx-chat-composer{animation:none}}
+@media(max-height:620px){.dx-hero-mark{display:none}.dx-starters small{display:none}}
+.dx-starters button{text-align:left;align-items:center}
+.dx-panel-chat .dx-chat-empty .dx-chat{scrollbar-gutter:auto;scrollbar-width:thin;padding:0 2px}
+
+/* Share: two clear choices, the link just made, and every link in one list. */
+.dx-share,.dx-workflow-share{display:flex;flex-direction:column;gap:12px;padding:0}
+.dx-share-card{display:flex;flex-direction:column;gap:10px;padding:14px;border:1px solid #e6e4f0;border-radius:12px;background:#fff}
+.dx-share-card header{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.dx-share-card header strong{font-size:14px;color:#232635}
+.dx-share-card header span{padding:2px 8px;border-radius:999px;background:#f0edfb;color:#5045ac;font-size:10px;font-weight:600;white-space:nowrap}
+.dx-share-card p{margin:0;font-size:12px;line-height:1.5;color:#646b7d}
+.dx-share-card>.dx-primary{width:100%;margin:0}
+.dx-share-card iframe{display:block;width:100%;height:200px;margin-bottom:8px;border:1px solid #e6e4f0;border-radius:8px;background:#fff}
+.dx-share-switch{display:flex;align-items:center;gap:8px;font-size:12px;color:#353b49;cursor:pointer}
+.dx-share-switch input{margin:0;accent-color:#5b5bd6}
+.dx-share-card .dx-share-warning{padding:8px 10px;border-radius:8px;background:#fff6e0;color:#7a5a00}
+.dx-share-actions{display:grid;grid-template-columns:1fr 1.4fr;gap:8px;margin-top:8px}
+.dx-share-actions>button,.dx-share-latest>button{margin:0;width:auto}
+.dx-share-latest{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px;padding:6px;border:1px solid #d9d3f0;border-radius:10px;background:#f7f5fd}
+.dx-share-latest input{min-width:0;width:100%;padding:6px 8px;border:0;background:transparent;color:#353b49;font-size:12px;text-overflow:ellipsis;outline:none}
+.dx-share-title{margin:4px 0 6px;font-size:11px;font-weight:600;color:#72798a}
+.dx-share-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:6px;padding:8px 0;border-top:1px solid #eceef3}
+.dx-share-row>div{min-width:0}
+.dx-share-row strong{display:block;font-size:12px;color:#353b49;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dx-share-row small{font-size:10px;color:#79808e}
+.dx-share-remove{width:24px;height:24px;border:0;border-radius:6px;background:transparent;color:#8a90a0;font-size:15px;cursor:pointer}
+.dx-share-remove:hover:not(:disabled){background:#fff0f2;color:#a33d4e}
+.dx-share-more>summary{font-size:12px;color:#5e6677;cursor:pointer;padding:4px 0}
+.dx-share-more-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-top:8px}
+.dx-share-more-row>*{margin:0;width:100%;padding:7px 4px;font-size:11px;text-align:center;white-space:nowrap}
+.dx-share-import{position:relative;overflow:hidden;cursor:pointer}
+.dx-share-import input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.dx-workflow-share details{border:0}
+.dx-panel .dx-share section.dx-share-card{padding:14px;margin:0;border:1px solid #e6e4f0;border-radius:12px}
+.dx-panel .dx-share>section:not(.dx-share-card){padding:0;margin:0;border:0}
+.dx-panel section.dx-workflow-share{padding:0;margin:0;border:0}
+.dx-panel .dx-workflow-share .dx-share-more{margin:0;padding:0;border:0}
+.dx-panel .dx-share-card>button.dx-primary{width:100%;margin:2px 0 0}
+
+/* Someone opened a shared link: they should know at once what this is. */
+.dx-shared-hero{display:flex;flex-direction:column;gap:4px;padding:16px;border-radius:14px;background:linear-gradient(120deg,#6155db,#a855d8 60%,#f0785a);color:#fff;box-shadow:0 10px 26px #6155db3d}
+.dx-shared-hero span{align-self:flex-start;padding:2px 8px;border-radius:999px;background:#ffffff2e;font-size:10px;font-weight:600;letter-spacing:.2px}
+.dx-shared-hero strong{margin-top:4px;font-size:18px;line-height:1.25;letter-spacing:-.3px;overflow-wrap:anywhere}
+.dx-shared-hero p{margin:0;font-size:12px;line-height:1.5;color:#ffffffe0}
+.dx-shared-view .dx-replaying .dx-section-title,.dx-shared-view .dx-replaying h2,.dx-shared-view .dx-replaying p{display:none}
+.dx-shared-view>.dx-footer.dx-action-row,.dx-shared-view .dx-view-head button{display:none}
+.dx-shared-view .dx-project .dx-header-actions{display:none}
+.dx-shared-view .dx-view-head{display:none}
