@@ -106,3 +106,4 @@ Note: Claude in Chrome cannot work in tabs holding another extension's iframe, s
 18. Older gaps: nearest-style rule unconfirmed on a real page; neighbour check compares only size/position; core instructions not reviewed for contradictions; copies of tabs/toggles in their "on" state may copy the active look; pushing to `main` auto-deploys the server and web page to Railway, but the hosted extension zip is built separately.
 
 - Talk: types words live, replies with OpenAI voice Marin (`/api/assistant/speak`, no AI action) in one short `spoken` line. Prototypes can take over a click conditionally and show a toast that learns the app's look from any real toast. Earlier edits on a closed view no longer block new changes.
+- Talk turn-taking: the microphone stays open while Wandel speaks, a clear voice interrupts it, replies wait until the person stops, commands said during work show at once and queue. Own speech coming back is ignored by `echoOf`.

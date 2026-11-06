@@ -46,9 +46,9 @@ if(isLocalDev())window.addEventListener('wandel:dev-command',event=>{void (async
 if(isLocalDev())window.addEventListener('wandel:dev-chat',event=>{void (async()=>{
  let result:Record<string,unknown>;
  try{
-  const {instruction,referenceURL}=JSON.parse(String((event as CustomEvent).detail));await ready;
+  const {instruction,referenceURL,talk}=JSON.parse(String((event as CustomEvent).detail));await ready;
   const snap=await session.dispatch({type:'assistantContext',chat:true,instruction});let context=snap.assistant?.context;if(!context)throw new Error('No page context: '+JSON.stringify({keys:Object.keys(snap),assistant:snap.assistant&&Object.keys(snap.assistant),mode:snap.mode,navigationError:snap.navigationError}).slice(0,400));
-  const ask=async(request:string,page:NonNullable<typeof context>)=>{const reply=await send({type:'WANDEL_DEV_PLAN',referenceURL,body:{instruction:request,context:page,history:[],requestId:crypto.randomUUID()}});if(reply?.error)throw new Error(reply.error);return reply.plan;};
+  const ask=async(request:string,page:NonNullable<typeof context>)=>{const reply=await send({type:'WANDEL_DEV_PLAN',referenceURL,body:{instruction:request,context:talk?{...page,talk}:page,history:[],requestId:crypto.randomUUID()}});if(reply?.error)throw new Error(reply.error);return reply.plan;};
   // As in the real panel, a plan may ask to look closer at part of the page first.
   const start=context,resolved=await resolveInspections(await ask(instruction,start),start,{active:()=>true,inspect:async refs=>{const next=await session.dispatch({type:'assistantContext',chat:true,inspect:refs,instruction});return next.assistant?.context||null;},replan:(expanded,note)=>ask(instruction+'\n'+note,expanded)});
   const plan=resolved.plan;context=resolved.context;result={plan};

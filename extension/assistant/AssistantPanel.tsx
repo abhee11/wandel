@@ -8,10 +8,11 @@ import {connectionRoute,connectionControls,matchingScreens,matchingStates,routeT
 import {readConversation,rememberConversation,type ChatTurn} from './conversation';
 import {liveSpeech} from './liveSpeech';
 import {prepareMicrophone,openMicrophoneSetup,voiceSharingAllowed,rememberVoiceSharing} from './microphonePermission';
-import {HandsFree,fillerSpeech,pickVoice,spokenReply,stopListening,stopWork,type HandsFreeState} from './handsFree';
+import {HandsFree,echoOf,fillerSpeech,firstName,onItLine,pickVoice,spokenReply,thanks,thanksLine,stopListening,stopWork,type HandsFreeState} from './handsFree';
 import {useEffect,useLayoutEffect,useRef,useState} from 'react';
 import type {Bridge} from '../sidepanel/bridge';
 import {uid,type Snapshot,type VisitedScreen,type ConnectionEvent,type ConnectionCondition} from '../shared/model';
+import {accountAPI} from '../sidepanel/accountClient';
 import {planConversation,verifyConversation,transcribeInstruction,speakReply,reportFailure} from './client';
 import {samePage,stateURL} from '../shared/liveNavigation';
 import {PushToTalk} from './voice';
@@ -46,6 +47,10 @@ export function AssistantPanel({bridge,snapshot,onSave,onBusyChange}:{bridge:Bri
  // Every answer that carries a warning (the Fix it case) is logged with its plan, whichever path produced it.
  function speak(text:string){
   if(!talkOn.current)return;const line=spokenReply(text);if(!line)return;
+  // Never over the person: wait for them to finish, and if they said something new, that turn answers instead.
+  if(hearingNow.current){heldLine.current=line;return;}
+  if(typingNow.current>0||talkPending.current.length)return;
+  lastSpoken.current=line;recentLines.current=[...recentLines.current.slice(-3),line];
   // The microphone waits while Wandel talks, so it never answers itself.
   stopSpeaking();talk.current?.pause();
   let done=false;const line_id=++speakId.current,limit=setTimeout(()=>finish(),20000);
@@ -55,29 +60,32 @@ export function AssistantPanel({bridge,snapshot,onSave,onBusyChange}:{bridge:Bri
   const controller=new AbortController();speakAbort.current=controller;
   void speakReply(line,controller.signal).then(source=>{if(line_id!==speakId.current||!talkOn.current){finish();return;}const audio=new Audio(source);speakAudio.current=audio;audio.onended=finish;audio.onerror=device;return audio.play();}).catch(()=>device());
  }
- function stopSpeaking(){speakId.current++;speakAbort.current?.abort();speakAudio.current?.pause();speakAudio.current=null;if('speechSynthesis' in window)window.speechSynthesis.cancel();}
+ function stopSpeaking(){speakId.current++;heldLine.current='';speakAbort.current?.abort();speakAudio.current?.pause();speakAudio.current=null;if('speechSynthesis' in window)window.speechSynthesis.cancel();}
  function stopTalk(note='Conversation mode is off.'){talkOn.current=false;talkPending.current=[];setTalkWaiting(0);talk.current?.stop();talk.current=null;setTalking(false);stopSpeaking();stopPreview.current?.();stopPreview.current=null;setTalkTyping(0);setInstruction('');setMessage(note);}
  async function startTalk(allowed=false){
   if(talkOn.current)return;if(!consent&&!allowed){talkConsent.current=true;setError('');setVoiceConsentOpen(true);setMessage('Allow voice sharing below to start talking.');return;}
   setError('');try{if(!await prepareMicrophone()){setMessage('Microphone setup opened in a separate window. Allow access there, then press Talk again.');return;}}catch(e){setError(e instanceof Error?e.message:'Could not open microphone setup.');return;}
   talkOn.current=true;setTalking(true);setTalkState('listening');
   const listener=new HandsFree(wav=>{void hear(wav);},talkChanged,()=>stopTalk('Conversation mode turned off after 3 quiet minutes.'),failure=>{stopTalk(failure);setError(failure);});talk.current=listener;await listener.start();
+  if(talkOn.current){void accountAPI<{user?:{name?:string|null;email?:string|null}}>('/me').then(me=>{speaker.current=firstName(me.user?.name,me.user?.email);}).catch(()=>{}).finally(()=>{speak(speaker.current?`Hey ${speaker.current}, I'm listening.`:"Hey, I'm listening.");});}
  }
  // Words appear in the box as they are spoken, then the exact transcript replaces them.
  function talkChanged(state:HandsFreeState){
-  if(state==='hearing'){setInstruction('');stopPreview.current?.();stopPreview.current=liveSpeech(text=>{if(talkOn.current)setInstruction(text);},()=>{});}
+  hearingNow.current=state==='hearing';
+  if(state==='hearing'){stopSpeaking();if(!sending.current)setInstruction('');stopPreview.current?.();stopPreview.current=liveSpeech(text=>{if(talkOn.current)setInstruction(text);},()=>{});}
   else{stopPreview.current?.();stopPreview.current=null;}
-  if(state==='dropped'){setInstruction('');return;}
+  if(state==='dropped'){if(!sending.current)setInstruction('');const line=heldLine.current;heldLine.current='';if(line)speak(line);return;}
+  if(state==='listening')heldLine.current='';
   setTalkState(state);
  }
- async function hear(wav:Blob){setTalkTyping(count=>count+1);try{const text=await transcribeInstruction(wav,new AbortController().signal,uid());setTalkTyping(count=>Math.max(0,count-1));if(talkOn.current){setInstruction(text);onSpoken.current(text);}}catch(e){setTalkTyping(count=>Math.max(0,count-1));setInstruction('');const detail=e instanceof Error?e.message:'';if(talkOn.current&&!/No instruction was/i.test(detail))setError(detail||'That could not be heard. Try again.');}}
- function drainTalk(){if(!talkOn.current||sending.current)return;const next=talkPending.current.shift();setTalkWaiting(talkPending.current.length);if(next)void submit(next);}
+ async function hear(wav:Blob){typingNow.current++;setTalkTyping(typingNow.current);const finished=()=>{typingNow.current=Math.max(0,typingNow.current-1);setTalkTyping(typingNow.current);};try{const text=await transcribeInstruction(wav,new AbortController().signal,uid());finished();if(talkOn.current&&!echoOf(text,lastSpoken.current)){setInstruction(text);onSpoken.current(text);}else if(talkOn.current)setInstruction('');}catch(e){finished();if(!sending.current)setInstruction('');const detail=e instanceof Error?e.message:'';if(talkOn.current&&!/No instruction was/i.test(detail))setError(detail||'That could not be heard. Try again.');}}
+ function drainTalk(){if(!talkOn.current||sending.current)return;const next=talkPending.current.shift();setTalkWaiting(talkPending.current.length);if(next)void submit(next.text,undefined,!next.id,undefined,next.id);}
  function answer(text:string,edited=false,review=''){if(review){const asked=[...conversation.current].reverse().find(turn=>turn.role==='user')?.text||'';reportFailure({detail:('kept with warning: '+review).slice(0,600),instruction:asked.slice(0,400),plan:lastPlan.current.slice(0,400),page:(snapshot.workflow.route||'').slice(0,300),applied:true});}setMessage(text);say('assistant',text,{...(edited?{edited:true}:{}),...(review?{review}:{})});const line=review?text:spokenLine.current||(edited?'Done, take a look.':text);spokenLine.current='';speak(line);}
  async function history(type:'undo'|'redo'){if(sending.current)return;try{await bridge.send({type});setMessage(type==='undo'?'Undid the last change.':'Redid the change.');}catch(e){setError(e instanceof Error?e.message:'That change could not be '+(type==='undo'?'undone.':'redone.'));}}
  useEffect(()=>{setReferenceImage(undefined);const saved=readConversation(snapshot.workflow.id);conversation.current=saved;setTurns(saved);routeSource.current=null;pendingCopy.current=null;setRouteChoices([]);},[snapshot.workflow.id]);
  const [talkTyping,setTalkTyping]=useState(0),spokenLine=useRef(''),speakId=useRef(0),speakAbort=useRef<AbortController|null>(null),speakAudio=useRef<HTMLAudioElement|null>(null);
  const [talking,setTalking]=useState(false),[talkState,setTalkState]=useState<HandsFreeState>('listening'),[talkWaiting,setTalkWaiting]=useState(0);
- const talk=useRef<HandsFree|null>(null),talkOn=useRef(false),talkPending=useRef<string[]>([]),talkConsent=useRef(false),onSpoken=useRef<(text:string)=>void>(()=>{});
+ const talk=useRef<HandsFree|null>(null),talkOn=useRef(false),talkPending=useRef<{text:string;id?:string}[]>([]),hearingNow=useRef(false),typingNow=useRef(0),heldLine=useRef(''),lastSpoken=useRef(''),recentLines=useRef<string[]>([]),speaker=useRef(''),talkConsent=useRef(false),onSpoken=useRef<(text:string)=>void>(()=>{});
  const [voiceTranscript,setVoiceTranscript]=useState(''),[startingVoice,setStartingVoice]=useState(false),[voiceConsentOpen,setVoiceConsentOpen]=useState(false),[microphoneReady,setMicrophoneReady]=useState(false);
  const [instruction,setInstruction]=useState(''),[consent,setConsent]=useState(voiceSharingAllowed),[busy,setBusy]=useState(false),[listening,setListening]=useState(false),[message,setMessage]=useState('Ask about the layout, or select an element for focused feedback.'),[error,rawSetError]=useState(''),[clarification,setClarification]=useState<AssistantPlan|null>(null);
  // The current execution stage of the request in flight, shown beside Cancel above the composer.
@@ -121,7 +129,10 @@ export function AssistantPanel({bridge,snapshot,onSave,onBusyChange}:{bridge:Bri
   if(stopListening(text)){stopTalk();return;}
   if(stopWork(text)){setInstruction('');talkPending.current=[];setTalkWaiting(0);if(sending.current||clarificationRequest.current){cancel();speak('Stopped.');}return;}
   if(fillerSpeech(text)&&!clarificationRequest.current){setInstruction('');return;}
-  talkPending.current.push(text);setTalkWaiting(talkPending.current.length);drainTalk();
+  if(thanks(text)&&!clarificationRequest.current){setInstruction('');speak(thanksLine());return;}
+  // A command said during other work shows at once and waits its turn, so nothing disappears.
+  if(sending.current){const id=uid();say('user',text,{id,status:'sending'});setInstruction('');talkPending.current.push({text,id});setTalkWaiting(talkPending.current.length);return;}
+  speak(onItLine());talkPending.current.push({text});setTalkWaiting(talkPending.current.length);drainTalk();
  };
  useEffect(()=>{if(!busy)drainTalk();},[busy,talking]);
  async function submit(text:string,prepared?:Promise<PageContext>,recordTurn=true,expectedSelection?:string|null,existingId?:string,capturedSelection?:string){
@@ -138,7 +149,8 @@ export function AssistantPanel({bridge,snapshot,onSave,onBusyChange}:{bridge:Bri
    let verificationNote='',reviewIssue='';const combined=followUp&&recordTurn&&followUp.scope===origin?'Continue this request: '+followUp.text+'\nUser clarification: '+value:value;const image=referenceRef.current;setProgress('Looking at the page…');let pageScreenshot=await capture(c);
    setProgress(c.workspace?.goal?'Continuing our design…':'Thinking…');
    lastPlan.current='';
-   let plan=await planConversation(combined,c,controller.signal,conversation.current.filter(turn=>turn.id!==userId),image,pageScreenshot,userId);spokenLine.current=plan.spoken||'';
+   const talkContext=(page:PageContext):PageContext=>talkOn.current?{...page,talk:{...(speaker.current?{speaker:speaker.current}:{}),recent:recentLines.current}}:page;
+   let plan=await planConversation(combined,talkContext(c),controller.signal,conversation.current.filter(turn=>turn.id!==userId),image,pageScreenshot,userId);spokenLine.current=plan.spoken||'';
    const inspectPlan=async(input:AssistantPlan,current:PageContext,allowNavigation:boolean)=>resolveInspections(input,current,{
     active:stillHere,
     inspect:async refs=>{
@@ -149,7 +161,7 @@ export function AssistantPanel({bridge,snapshot,onSave,onBusyChange}:{bridge:Bri
      }
      setProgress('Inspecting the relevant layout…');return context(refs.filter(ref=>!ref.startsWith('view:')),combined);
     },
-    replan:(expanded,note)=>planConversation(combined,expanded,controller.signal,[...conversation.current.filter(turn=>turn.id!==userId),{role:'assistant',text:note,status:'sent'}],image,pageScreenshot,userId)
+    replan:(expanded,note)=>planConversation(combined,talkContext(expanded),controller.signal,[...conversation.current.filter(turn=>turn.id!==userId),{role:'assistant',text:note,status:'sent'}],image,pageScreenshot,userId)
    });
    {const inspected=await inspectPlan(plan,c,true);if(inspected.interrupted)return;plan=inspected.plan;c=inspected.context;spokenLine.current=plan.spoken||'';}
    // One level deep: the thing the user means only appears once a control of the app is opened. Wandel opens it once, then plans again on what it shows.

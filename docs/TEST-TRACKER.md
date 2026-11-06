@@ -188,6 +188,8 @@ Anyone on the Nov 2 zip (0.1.1) cannot read prototypes that use `logic`, so test
 | T7 | Talk replies in a natural server voice, with this device's best voice as fallback | ⬜ | Panel flow and fallback passed in the free panel. Owner chose Marin from samples on 2026-11-05. Not heard in the real panel |
 | T8 | Talk says one short friendly line and never repeats the request | ✅ | Fallback passed in the free panel. The planner's own short line is not yet heard with a real request |
 | T9 | When a condition holds, a click shows a 3-second toast in the app's look; otherwise the real click runs | ✅ | Blocked path on MirrorTalk with a guard on Generate, both paths in the free check. Pass-through never tried on MirrorTalk, on purpose. A disabled control can't show it: Generate needs an item and Feedback selected |
+| T10 | Talk never speaks over the user, can be interrupted, and keeps every command | ✅ | Free panel with simulated sound. Not tried with a real voice, or with speakers instead of headphones |
+| T11 | Talk sounds like a colleague: greeting by name, quick acknowledgements, replies to the person, no "what next" | ⬜ | One real planner line checked and good. Not heard in a real conversation |
 
 ## Warnings
 

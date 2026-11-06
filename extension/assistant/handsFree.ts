@@ -1,6 +1,6 @@
 import {pcmWav} from './voice';
 /** Hands-free conversation: listens for speech and hands over one finished utterance at a time. Sound is measured here on this device; nothing leaves it until someone has spoken and paused. */
-const SPEECH_FLOOR=.012,START_MS=140,END_MS=1100,MIN_SPEECH_MS=450,MAX_MS=20000,PRE_ROLL_MS=350,IDLE_MS=180000;
+const SPEECH_FLOOR=.012,START_MS=140,END_MS=1500,MIN_SPEECH_MS=450,MAX_MS=20000,PRE_ROLL_MS=350,IDLE_MS=180000;
 export type GateEvent='start'|'end'|'drop'|null;
 /** Decides when speech starts and ends from sound levels. Kept pure so it can be checked without a microphone. */
 export class SpeechGate{
@@ -22,7 +22,7 @@ export class SpeechGate{
 export type HandsFreeState='listening'|'hearing'|'paused'|'dropped';
 export class HandsFree{
  private stream:MediaStream|null=null;private audio:AudioContext|null=null;private processor:ScriptProcessorNode|null=null;
- private gate=new SpeechGate();private chunks:Float32Array[]=[];private held=false;private heard=0;
+ private gate=new SpeechGate();private chunks:Float32Array[]=[];private over=false;private heard=0;
  constructor(private segment:(wav:Blob)=>void,private state:(value:HandsFreeState)=>void,private idle:()=>void,private failed:(message:string)=>void){}
  async start(){
   try{
@@ -36,22 +36,22 @@ export class HandsFree{
   }catch(error){this.stop();this.failed(error instanceof DOMException&&error.name==='NotAllowedError'?'Microphone permission was denied. You can still type.':error instanceof Error?error.message:'Microphone unavailable.');}
  }
  private sound(input:Float32Array,rate:number){
-  if(this.held)return;
   const data=input.slice(),ms=data.length/rate*1000;let sum=0;for(const value of data)sum+=value*value;
-  const event=this.gate.feed(Math.sqrt(sum/data.length),ms);
+  // While Wandel talks only a clear voice counts, so its own sound doesn't trigger it but the person can still cut in.
+  const event=this.gate.feed(Math.sqrt(sum/data.length)*(this.over?.3:1),ms);
   this.chunks.push(data);
   if(!this.gate.speaking&&event===null){const keep=Math.ceil(PRE_ROLL_MS/ms);if(this.chunks.length>keep)this.chunks.splice(0,this.chunks.length-keep);if(performance.now()-this.heard>IDLE_MS){this.idle();return;}}
-  if(event==='start'){this.heard=performance.now();this.state('hearing');}
+  if(event==='start'){this.over=false;this.heard=performance.now();this.state('hearing');}
   if(event==='drop'){this.chunks=[];this.state('dropped');this.state('listening');}
   if(event==='end'){const length=this.chunks.reduce((total,chunk)=>total+chunk.length,0),samples=new Float32Array(length);let at=0;for(const chunk of this.chunks){samples.set(chunk,at);at+=chunk.length;}this.chunks=[];this.heard=performance.now();this.state('listening');this.segment(pcmWav(samples,rate));}
  }
- /** Stops listening while Wandel speaks, so it never hears itself. */
- pause(){this.held=true;this.chunks=[];this.gate.reset();this.state('paused');}
- resume(){if(!this.processor)return;this.held=false;this.chunks=[];this.gate.reset();this.heard=performance.now();this.state('listening');}
+ /** Wandel is talking. The microphone stays open: nothing the person says is dropped, and speaking up interrupts it. */
+ pause(){this.over=true;this.state('paused');}
+ resume(){if(!this.processor)return;this.over=false;this.heard=performance.now();this.state(this.gate.speaking?'hearing':'listening');}
  stop(){if(this.processor)this.processor.onaudioprocess=null;this.processor?.disconnect();this.processor=null;void this.audio?.close().catch(()=>{});this.audio=null;this.stream?.getTracks().forEach(track=>track.stop());this.stream=null;this.chunks=[];this.gate.reset();}
 }
 /** Words that are thinking aloud, not an instruction. */
-export const fillerSpeech=(text:string)=>/^(?:u+m+|u+h+|h+m+|ah+|oh+|ok(?:ay)?|right|so|well|yeah|yep|thanks|thank you|bye)[.,!?]*$/i.test(text.trim())||text.replace(/[^\p{L}\p{N}]/gu,'').length<2;
+export const fillerSpeech=(text:string)=>/^(?:u+m+|u+h+|h+m+|ah+|oh+|ok(?:ay)?|right|so|well|yeah|yep|bye)[.,!?]*$/i.test(text.trim())||text.replace(/[^\p{L}\p{N}]/gu,'').length<2;
 export const stopListening=(text:string)=>/^(?:please )?(?:stop listening|turn (?:this|it|yourself)? ?off|that'?s all|we'?re done|end conversation|stop talking)[.!]?$/i.test(text.trim());
 export const stopWork=(text:string)=>/^(?:stop|cancel|wait|hold on|never ?mind|forget it)[.!]?$/i.test(text.trim());
 /** Spoken aloud, one short sentence is plenty; the full answer stays on screen. */
@@ -59,10 +59,25 @@ export function spokenReply(text:string){
  const plain=text.replace(/\s+/g,' ').trim(),first=(plain.match(/^.+?(?:[.!?](?=\s|$)|$)/)?.[0]||plain).trim();
  return first.length<=110?first:first.slice(0,110).replace(/[\s,;:]+\S*$/,'')+'.';
 }
+/** Whether what was heard is only Wandel's own last line coming back through the speakers. */
+export function echoOf(heard:string,spoken:string){
+ const words=(text:string)=>text.toLowerCase().match(/[\p{L}\p{N}']+/gu)||[],said=new Set(words(spoken)),got=words(heard);
+ return got.length>0&&got.filter(word=>said.has(word)).length/got.length>=.7;
+}
 /** The most natural voice this device has for a language; the novelty voices some systems ship never speak for Wandel. */
 const novelty=/albert|bad news|bahh|bells|boing|bubbles|cellos|good news|jester|junior|kathy|organ|ralph|superstar|trinoids|whisper|wobble|zarvox|fred|eddy|flo|grandma|grandpa|reed|rocko|sandy|shelley/i;
 export function pickVoice(voices:SpeechSynthesisVoice[],language='en-US'){
  const base=language.split('-')[0]!.toLowerCase(),usable=voices.filter(voice=>voice.lang.toLowerCase().startsWith(base)&&!novelty.test(voice.name));
  const score=(voice:SpeechSynthesisVoice)=>(/premium|enhanced|neural|natural/i.test(voice.name)?8:0)+(/^google/i.test(voice.name)?4:0)+(/samantha|ava|allison|zoe|evan|nathan|joelle|noelle|daniel|karen|moira|microsoft (aria|jenny|guy)/i.test(voice.name)?3:0)+(voice.lang===language?1:0);
  return usable.sort((a,b)=>score(b)-score(a))[0]||null;
+}
+export const thanks=(text:string)=>/^(?:thanks|thank you|thanks a lot|thank you so much|cheers|nice|great|perfect|awesome|love it)[.,!]*$/i.test(text.trim());
+const pick=(lines:string[])=>lines[Math.floor(Math.random()*lines.length)]!;
+export const thanksLine=()=>pick(['Anytime.','Happy to help.','Glad that works.','Of course.']);
+export const onItLine=()=>pick(['Sure, one sec.','Okay, give me a moment.','Got it, one sec.','Yep, let me look.','Mm-hm, on it.']);
+/** A first name for friendly talk: the account's name, or a clearly personal email address. */
+export function firstName(name?:string|null,email?:string|null){
+ const given=name?.trim().split(/\s+/)[0];if(given)return given;
+ const local=email?.split('@')[0]?.split(/[._-]/)[0]||'';
+ return /^[a-z]{3,}$/i.test(local)&&!/^(info|admin|hello|team|contact|support|mail|test|sales)$/i.test(local)?local[0]!.toUpperCase()+local.slice(1).toLowerCase():'';
 }
