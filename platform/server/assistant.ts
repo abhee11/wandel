@@ -72,7 +72,7 @@ export class OpenAIAssistant implements AssistantProvider{
  /** A short reply spoken in a natural voice. Nothing is stored. */
  async speak(text:string){
   if(!this.key)throw new APIError(503,'ASSISTANT_UNAVAILABLE','Configure the assistant API on the server.');
-  const result=await fetch('https://api.openai.com/v1/audio/speech',{method:'POST',headers:{Authorization:'Bearer '+this.key,'Content-Type':'application/json'},body:JSON.stringify({model:'gpt-4o-mini-tts',voice:'coral',input:text,response_format:'mp3',instructions:'Speak naturally and warmly, like a helpful colleague in a relaxed conversation.'}),signal:AbortSignal.timeout(15000)});
+  const result=await fetch('https://api.openai.com/v1/audio/speech',{method:'POST',headers:{Authorization:'Bearer '+this.key,'Content-Type':'application/json'},body:JSON.stringify({model:'gpt-4o-mini-tts',voice:'marin',input:text,response_format:'mp3',instructions:'Sound like a real person chatting with a friend at work: relaxed, warm, natural pacing, slight smile in the voice, small natural pauses. Never sound like an announcer or an assistant reading text.'}),signal:AbortSignal.timeout(15000)});
   if(!result.ok)throw new APIError(503,'ASSISTANT_UNAVAILABLE','The voice could not be reached.');
   return Buffer.from(await result.arrayBuffer()).toString('base64');
  }

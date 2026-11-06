@@ -184,8 +184,8 @@ Anyone on the Nov 2 zip (0.1.1) cannot read prototypes that use `logic`, so test
 | T3 | Talking over an edit queues the next turn | ✅ | Same |
 | T4 | "Stop" cancels, "stop listening" turns it off | ✅ | Same |
 | T5 | Real voice, in the real panel | ⬜ | Needs a person and a microphone. Not tried with room noise, or with a real spoken reply |
-| T6 | Talk types your words as you speak, then replaces them with the exact transcript | Passed in the free panel with stubbed dictation. Not tried with a real voice |
-| T7 | Talk replies in a natural server voice, with this device's best voice as fallback | Real voice sample generated, panel flow and fallback passed in the free panel. Not heard in the real panel |
+| T6 | Talk types your words as you speak, then replaces them with the exact transcript | ✅ | Free panel with stubbed dictation. Not tried with a real voice |
+| T7 | Talk replies in a natural server voice, with this device's best voice as fallback | ⬜ | Panel flow and fallback passed in the free panel. Owner rejected a first sample as machine-like; a more human voice is being chosen. Not heard in the real panel |
 
 ## Warnings
 
