@@ -32,7 +32,7 @@ export function AssistantPanel({bridge,snapshot,onSave,onBusyChange}:{bridge:Bri
  async function capture(c:PageContext){if(!bridge.capturePage){setVisualContext('DOM context only: this browser connection has no screenshot capture.');return undefined;}try{const image=await bridge.capturePage(c);setVisualContext('Redacted viewport screenshot and DOM context.');return image;}catch(error){setVisualContext('DOM context only. Capture diagnostic: '+(error instanceof Error?error.message:'Viewport capture was unavailable.'));return undefined;}}
  // The last plan's steps, for failure reports.
  const lastPlan=useRef('');
- function recover(detail:string,applied=false){const asked=[...conversation.current].reverse().find(turn=>turn.role==='user')?.text||'';reportFailure({detail:detail.slice(0,600),instruction:asked.slice(0,400),plan:lastPlan.current.slice(0,400),page:(snapshot.workflow.route||'').slice(0,300),applied});const reply=conversationRecovery(detail,applied);setError('');setMessage(reply.text);say('assistant',reply.text,{status:'failed',error:detail.slice(0,300)});speak(reply.text);}
+ function recover(detail:string,applied=false){spokenLine.current='';const asked=[...conversation.current].reverse().find(turn=>turn.role==='user')?.text||'';reportFailure({detail:detail.slice(0,600),instruction:asked.slice(0,400),plan:lastPlan.current.slice(0,400),page:(snapshot.workflow.route||'').slice(0,300),applied});const reply=conversationRecovery(detail,applied);setError('');setMessage(reply.text);say('assistant',reply.text,{status:'failed',error:detail.slice(0,300)});speak(reply.text);}
 
  const clarificationRequest=useRef<{text:string;id:string;scope:string}|null>(null);
  const pendingCopy=useRef<{selection:string;workflow:string;state:string}|null>(null);
@@ -72,10 +72,10 @@ export function AssistantPanel({bridge,snapshot,onSave,onBusyChange}:{bridge:Bri
  }
  async function hear(wav:Blob){setTalkTyping(count=>count+1);try{const text=await transcribeInstruction(wav,new AbortController().signal,uid());setTalkTyping(count=>Math.max(0,count-1));if(talkOn.current){setInstruction(text);onSpoken.current(text);}}catch(e){setTalkTyping(count=>Math.max(0,count-1));setInstruction('');const detail=e instanceof Error?e.message:'';if(talkOn.current&&!/No instruction was/i.test(detail))setError(detail||'That could not be heard. Try again.');}}
  function drainTalk(){if(!talkOn.current||sending.current)return;const next=talkPending.current.shift();setTalkWaiting(talkPending.current.length);if(next)void submit(next);}
- function answer(text:string,edited=false,review=''){if(review){const asked=[...conversation.current].reverse().find(turn=>turn.role==='user')?.text||'';reportFailure({detail:('kept with warning: '+review).slice(0,600),instruction:asked.slice(0,400),plan:lastPlan.current.slice(0,400),page:(snapshot.workflow.route||'').slice(0,300),applied:true});}setMessage(text);say('assistant',text,{...(edited?{edited:true}:{}),...(review?{review}:{})});speak(text);}
+ function answer(text:string,edited=false,review=''){if(review){const asked=[...conversation.current].reverse().find(turn=>turn.role==='user')?.text||'';reportFailure({detail:('kept with warning: '+review).slice(0,600),instruction:asked.slice(0,400),plan:lastPlan.current.slice(0,400),page:(snapshot.workflow.route||'').slice(0,300),applied:true});}setMessage(text);say('assistant',text,{...(edited?{edited:true}:{}),...(review?{review}:{})});const line=review?text:spokenLine.current||(edited?'Done, take a look.':text);spokenLine.current='';speak(line);}
  async function history(type:'undo'|'redo'){if(sending.current)return;try{await bridge.send({type});setMessage(type==='undo'?'Undid the last change.':'Redid the change.');}catch(e){setError(e instanceof Error?e.message:'That change could not be '+(type==='undo'?'undone.':'redone.'));}}
  useEffect(()=>{setReferenceImage(undefined);const saved=readConversation(snapshot.workflow.id);conversation.current=saved;setTurns(saved);routeSource.current=null;pendingCopy.current=null;setRouteChoices([]);},[snapshot.workflow.id]);
- const [talkTyping,setTalkTyping]=useState(0),speakId=useRef(0),speakAbort=useRef<AbortController|null>(null),speakAudio=useRef<HTMLAudioElement|null>(null);
+ const [talkTyping,setTalkTyping]=useState(0),spokenLine=useRef(''),speakId=useRef(0),speakAbort=useRef<AbortController|null>(null),speakAudio=useRef<HTMLAudioElement|null>(null);
  const [talking,setTalking]=useState(false),[talkState,setTalkState]=useState<HandsFreeState>('listening'),[talkWaiting,setTalkWaiting]=useState(0);
  const talk=useRef<HandsFree|null>(null),talkOn=useRef(false),talkPending=useRef<string[]>([]),talkConsent=useRef(false),onSpoken=useRef<(text:string)=>void>(()=>{});
  const [voiceTranscript,setVoiceTranscript]=useState(''),[startingVoice,setStartingVoice]=useState(false),[voiceConsentOpen,setVoiceConsentOpen]=useState(false),[microphoneReady,setMicrophoneReady]=useState(false);
@@ -138,7 +138,7 @@ export function AssistantPanel({bridge,snapshot,onSave,onBusyChange}:{bridge:Bri
    let verificationNote='',reviewIssue='';const combined=followUp&&recordTurn&&followUp.scope===origin?'Continue this request: '+followUp.text+'\nUser clarification: '+value:value;const image=referenceRef.current;setProgress('Looking at the page…');let pageScreenshot=await capture(c);
    setProgress(c.workspace?.goal?'Continuing our design…':'Thinking…');
    lastPlan.current='';
-   let plan=await planConversation(combined,c,controller.signal,conversation.current.filter(turn=>turn.id!==userId),image,pageScreenshot,userId);
+   let plan=await planConversation(combined,c,controller.signal,conversation.current.filter(turn=>turn.id!==userId),image,pageScreenshot,userId);spokenLine.current=plan.spoken||'';
    const inspectPlan=async(input:AssistantPlan,current:PageContext,allowNavigation:boolean)=>resolveInspections(input,current,{
     active:stillHere,
     inspect:async refs=>{
@@ -151,7 +151,7 @@ export function AssistantPanel({bridge,snapshot,onSave,onBusyChange}:{bridge:Bri
     },
     replan:(expanded,note)=>planConversation(combined,expanded,controller.signal,[...conversation.current.filter(turn=>turn.id!==userId),{role:'assistant',text:note,status:'sent'}],image,pageScreenshot,userId)
    });
-   {const inspected=await inspectPlan(plan,c,true);if(inspected.interrupted)return;plan=inspected.plan;c=inspected.context;}
+   {const inspected=await inspectPlan(plan,c,true);if(inspected.interrupted)return;plan=inspected.plan;c=inspected.context;spokenLine.current=plan.spoken||'';}
    // One level deep: the thing the user means only appears once a control of the app is opened. Wandel opens it once, then plans again on what it shows.
    if(plan.status==='open'&&plan.candidates[0]){
     const opener=c.elements.find(element=>element.ref===plan.candidates[0]),name=(opener?.name||opener?.text||'it').slice(0,60);
@@ -173,7 +173,7 @@ export function AssistantPanel({bridge,snapshot,onSave,onBusyChange}:{bridge:Bri
     if(request!==epoch.current)return;
     c=await context(undefined,combined);pageScreenshot=await capture(c);setProgress('Looking at what opened…');
     plan=await planConversation(combined+`\n(Wandel opened “${name}” so you can see what it shows. Continue the request on this screen; do not open anything else.)`,c,controller.signal,conversation.current.filter(turn=>turn.id!==userId),image,pageScreenshot,userId);
-    {const inspected=await inspectPlan(plan,c,false);if(inspected.interrupted)return;plan=inspected.plan;c=inspected.context;}
+    {const inspected=await inspectPlan(plan,c,false);if(inspected.interrupted)return;plan=inspected.plan;c=inspected.context;spokenLine.current=plan.spoken||'';}
     if(plan.status==='open'||plan.status==='inspect'){answer(plan.question||'I opened it but still couldn’t find what you mean. Which part is it?');return;}
    }
    if(plan.status==='watch'){if(plan.candidates.length)await bridge.send({type:'assistantCandidates',refs:plan.candidates});watchRequest.current={text:value,id:userId};await bridge.send({type:'watch'});answer(plan.question||'Click it once in the page and I’ll watch what opens, then build it.');return;}
@@ -239,6 +239,7 @@ export function AssistantPanel({bridge,snapshot,onSave,onBusyChange}:{bridge:Bri
       }
      }
     },refresh:async()=>{const fresh=await context(undefined,combined);pageScreenshot=await capture(fresh);return fresh;},inspect:(refs)=>context(refs,combined),replan:(feedback,current)=>planConversation(combined,current,controller.signal,[...conversation.current.filter(turn=>turn.id!==userId),{role:'assistant',text:'The last proposed edit was not applied or its preview was fully rolled back. Repair only the current request; inspect or ask a concise clarification when the target is genuinely ambiguous. '+feedback,status:'failed'}],image,pageScreenshot,userId),active:stillHere,repairing:()=>setProgress('Checking a safer way to apply your request…')});}
+   spokenLine.current=plan.spoken||'';
    lastPlan.current=plan.status+': '+plan.actions.map(action=>action.kind+(action.element?' '+action.element:'')+(action.position?' '+action.position:'')).join(', ');
    if(plan.status==='clarify'||plan.status==='unsupported'){setClarification(plan);if(plan.status!=='unsupported'){waiting=true;clarificationRequest.current={text:combined,id:userId,scope:origin};}if(plan.candidates.length)await bridge.send({type:'assistantCandidates',refs:plan.candidates});answer(plan.status==='clarify'?(plan.question||plan.message):plan.message);return;}
    if(request===epoch.current){await remember(plan);answer(plan.status==='edit'?(plan.reply||'Applied: '+plan.actions.map(action=>action.kind==='create'?'added '+(action.text||action.element):action.kind==='duplicate'?'duplicated '+(action.text||'the referenced element'):action.kind==='theme'?'updated the theme':action.kind==='layout'?'updated the layout':action.kind==='text'?'updated the text':action.kind==='remove'?'removed the element':action.kind==='connect'?'connected the views':'updated the element').join('; ')+'. Undo is available.')+(reviewIssue?' The edit still needs attention: '+reviewIssue.replace(/\s*\([^)]*\)/g,'')+' I couldn’t resolve this automatically. Undo is available.':verificationNote?' '+verificationNote:''):plan.message,plan.status==='edit',plan.status==='edit'?reviewIssue:'');}

@@ -1,3 +1,5 @@
+import {resolveInspections} from '../assistant/inspection';
+import {rememberAppToasts} from './appToast';
 import {FloatingPanel} from './floatingPanel';
 import {isLocalDev} from '../sidepanel/devReload';
 import {createRuntimeChannel} from './runtimeChannel';
@@ -22,6 +24,7 @@ const ignore=(error:unknown)=>channel.handle(error);
 runtime.__wandelContentStarted=true;
 // A stale editor must stop intercepting the first interaction after an update.
 for(const type of ['pointerdown','keydown','pointermove'])window.addEventListener(type,()=>channel.available(),{capture:true,signal:lifecycle.signal});
+rememberAppToasts();
 const session=new Session(document.body,new Repository((freeBuild?new PersistentChromeStorage(send):new TemporaryChromeStorage(send))),new URL(location.href),{historyStore:{read:async workflowId=>(await send({type:'WANDEL_HISTORY',action:'read',workflowId}))?.value,write:async(workflowId,value)=>{await send({type:'WANDEL_HISTORY',action:'write',workflowId,value});}},liveNavigation:new ChromeLiveNavigation(send),externalConnections:true,requestConnections:async()=>{const result=await send({type:'WANDEL_OPEN_CONNECTIONS'});if(result?.error)throw new Error(result.error);},...(freeBuild?{}:{requestSignIn:async()=>{const result=await send({type:'WANDEL_SIGN_IN_REQUEST'});if(result?.error)throw new Error(result.error);},requestPlan:async(prompt,selection)=>{const result=await send({type:'WANDEL_PLAN_REQUEST',prompt,selection});if(!result)throw new Error('Open the Wandel panel to use the connected planner.');if(result.error)throw new Error(result.error);return result.plan;}}),requestSectionChat:(rect,label)=>{void send({type:'WANDEL_INLINE_STATUS'}).then(status=>{if(status?.tabId){floatingPanel.show(status.tabId);floatingPanel.focusSection(rect,label);}}).catch(ignore);},requestClose:async()=>{if(session.snapshot().panelMinimized)floatingPanel.collapse(true);else{floatingPanel.destroy();void send({type:'WANDEL_INLINE_CLOSE'}).catch(ignore);}const result=await send({type:'WANDEL_COLLAPSE'});if(result?.error)throw new Error(result.error);},requestSave:()=>{send({type:'WANDEL_SAVE_REQUEST'}).catch(()=>{});}});
 const floatingPanel=new FloatingPanel(()=>{void send({type:'WANDEL_INLINE_CLOSE'}).catch(ignore);},()=>{void ready.then(()=>session.dispatch({type:'restorePanel'})).catch(ignore);});
 const ready=session.init();
@@ -44,9 +47,11 @@ if(isLocalDev())window.addEventListener('wandel:dev-chat',event=>{void (async()=
  let result:Record<string,unknown>;
  try{
   const {instruction,referenceURL}=JSON.parse(String((event as CustomEvent).detail));await ready;
-  const snap=await session.dispatch({type:'assistantContext',chat:true,instruction}),context=snap.assistant?.context;if(!context)throw new Error('No page context: '+JSON.stringify({keys:Object.keys(snap),assistant:snap.assistant&&Object.keys(snap.assistant),mode:snap.mode,navigationError:snap.navigationError}).slice(0,400));
-  const reply=await send({type:'WANDEL_DEV_PLAN',referenceURL,body:{instruction,context,history:[],requestId:crypto.randomUUID()}});if(reply?.error)throw new Error(reply.error);
-  const plan=reply.plan;result={plan};
+  const snap=await session.dispatch({type:'assistantContext',chat:true,instruction});let context=snap.assistant?.context;if(!context)throw new Error('No page context: '+JSON.stringify({keys:Object.keys(snap),assistant:snap.assistant&&Object.keys(snap.assistant),mode:snap.mode,navigationError:snap.navigationError}).slice(0,400));
+  const ask=async(request:string,page:NonNullable<typeof context>)=>{const reply=await send({type:'WANDEL_DEV_PLAN',referenceURL,body:{instruction:request,context:page,history:[],requestId:crypto.randomUUID()}});if(reply?.error)throw new Error(reply.error);return reply.plan;};
+  // As in the real panel, a plan may ask to look closer at part of the page first.
+  const start=context,resolved=await resolveInspections(await ask(instruction,start),start,{active:()=>true,inspect:async refs=>{const next=await session.dispatch({type:'assistantContext',chat:true,inspect:refs,instruction});return next.assistant?.context||null;},replan:(expanded,note)=>ask(instruction+'\n'+note,expanded)});
+  const plan=resolved.plan;context=resolved.context;result={plan};
   if(plan?.status==='edit'){try{await session.dispatch({type:'assistantApply',plan,token:context.token});result.applied='OK';}catch(error){result.applied=error instanceof Error?error.message:String(error);}}
   result.unresolved=session.snapshot().unresolved;
  }catch(error){result={error:error instanceof Error?error.message:String(error)};}

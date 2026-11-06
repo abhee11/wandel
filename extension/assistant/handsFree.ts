@@ -54,8 +54,11 @@ export class HandsFree{
 export const fillerSpeech=(text:string)=>/^(?:u+m+|u+h+|h+m+|ah+|oh+|ok(?:ay)?|right|so|well|yeah|yep|thanks|thank you|bye)[.,!?]*$/i.test(text.trim())||text.replace(/[^\p{L}\p{N}]/gu,'').length<2;
 export const stopListening=(text:string)=>/^(?:please )?(?:stop listening|turn (?:this|it|yourself)? ?off|that'?s all|we'?re done|end conversation|stop talking)[.!]?$/i.test(text.trim());
 export const stopWork=(text:string)=>/^(?:stop|cancel|wait|hold on|never ?mind|forget it)[.!]?$/i.test(text.trim());
-/** The first sentence or two: enough to hear what happened without being read a paragraph. */
-export function spokenReply(text:string){const plain=text.replace(/\s+/g,' ').trim(),sentences=plain.match(/[^.!?]+(?:[.!?]+|$)/g)||[plain];let out='';for(const sentence of sentences){if((out+sentence).length>170&&out)break;out+=sentence;}return out.trim().slice(0,220);}
+/** Spoken aloud, one short sentence is plenty; the full answer stays on screen. */
+export function spokenReply(text:string){
+ const plain=text.replace(/\s+/g,' ').trim(),first=(plain.match(/^.+?(?:[.!?](?=\s|$)|$)/)?.[0]||plain).trim();
+ return first.length<=110?first:first.slice(0,110).replace(/[\s,;:]+\S*$/,'')+'.';
+}
 /** The most natural voice this device has for a language; the novelty voices some systems ship never speak for Wandel. */
 const novelty=/albert|bad news|bahh|bells|boing|bubbles|cellos|good news|jester|junior|kathy|organ|ralph|superstar|trinoids|whisper|wobble|zarvox|fred|eddy|flo|grandma|grandpa|reed|rocko|sandy|shelley/i;
 export function pickVoice(voices:SpeechSynthesisVoice[],language='en-US'){

@@ -8,6 +8,7 @@ import {validateTheme,verifyTheme} from '../content/theme';
 import {findCard} from './card';
 import {captureCopy} from '../content/duplicate';
 import {watched} from '../content/watch';
+import {appToastLook} from '../content/appToast';
 import {safeDeclarations,choiceChecks,choiceLabel,choiceLabels} from '../content/behavior';
 import {structureAround,structureOf} from './layoutMap';
 import {neighbourMismatch} from './applyVerified';
@@ -297,8 +298,14 @@ export function compileAssistant(workflow:Workflow,stateId:string,planInput:unkn
   }else if(action.kind==='behavior'){
    // When the target is clicked, hovered or the screen loads, the effects change other elements: expand, collapse, reveal, relabel, restyle.
    if(!action.effects?.length)throw new Error('Say what the behavior changes: show, hide, toggle, text or style, and on which elements.');
-   const effects=action.effects.flatMap(effect=>effect.targets.map(ref=>({action:effect.action,target:locate(ref).locator,...(effect.value!=null?{value:effect.value}:{})})));
-   for(const target of targets)add({id:uid(),kind:'behavior',target:target.locator,event:action.event||'click',effects});
+   // A toast belongs to no element of its own; it is carried by the control that shows it, with the app's look when one of its toasts has been seen.
+   const look=appToastLook()||undefined;
+   const effects=action.effects.flatMap(effect=>(effect.action==='toast'?[action.targets[0]]:effect.targets).map(ref=>({action:effect.action,target:locate(ref).locator,...(effect.value!=null?{value:effect.value}:{}),...(effect.action==='toast'?{...(effect.seconds?{seconds:effect.seconds}:{}),...(look?{look}:{})}:{})})));
+   if(action.effects.some(effect=>effect.action!=='toast'&&!effect.targets.length))throw new Error('Say which elements the behavior changes.');
+   if(action.effects.some(effect=>effect.action==='toast'&&!effect.value?.trim()))throw new Error('Say what the toast should say.');
+   const condition=action.condition,when=condition&&(condition.ref||condition.text?.trim())?{...(condition.ref?{target:locate(condition.ref).locator}:{text:condition.text!.trim()}),present:condition.present}:undefined;
+   if(when&&(action.event||'click')!=='click')throw new Error('Only a click can depend on a condition.');
+   for(const target of targets)add({id:uid(),kind:'behavior',target:target.locator,event:action.event||'click',...(when?{when}:{}),effects});
   }else if(action.kind==='connect'&&action.destination&&/^e_/.test(action.destination)){
    // An existing application control as the destination: clicks on the trigger are forwarded to it, so its real modal, menu or action runs.
    if(targets.length!==1)throw new Error('Choose one trigger.');const host=locate(action.destination);

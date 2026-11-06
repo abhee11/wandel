@@ -618,7 +618,12 @@ export class Session {
           const previous=this.workflow,previousState=this.stateId,dirty=this.dirty,past=[...this.history.past],future=[...this.history.future];
           // Cosmetic layout issues (clipping, spilling past a container, overlap) keep the change and flag it; only a change that did not render rolls back.
           let cosmetic='';
-          try{this.commit(next,stateId);const fatal=this.unresolved.filter(issue=>!/clipped|beyond a clipping container|overlap/i.test(issue));if(fatal.length)throw new Error('Preview could not be applied: '+fatal[0]);cosmetic=this.unresolved[0]||'';await new Promise<void>(resolve=>{const fallback=setTimeout(resolve,300);requestAnimationFrame(()=>requestAnimationFrame(()=>{clearTimeout(fallback);resolve();}));});
+          const serious=(issue:string)=>!/clipped|beyond a clipping container|overlap/i.test(issue);
+          try{this.commit(next,stateId);
+          // Earlier edits may belong to a view that isn't open now. Their missing targets say nothing about this change, so only problems it caused can reject it.
+          let known=new Set<string>();
+          if(this.unresolved.some(serious)){this.commit(previous,previousState);known=new Set(this.unresolved);this.history.past=[...past];this.history.future=[...future];this.commit(next,stateId);}
+          const caused=this.unresolved.filter(issue=>!known.has(issue)),fatal=caused.filter(serious);if(fatal.length)throw new Error('Preview could not be applied: '+fatal[0]);cosmetic=caused[0]||'';await new Promise<void>(resolve=>{const fallback=setTimeout(resolve,300);requestAnimationFrame(()=>requestAnimationFrame(()=>{clearTimeout(fallback);resolve();}));});
           // A menu or dialog that is still opening reports its contents as clipped; only a clip that remains once it settles is worth a warning.
           if(/clipped|beyond a clipping container/i.test(cosmetic)){await new Promise(resolve=>setTimeout(resolve,500));cosmetic=inspectLayout(this.renderer.owned.values()).find(issue=>/clipped|beyond a clipping container/i.test(issue))||'';}}
           catch(error){this.workflow=previous;this.stateId=previousState;this.dirty=dirty;this.history.past=past;this.history.future=future;this.render(true);throw new Error(rolledBackPreview+(error instanceof Error?error.message:'The preview did not pass verification.'));}

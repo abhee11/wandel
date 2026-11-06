@@ -200,6 +200,22 @@ const cases:Record<string,()=>Promise<Result>>={
   const real=['Nothing yet','My Record','Plan and Setup','Customize the activity','General','Library'].filter(word=>snapshot.html.includes(word)||data.includes(word));
   const unsafe=/<script|\son[a-z]+=|href=/i.test(snapshot.html.replace(/<style[\s\S]*?<\/style>/g,'')),kept=data.includes('My prototype card');
   return check(!real.length&&!unsafe&&kept,`Real text left: ${real.join(', ')||'none'}; unsafe markup: ${unsafe}; prototype text kept: ${kept}.`);
+ },
+ async 'A conditional click shows a timed toast only when its condition holds'(){
+  const library=[...document.querySelectorAll<HTMLElement>('nav button')].find(button=>button.textContent==='Library')!;let real=0;library.addEventListener('click',()=>{real++;});
+  const button=await ref(e=>e.tag==='button'&&e.name==='Library');
+  const applied=await apply([{kind:'behavior',targets:[button],event:'click',condition:{ref:null,text:'Feedback card',present:true},effects:[{action:'toast',targets:[],value:'Feedback card is already created',seconds:1}]}]);
+  if(applied!=='OK')return check(false,'Rolled back: '+applied);
+  await session.dispatch({type:'interact'});
+  library.click();await frames();
+  const passedWithout=real===1,noToast=!document.querySelector('[role=status][data-dx-ignore]');
+  const card=document.createElement('p');card.textContent='Feedback card';document.getElementById('title')!.after(card);await frames();
+  library.click();await frames();
+  const toast=document.querySelector<HTMLElement>('[role=status][data-dx-ignore]'),blocked=real===1,shown=toast?.textContent==='Feedback card is already created';
+  await new Promise(resolve=>setTimeout(resolve,1300));
+  const gone=!document.querySelector('[role=status][data-dx-ignore]');
+  card.remove();await frames();library.click();await frames();
+  return check(passedWithout&&noToast&&blocked&&shown&&gone&&real===2,`No card: real click ran ${passedWithout}, no toast ${noToast}. With card: real click blocked ${blocked}, toast shown ${shown}, gone on time ${gone}. Card removed: real click runs again ${real===2}.`);
  }
 };
 const name=new URL(location.href).searchParams.get('case')||'';

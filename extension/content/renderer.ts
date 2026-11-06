@@ -303,8 +303,10 @@ export class Renderer {
       this.applied.set(op.id,{target});return;
     }
     if(op.kind==='behavior'){
-      const effects=op.effects.map(effect=>{const el=resolve(effect.target,this.root,this.owned);if(!el)throw new Error('An element this behavior changes is missing.');return {action:effect.action,el,...(effect.value!==undefined?{value:effect.value}:{})};});
-      this.behaviors.add(target,op.event,effects,op.id);this.applied.set(op.id,{target});return;
+      const effects=op.effects.map(effect=>{const el=resolve(effect.target,this.root,this.owned);if(!el)throw new Error('An element this behavior changes is missing.');return {action:effect.action,el,...(effect.value!==undefined?{value:effect.value}:{}),...(effect.seconds?{seconds:effect.seconds}:{}),...(effect.look?{look:effect.look}:{})};});
+      // A conditional click is taken over only when its condition holds; otherwise the page's own click runs untouched.
+      const when=op.when,holds=when?()=>{const on=when.target?!!resolve(when.target,this.root,this.owned)?.getClientRects().length:(this.root.textContent||'').toLowerCase().includes(when.text!.toLowerCase());return on===when.present;}:undefined;
+      this.behaviors.add(target,op.event,effects,op.id,holds);this.applied.set(op.id,{target});return;
     }
     // A connected page element shows the pointer a link would; the reset restores its own cursor.
     if(op.kind==='trigger'){this.triggers.set(target,op.source);const before=target.style.getPropertyValue('cursor'),priority=target.style.getPropertyPriority('cursor');target.style.setProperty('cursor','pointer');this.applied.set(op.id,{target,styles:[{key:'cursor',before,priority,after:target.style.getPropertyValue('cursor')}]});return;}

@@ -1,5 +1,6 @@
+import {appToastLook} from './appToast';
 /** General prototype behavior: when something happens on one element, show, hide, toggle, relabel or restyle others. Every change is reversible from a snapshot. */
-export type Effect={action:'show'|'hide'|'toggle'|'text'|'style'|'choose';el:HTMLElement;value?:string};
+export type Effect={action:'show'|'hide'|'toggle'|'text'|'style'|'choose'|'toast';el:HTMLElement;value?:string;seconds?:number;look?:Record<string,string>};
 /** One copied option of a pick-one group, with the original option it was copied from. */
 export interface ChoiceMember{original:HTMLElement;item:HTMLElement;carrier:HTMLElement;text:string;originalText:string;background:string;labels:HTMLElement[];container?:HTMLElement}
 interface ChoiceGroup{original:HTMLElement;members:ChoiceMember[];background:string;originalText:string;labels:HTMLElement[];container?:HTMLElement}
@@ -40,7 +41,18 @@ export class Behaviors{
  setChoice(group:string,text:string){this.chosen.set(group,text);this.showChoice(group);}
  choiceOriginal(group:string){const node=this.choices.get(group)?.original;return node?.isConnected?node:undefined;}
  choiceTitle(group:string,labels:HTMLElement[]){const value=this.chosen.get(group);if(!value)return;for(const label of labels){if(!label.isConnected)continue;const node=[...label.childNodes].find((n):n is Text=>n instanceof Text&&!!n.data.trim());if(node&&node.data.trim()!==value){this.remember(label);node.data=node.data.replace(node.data.trim(),value);}}}
- readonly click=new Map<HTMLElement,{effects:Effect[];key:string}[]>();private cleanups:(()=>void)[]=[];
+ readonly click=new Map<HTMLElement,{effects:Effect[];key:string;when?:()=>boolean}[]>();
+ private toastNode:HTMLElement|null=null;private toastTimer?:ReturnType<typeof setTimeout>;
+ /** A short message that leaves by itself: the app's own look when one was watched, otherwise a neutral one. */
+ private toast(text:string,seconds=3,look?:Record<string,string>){
+  this.clearToast();const node=document.createElement('div');node.dataset.dxIgnore='true';node.setAttribute('role','status');
+  const shape=appToastLook()||look||{},edge=shape['--edge']||'top',align=shape['--align']||'center',offset=shape['--offset']||'24px',inset=shape['--inset']||'24px';
+  node.style.cssText=`position:fixed;${edge}:${offset};z-index:2147483646;width:max-content;max-width:min(520px,calc(100vw - 32px));box-sizing:border-box;padding:12px 18px;border-radius:12px;background-color:#1e1b2e;color:#fff;font:500 14px/1.4 ${getComputedStyle(document.body).fontFamily||'system-ui'};box-shadow:0 8px 28px #0003;display:flex;align-items:center;gap:10px;${align==='center'?'left:50%;transform:translateX(-50%);':`${align}:${inset};`}`;
+  for(const [key,value] of Object.entries(shape))if(!key.startsWith('--'))node.style.setProperty(key,value);
+  if(shape['--icon']){const icon=document.createElement('span');icon.style.cssText=`flex:none;width:18px;height:18px;background:${shape['--icon']} center/contain no-repeat;`;node.append(icon);}
+  node.append(text);document.documentElement.append(node);this.toastNode=node;this.toastTimer=setTimeout(()=>this.clearToast(),seconds*1000);
+ }
+ private clearToast(){clearTimeout(this.toastTimer);this.toastNode?.remove();this.toastNode=null;}private cleanups:(()=>void)[]=[];
  /** Keeps an element's inline style and text as they were before the first behavior touched it. */
  private remember(el:HTMLElement){if(!this.snapshots.has(el)){const texts:[Text,string][]=[];const walk=document.createTreeWalker(el,NodeFilter.SHOW_TEXT);for(let n=walk.nextNode();n;n=walk.nextNode())texts.push([n as Text,(n as Text).data]);this.snapshots.set(el,{css:el.getAttribute('style')||'',texts,attrs:['aria-selected','aria-checked','aria-label','role'].map(key=>[key,el.getAttribute(key)])});}}
  private hidden(el:HTMLElement){return getComputedStyle(el).display==='none';}
@@ -50,6 +62,7 @@ export class Behaviors{
  run(effects:Effect[],key:string){
   const revealed:HTMLElement[]=[];
   effects.forEach((effect,index)=>{const el=effect.el;if(!el.isConnected)return;this.remember(el);const wasHidden=(effect.action==='show'||effect.action==='toggle')&&this.hidden(el);
+   if(effect.action==='toast'){this.toast(effect.value||'',effect.seconds,effect.look);return;}
    if(effect.action==='hide')el.style.setProperty('display','none','important');
    else if(effect.action==='show')this.show(el);
    else if(effect.action==='toggle'){if(this.hidden(el))this.show(el);else el.style.setProperty('display','none','important');}
@@ -69,11 +82,11 @@ export class Behaviors{
   if(revealed.length)this.onReveal?.(revealed);
  }
  /** Registers a behavior; load effects run at once, hover effects undo themselves when the pointer leaves. */
- add(source:HTMLElement,event:'click'|'hover'|'load',effects:Effect[],key:string){
+ add(source:HTMLElement,event:'click'|'hover'|'load',effects:Effect[],key:string,when?:()=>boolean){
   // A page re-render applies operations again; a behavior registers once until the next reset, so a list the user expanded stays expanded.
   if(this.keys.has(key))return;this.keys.add(key);
   if(event==='load'){this.run(effects,key);return;}
-  if(event==='click'){const list=this.click.get(source)||[];list.push({effects,key});this.click.set(source,list);this.remember(source);source.style.setProperty('cursor','pointer');return;}
+  if(event==='click'){const list=this.click.get(source)||[];list.push({effects,key,...(when?{when}:{})});this.click.set(source,list);this.remember(source);source.style.setProperty('cursor','pointer');return;}
   const enter=()=>this.run(effects.map(e=>e.action==='toggle'?{...e,action:'show' as const}:e),key),leave=()=>{for(const e of effects)this.restore(e.el);this.styled.delete(key+':0');};
   source.addEventListener('pointerenter',enter);source.addEventListener('pointerleave',leave);this.cleanups.push(()=>{source.removeEventListener('pointerenter',enter);source.removeEventListener('pointerleave',leave);});
  }
@@ -121,6 +134,6 @@ export class Behaviors{
  }
  private restore(el:HTMLElement){const before=this.snapshots.get(el);if(!before)return;if(before.css)el.setAttribute('style',before.css);else el.removeAttribute('style');for(const [node,data] of before.texts)if(node.isConnected)node.data=data;for(const [key,value] of before.attrs){if(value===null)el.removeAttribute(key);else el.setAttribute(key,value);}this.snapshots.delete(el);}
  /** The click behaviors of the element a click landed in, nearest first. */
- forClick(target:Element|null){for(let el=target;el;){const found=this.click.get(el as HTMLElement);if(found)return found;const root=el.getRootNode();el=el.parentElement||(root instanceof ShadowRoot?root.host:null);}return null;}
- reset(){for(const timer of this.choiceTimers)clearTimeout(timer);this.choiceTimers.clear();for(const check of this.addedChecks.values())check.remove();this.addedChecks.clear();this.keys.clear();for(const cleanup of this.cleanups)cleanup();this.cleanups=[];for(const el of [...this.snapshots.keys()].reverse())this.restore(el);this.click.clear();this.styled.clear();this.choices.clear();}
+ forClick(target:Element|null){for(let el=target;el;){const found=this.click.get(el as HTMLElement)?.filter(entry=>!entry.when||entry.when());if(found?.length)return found;const root=el.getRootNode();el=el.parentElement||(root instanceof ShadowRoot?root.host:null);}return null;}
+ reset(){this.clearToast();for(const timer of this.choiceTimers)clearTimeout(timer);this.choiceTimers.clear();for(const check of this.addedChecks.values())check.remove();this.addedChecks.clear();this.keys.clear();for(const cleanup of this.cleanups)cleanup();this.cleanups=[];for(const el of [...this.snapshots.keys()].reverse())this.restore(el);this.click.clear();this.styled.clear();this.choices.clear();}
 }

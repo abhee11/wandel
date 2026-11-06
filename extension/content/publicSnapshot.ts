@@ -60,6 +60,9 @@ export function publicSnapshot(doc:Document,workflow:Workflow,owned:Map<string,H
   let id=node.dataset.dxStamp;if(!id){id='dxs'+(++count);stamped.set(node,node.getAttribute('data-testid'));node.dataset.dxStamp=id;node.setAttribute('data-testid',id);}
   locator.attrs={'data-testid':id};
  });
+ // A frozen copy has no app behind it and its words may be masked, so a condition on page text is settled now: it always applies, or it never does. The words themselves stay out of the link.
+ const pageText=(doc.body.textContent||'').toLowerCase();
+ for(const state of published.states)state.operations=state.operations.filter(op=>{if(op.kind!=='behavior'||!op.when?.text)return true;const holds=pageText.includes(op.when.text.toLowerCase())===op.when.present;delete op.when;return holds;});
  // A viewer needs neither the conversation that built this nor pictures of the real screens.
  delete published.assistantMemory;for(const state of published.states)delete state.screen;
  if(mask){
