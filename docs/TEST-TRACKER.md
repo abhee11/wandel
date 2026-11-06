@@ -191,6 +191,11 @@ Anyone on the Nov 2 zip (0.1.1) cannot read prototypes that use `logic`, so test
 | T10 | Talk never speaks over the user, can be interrupted, and keeps every command | ✅ | Free panel with simulated sound. Not tried with a real voice, or with speakers instead of headphones |
 | T11 | Talk sounds like a colleague: greeting by name, quick acknowledgements, replies to the person, no "what next" | ⬜ | One real planner line checked and good. Not heard in a real conversation |
 
+| T12 | Take back a look: highlight a gradient card, then "remove the highlight" | ✅ | Real plans on MirrorTalk: ring used, gradient kept, restore plan chosen. First version also dropped a sizing edit (1286px to 413px); restore now takes back paint only, re-run with a hand-written plan at 1286px |
+| T13 | Unreadable text after a colour edit is flagged | ✅ | Free fixture: white text on a card painted white went to review. Not tried on a real page |
+| T14 | Ctrl+V pastes an image into the panel | ✅ | Free fixture with a simulated paste event; text paste untouched. Not tried with a real clipboard in the installed panel |
+| T15 | Breadcrumbs from a screenshot | ⚠️ | One real request with a simple mock-up: wording, order and slashes right, purple links came out dark. The friend's screenshot was not available, so their failure is not reproduced |
+
 ## Warnings
 
 | ID | Test | Status | Result |

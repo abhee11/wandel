@@ -1,4 +1,4 @@
-import {verifyNewButton} from './controlVerification';
+import {verifyNewButton,verifyReadableText} from './controlVerification';
 import {verifyArrangement} from '../content/arrangement';
 import {namedIcon} from '../content/copyIcon';
 import {copyPlacement} from '../content/copyPlacement';
@@ -291,10 +291,18 @@ export function compileAssistant(workflow:Workflow,stateId:string,planInput:unkn
     insert.node.choices={options:action.labels,selected:0,headingTag:'h3',headingStyle:heading?readStyle(heading):design.heading,buttonStyle:appearance||insert.node.choices!.buttonStyle,sectionStyle:{display:'block',margin:'20px 0',padding:'0',border:'0','box-shadow':'none','background-color':'transparent'}};
     created.push(...action.labels.map((_,i)=>id+':choice:'+i));group=id;
    }
+  }else if(action.kind==='restore'){
+   // Wandel takes back its own looks by dropping those edits, so what was there before returns exactly, gradients included. Sizes, moves and arrangements stay.
+   const roots=targets.map(target=>target.node),within=(locator:Locator)=>{let node:HTMLElement|null=null;try{node=resolveLayoutSource(locator)||null;}catch{/* an edit for a view that is not open */}return !!node&&roots.some(root=>root.contains(node));};
+   const paint=/^(background|color|box-?shadow|border|outline|opacity|filter|text-?shadow)/i;
+   const look=(op:Operation)=>op.kind==='appearance'||op.kind==='css'&&op.css.split(';').every(rule=>!rule.trim()||paint.test(rule.trim()))||op.kind==='style'&&!op.arrangement&&!op.layoutChange&&Object.keys(op.style).every(key=>paint.test(key));
+   const before=opsState.operations.length;
+   opsState.operations=opsState.operations.filter(op=>!(look(op)&&'target' in op&&within(op.target as Locator)));
+   if(opsState.operations.length===before)throw new Error('Wandel has not changed the look of that element, so there is nothing to take back on it. Choose the element from context.styledByWandel.');
   }else if(action.kind==='css'){
    // Any style on any element, as plain CSS declarations.
    if(!action.css||!safeDeclarations(action.css).length)throw new Error('Give the CSS declarations to apply, such as "display:none" or "gap:12px".');
-   for(const target of targets)add({id:uid(),kind:'css',target:target.locator,css:action.css});
+   for(const target of targets){add({id:uid(),kind:'css',target:target.locator,css:action.css});checks.push(()=>verifyReadableText(target.node));}
   }else if(action.kind==='behavior'){
    // When the target is clicked, hovered or the screen loads, the effects change other elements: expand, collapse, reveal, relabel, restyle.
    if(!action.effects?.length)throw new Error('Say what the behavior changes: show, hide, toggle, text or style, and on which elements.');
@@ -433,6 +441,7 @@ export function compileAssistant(workflow:Workflow,stateId:string,planInput:unkn
      // positioning layers, so the span moves to the card's own grid slot.
      let locator=target.locator;if(style.gridColumn&&target.node.parentElement&&!getComputedStyle(target.node.parentElement).display.includes('grid')){for(let node:HTMLElement|null=target.node.parentElement,depth=0;node?.parentElement&&depth<5;node=node.parentElement,depth++)if(getComputedStyle(node.parentElement).display.includes('grid')){locator=locatorOf(node);const {gridColumn,...rest}=style;if(Object.keys(rest).length)add({id:uid(),kind:'style',target:target.locator,style:rest});style={gridColumn};break;}}
      add({id:uid(),kind:'style',target:locator,style});
+     if(style.backgroundColor!==undefined||style.color!==undefined)checks.push(()=>verifyReadableText(target.node));
     }else throw new Error('This action is not supported.');
    }
   }
