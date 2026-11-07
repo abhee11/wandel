@@ -1,5 +1,5 @@
 import {it,expect,vi,afterEach} from 'vitest';
-import {ChromeBridge} from '../extension/sidepanel/bridge';
+import {ChromeBridge,reconnectsOnly} from '../extension/sidepanel/bridge';
 afterEach(()=>vi.unstubAllGlobals());
 const flush=()=>new Promise(r=>setTimeout(r,0));
 function setup(){
@@ -80,4 +80,11 @@ it('rejects native copy prompts on a stale page instead of falsely reporting a c
 it('delivers recovery state without sending Edit into a blocked navigation session',async()=>{const mock=setup(),bridge=new ChromeBridge(1);bridge.subscribe(()=>{});await flush();mock.sendMessage.mockClear();mock.sendMessage.mockResolvedValue({snapshot:{navigationError:'Resume the existing flow'}} as any);mock.switchTab(2);await flush();mock.switchTab(1);await flush();expect(mock.sendMessage).not.toHaveBeenCalledWith(1,{type:'DX_COMMAND',command:{type:'edit'}},{frameId:0});});
 it('requires a matching designer runtime before planning or applying conversational layout changes',async()=>{
  const mock=setup(),bridge=new ChromeBridge(1);bridge.subscribe(()=>{});await flush();mock.sendMessage.mockClear();await expect(bridge.send({type:'assistantContext'})).rejects.toThrow('older Wandel script');expect(mock.sendMessage).toHaveBeenCalledTimes(1);
+});
+it('turns a prototype back on when the panel reopens, and leaves a running one alone',()=>{
+ expect(reconnectsOnly({liveSession:true,mode:'closed'})).toBe(false);
+ expect(reconnectsOnly({liveSession:true,mode:'interact'})).toBe(true);
+ expect(reconnectsOnly({panelMinimized:true,mode:'closed'})).toBe(true);
+ expect(reconnectsOnly({sharedExperience:true,mode:'closed'})).toBe(true);
+ expect(reconnectsOnly({mode:'closed'})).toBe(false);
 });

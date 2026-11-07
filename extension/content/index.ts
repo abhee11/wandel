@@ -89,7 +89,7 @@ let authoringConnections=0;
 const onConnect=(port:chrome.runtime.Port)=>{
  if(!channel.available())return;
  if(port.name!=='designx-authoring')return;
- ports.add(port);authoringConnections++;void ready.then(()=>{if(channel.available()&&!session.snapshot().navigationError&&!session.panelAttached())return session.dispatch({type:freeBuild?'edit':'interact'});}).catch(ignore);
+ ports.add(port);authoringConnections++;void ready.then(()=>{if(channel.available()&&!session.snapshot().navigationError&&!session.panelAttached())return session.dispatch({type:freeBuild?'edit':session.snapshot().sharedExperience?'replay':'interact'});}).catch(ignore);
  port.onDisconnect.addListener(()=>{ports.delete(port);if(!channel.available())return;void chrome.runtime.lastError;authoringConnections--;if(!authoringConnections)void ready.then(()=>session.dispatch({type:'pause'})).catch(ignore);});
 };
 try{if(channel.available()){chrome.runtime.onMessage.addListener(onMessage);chrome.runtime.onConnect.addListener(onConnect);stopRelay=freeBuild?undefined:registerShareRelay(accountConfig.apiOrigin);}}catch(error){ignore(error);}

@@ -64,7 +64,8 @@ export class Session {
   private closeComparison:(()=>void)|undefined;
   private panelMinimized=false;
   private restoringPanel=false;
-  panelAttached(){if(this.liveSession)return true;if(!this.panelMinimized&&!this.restoringPanel)return false;this.restoringPanel=false;this.panelMinimized=false;this.emit();return true;}
+  /** Whether the page is already showing the prototype. Closing the panel switches it off, so a live session alone doesn't mean it's running. */
+  panelAttached(){if(this.sharedWaiting||this.liveSession&&this.projectionActive)return true;if(!this.panelMinimized&&!this.restoringPanel)return false;this.restoringPanel=false;this.panelMinimized=false;this.emit();return true;}
   private styleClipboard:{selection:Selection;style:CopyNode['style']}|null=null;
   private projectionActive=false;
   private resizeHeld=false;

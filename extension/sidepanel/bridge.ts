@@ -4,6 +4,8 @@ import {freeBuild} from '../shared/build';
 import {ChromeScreenBrowser,type ScreenBrowser} from './screenBrowser';
 import type { Command, Snapshot } from '../shared/model';
 export interface Bridge { capturePage?(context:PageContext):Promise<string>; screens?:ScreenBrowser; connectionError?:string; retry?():Promise<void>; send(command:Command):Promise<Snapshot>; subscribe(listener:(snapshot:Snapshot|null)=>void):()=>void }
+/** Whether opening the panel only reconnects. A prototype the panel's closing switched off has to be turned back on; a shared one replays, which the page starts itself. */
+export const reconnectsOnly=(seen?:Partial<Snapshot>)=>!!(seen?.panelMinimized||seen?.panelRestoring||seen?.sharedWaiting||seen?.sharedExperience||seen?.liveSession&&seen?.mode!=='closed');
 export class ChromeBridge implements Bridge {
   readonly screens?:ScreenBrowser;
   connectionError='';
@@ -34,7 +36,7 @@ export class ChromeBridge implements Bridge {
     try{
       let resume=false;
       // Tabs already open when the extension was installed may lack the script.
-      try{const existing=await chrome.tabs.sendMessage(tabId,{type:'DX_COMMAND',command:{type:'snapshot'}},{frameId:0});resume=!!(existing?.snapshot?.panelMinimized||existing?.snapshot?.panelRestoring||existing?.snapshot?.liveSession);}
+      try{const existing=await chrome.tabs.sendMessage(tabId,{type:'DX_COMMAND',command:{type:'snapshot'}},{frameId:0});resume=reconnectsOnly(existing?.snapshot);}
       catch{
         if(generation!==this.generation)return;
         await chrome.scripting.executeScript({target:{tabId,frameIds:[0]},files:['content.js']});

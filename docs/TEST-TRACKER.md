@@ -207,6 +207,8 @@ Anyone on the Nov 2 zip (0.1.1) cannot read prototypes that use `logic`, so test
 
 | T23 | Shared link walks the viewer through sign-in | ⚠️ | Fixture: waits on a sign-in page, heads to the shared page, asks for the right account when sent back. Real background code tested for right page, wrong page and other site. Owner confirmed the link starts in a second Chrome profile. Real MirrorTalk signed-out path not confirmed |
 
+| T24 | Closing and reopening the panel brings the prototype back after a page reload | ⚠️ | Reproduced in real Chrome with the panel's commands, then fixed. Fixture and a bridge test confirm reopening turns it back on and a running one is left alone. Not yet clicked through in the real panel |
+
 ## Warnings
 
 | ID | Test | Status | Result |
