@@ -34,8 +34,13 @@ export function provisionIdentity(db:DB,identity:AccountIdentity,now:string){
  return db.transaction(()=>{
   let user=one<{id:string}>(db,'SELECT id FROM users WHERE clerk_id=?',identity.subject);
   if(user)return user.id;
-  // Do not silently link a legacy password account by email alone.
-  if(one(db,'SELECT 1 FROM users WHERE email=?',identity.email))throw new APIError(409,'ACCOUNT_LINK_REQUIRED','An older account uses this email. Migrate that account before using Clerk. Your saved work has not been changed.');
+  const existing=one<{id:string;password_hash:string}>(db,'SELECT id,password_hash FROM users WHERE email=?',identity.email);
+  if(existing){
+   // Moving to a new Clerk instance gives everyone a new id. A Clerk-verified email reconnects a Clerk account to its saved work.
+   if(existing.password_hash==='clerk-managed'){db.prepare('UPDATE users SET clerk_id=?,updated_at=? WHERE id=?').run(identity.subject,now,existing.id);return existing.id;}
+   // Do not silently link a legacy password account by email alone.
+   throw new APIError(409,'ACCOUNT_LINK_REQUIRED','An older account uses this email. Migrate that account before using Clerk. Your saved work has not been changed.');
+  }
   const id=randomUUID();
   db.prepare('INSERT INTO users (id,email,name,password_hash,created_at,updated_at,clerk_id) VALUES (?,?,?,?,?,?,?)').run(id,identity.email,identity.name,'clerk-managed',now,now,identity.subject);
   db.prepare("INSERT INTO subscriptions VALUES (?,'none',NULL,NULL,'FREE','free',NULL,NULL,0,?)").run(id,now);
