@@ -209,6 +209,8 @@ Anyone on the Nov 2 zip (0.1.1) cannot read prototypes that use `logic`, so test
 
 | T24 | Closing and reopening the panel brings the prototype back after a page reload | ⚠️ | Reproduced in real Chrome with the panel's commands, then fixed. Fixture and a bridge test confirm reopening turns it back on and a running one is left alone. Not yet clicked through in the real panel |
 
+| T25 | Production sign-in on wandel.studio447.ai | ✅ | Owner signed in with zip 0.2.2 after Clerk allowed subdomains, allowed_origins and the Clerk sync host were set. Not yet checked: old flows reconnecting, credits, a second tester |
+
 ## Warnings
 
 | ID | Test | Status | Result |
