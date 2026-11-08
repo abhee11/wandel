@@ -21,6 +21,8 @@ export function Privacy(){
    <li><strong>Links anyone can view</strong>: a copy of the page with your prototype, with real text and images replaced by placeholders unless you turn that off. Kept for 30 days, or until you remove it.</li>
    <li><strong>Walkthrough videos</strong> you upload to share. Kept for 7 days.</li>
   </ul>
+  <h3>Code from GitHub</h3>
+  <p>Only if you connect GitHub and ask Wandel to implement a prototype: we read files from the repository you choose and send them, with the prototype’s description, to OpenAI to propose changes. You review those changes before Wandel opens a draft pull request. Your GitHub access token is stored encrypted and expires after a few hours, and you can disconnect at any time.</p>
   <h3>Usage and safety records</h3>
   <p>A count of your AI edits for your monthly allowance, records of each AI request and its result so we can count usage and fix problems, short notes when an edit fails, and basic request logs. To limit abuse we keep short-lived counters, using a scrambled form of your IP address where you are not signed in.</p>
   <h3>Payments</h3>
@@ -34,6 +36,7 @@ export function Privacy(){
   <ul>
    <li><strong>AI providers</strong>: OpenAI, Anthropic (Claude) and xAI (Grok) process your requests and the page details above, depending on the model you choose. OpenAI also handles voice transcription, spoken replies and checking an edit’s screenshot. Each processes this under its own API terms. Where a provider offers a setting not to store requests, we use it.</li>
    <li><strong>Clerk</strong> for sign-in, and <strong>Google</strong> if you sign in with Google.</li>
+   <li><strong>GitHub</strong>, only if you connect it.</li>
    <li><strong>Railway</strong>, which hosts our server and database.</li>
    <li><strong>Stripe</strong>, if you upgrade.</li>
   </ul>

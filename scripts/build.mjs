@@ -11,6 +11,8 @@ defines.WANDEL_FREE=JSON.stringify(free);
 defines['process.env.WANDEL_LOCAL_DEV']=JSON.stringify(String(/^https?:\/\/(127\.0\.0\.1|localhost)(:|\/|$)/.test(publicConfig.API_ORIGIN||'')));
 // A Chrome Web Store upload: the store assigns the extension ID, so the fixed ID key stays out.
 const store=process.argv.includes('--store');
+// Connecting GitHub is switched on per build, and never in a store build yet.
+defines['process.env.WANDEL_GITHUB']=JSON.stringify(!store&&process.env.WANDEL_GITHUB==='true'?'true':'');
 defines['process.env.NODE_ENV']='"production"';
 await mkdir(out,{recursive:true});
 await Promise.all([

@@ -6,7 +6,7 @@ import type {Bridge} from './bridge';
 import type {Snapshot} from '../shared/model';
 import type {GitHubConnection,RepositoryChoice,ImplementationJob} from '../implementation/model';
 const jobKey=(workflow:string)=>'wandel:implementation-job:'+workflow;
-export function BuildWorkflow({snapshot,bridge,demo=false,githubLocked=true}:{snapshot:Snapshot;bridge:Bridge;demo?:boolean;githubLocked?:boolean}){
+export function BuildWorkflow({snapshot,bridge,demo=false,githubLocked=process.env.WANDEL_GITHUB!=='true'}:{snapshot:Snapshot;bridge:Bridge;demo?:boolean;githubLocked?:boolean}){
  const [githubOpen,setGithubOpen]=useState(false),[connection,setConnection]=useState<GitHubConnection|null>(null),[repos,setRepos]=useState<RepositoryChoice[]>([]),[repository,setRepository]=useState(''),[baseBranch,setBaseBranch]=useState(''),[projectPath,setProjectPath]=useState(''),[notes,setNotes]=useState(''),[consent,setConsent]=useState(false),[reviewed,setReviewed]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState(''),[job,setJob]=useState<ImplementationJob|null>(null);
  const epoch=useRef(0);useEffect(()=>{epoch.current++;setJob(null);setReviewed(false);setGithubOpen(false);setError('');},[snapshot.workflow.id]);
  const prepare=()=>bridge.send({type:'snapshot'});
