@@ -2,20 +2,17 @@
   "manifest_version": 3,
   "name": "Wandel \u2014 Workflow Prototyper",
   "description": "Create, save and replay multi-step product workflows on live applications.",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "minimum_chrome_version": "116",
   "permissions": [
     "sidePanel",
     "storage",
     "webNavigation",
-    "activeTab",
     "scripting",
     "unlimitedStorage"
   ],
   "host_permissions": [
-    "<all_urls>",
-    "http://*/*",
-    "https://*/*"
+    "<all_urls>"
   ],
   "background": {
     "service_worker": "background.js",

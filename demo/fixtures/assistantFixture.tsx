@@ -25,7 +25,7 @@ if(new URL(location.href).searchParams.get('stub')==='new-page'){
  // Live dictation in the test: window.liveWords('...') is what the browser hears so far.
  class FakeRecognition{onresult:((event:unknown)=>void)|null=null;onerror=null;onend=null;continuous=false;interimResults=false;lang='';start(){Object.assign(window,{liveWords:(text:string)=>this.onresult?.({results:[[{transcript:text}]]})});}abort(){Object.assign(window,{liveWords:()=>{}});}}
  Object.assign(window,{SpeechRecognition:FakeRecognition,webkitSpeechRecognition:FakeRecognition});
- const calls:string[]=[];Object.assign(window,{voice:(on:boolean)=>{gain.gain.value=on?.2:0;},heard:'',calls});sessionStorage.setItem('wandel:voice-sharing:v2','allowed');
+ const calls:string[]=[];Object.assign(window,{voice:(on:boolean)=>{gain.gain.value=on?.2:0;},heard:'',calls});sessionStorage.setItem('wandel:voice-sharing:v2','allowed');if(!new URL(location.href).searchParams.has('notice'))localStorage.setItem('wandel:data-notice:v1','1');
  window.fetch=async(url,init)=>{if(!String(url).includes('/api/assistant/'))return real(url,init);
   if(String(url).includes('/models'))return answer({default:'gpt-6.1-sol',models:[{id:'gpt-6.1-sol',label:'GPT-6.1 Sol',provider:'openai'},{id:'claude-opus-5-5',label:'Claude Opus 5.5',provider:'anthropic'},{id:'grok-4.7',label:'Grok 4.7',provider:'xai'}]});
   if(String(url).includes('/speak')){calls.push('speak');return answer({audio:'SUQzBAAAAAAAAA=='});}

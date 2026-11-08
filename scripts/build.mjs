@@ -8,11 +8,14 @@ import { mkdir, copyFile, writeFile, cp } from 'node:fs/promises';
 const publicConfig={CLERK_KEY:process.env.VITE_CLERK_PUBLISHABLE_KEY||process.env.CLERK_PUBLISHABLE_KEY||'',CLERK_SYNC_HOST:process.env.CLERK_SYNC_HOST||'http://127.0.0.1',APP_ORIGIN:process.env.WANDEL_APP_ORIGIN||'http://127.0.0.1:5174',API_ORIGIN:process.env.WANDEL_API_ORIGIN||'http://127.0.0.1:4320'};
 const defines=Object.fromEntries(Object.entries(publicConfig).map(([key,value])=>['process.env.WANDEL_PUBLIC_'+key,JSON.stringify(value)]));
 defines.WANDEL_FREE=JSON.stringify(free);
+defines['process.env.WANDEL_LOCAL_DEV']=JSON.stringify(String(/^https?:\/\/(127\.0\.0\.1|localhost)(:|\/|$)/.test(publicConfig.API_ORIGIN||'')));
+// A Chrome Web Store upload: the store assigns the extension ID, so the fixed ID key stays out.
+const store=process.argv.includes('--store');
 defines['process.env.NODE_ENV']='"production"';
 await mkdir(out,{recursive:true});
 await Promise.all([
-  build({entryPoints:[free?'extension/background/free.ts':'extension/background/index.ts'],outfile:out+'/background.js',bundle:true,format:'esm',target:'chrome116',define:defines}),
-  build({entryPoints:['extension/content/index.ts'],outfile:out+'/content.js',bundle:true,format:'iife',target:'chrome116',define:defines}),
+  build({entryPoints:[free?'extension/background/free.ts':'extension/background/index.ts'],outfile:out+'/background.js',bundle:true,format:'esm',target:'chrome116',minifySyntax:true,define:defines}),
+  build({entryPoints:['extension/content/index.ts'],outfile:out+'/content.js',bundle:true,format:'iife',target:'chrome116',minifySyntax:true,define:defines}),
   build({entryPoints:[free?'extension/sidepanel/free.tsx':'extension/sidepanel/index.tsx'],outfile:out+'/sidepanel.js',bundle:true,format:'esm',target:'chrome116',minify:true,define:defines})
 ]);
 await build({entryPoints:[free?'extension/recording/free.tsx':'extension/recording/index.tsx'],outfile:out+'/recorder.js',bundle:true,format:'esm',target:'chrome116',minify:true,define:defines});
@@ -34,7 +37,7 @@ if(free){manifest.name='Wandel — Local Workflow Prototyper';manifest.version='
  manifest.content_security_policy.extension_pages+=' '+[...origins].join(' ');
 }
 if(!free)manifest.externally_connectable={matches:[new URL(publicConfig.APP_ORIGIN).origin+'/*']};
-if(!free&&process.env.WANDEL_EXTENSION_KEY)manifest.key=process.env.WANDEL_EXTENSION_KEY;
+if(!free&&!store&&process.env.WANDEL_EXTENSION_KEY)manifest.key=process.env.WANDEL_EXTENSION_KEY;
 await writeFile(out+'/manifest.json',JSON.stringify(manifest,null,2));
 await writeFile(out+'/sidepanel.html','<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Wandel</title><link rel="stylesheet" href="sidepanel.css"></head><body><div id="root"></div><script type="module" src="sidepanel.js"></script></body></html>');
 await writeFile(out+'/recorder.html','<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Wandel walkthrough studio</title><link rel="stylesheet" href="recorder.css"></head><body><div id="root"></div><script type="module" src="recorder.js"></script></body></html>');

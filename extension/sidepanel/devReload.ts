@@ -5,7 +5,9 @@
  * The page can also ask to open the Wandel panel (`wandel:dev-open`), so a browser automation
  * can test without clicking Chrome's toolbar. Published builds never run any of this. */
 const tabsKey='wandel:dev-reload-tabs',originsKey='wandel:dev-reload-origins',stampKey='wandel:dev-reload-stamp';
-export function isLocalDev(){return /^https?:\/\/(127\.0\.0\.1|localhost)(:|\/|$)/.test(process.env.WANDEL_PUBLIC_API_ORIGIN||'');}
+/** Set when the build targets a server on this computer. Release builds fold it to false and drop everything behind it. */
+export const LOCAL_DEV=process.env.WANDEL_LOCAL_DEV==='true';
+export function isLocalDev(){return LOCAL_DEV;}
 export function watchDevReload(){
  if(!isLocalDev())return;
  chrome.runtime.onInstalled.addListener(async details=>{

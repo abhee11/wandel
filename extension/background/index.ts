@@ -6,12 +6,12 @@ import {watchDevReload} from '../sidepanel/devReload';
 watchDevReload();
 import {backgroundAccountToken} from './account';
 import {accountConfig as devAccount} from '../shared/accountConfig';
-import {isLocalDev} from '../sidepanel/devReload';
+import {LOCAL_DEV} from '../sidepanel/devReload';
 // Local development: Wandel's own content script asks for a plan from the local server, so
 // end-to-end checks can run where the panel can't load (for example a browser automation tab).
 async function devImage(url:string){const blob=await (await fetch(url)).blob(),bytes=new Uint8Array(await blob.arrayBuffer());let text='';for(const byte of bytes)text+=String.fromCharCode(byte);return 'data:'+blob.type+';base64,'+btoa(text);}
-if(isLocalDev())chrome.runtime.onMessage.addListener((message,sender,reply)=>{
- if(message?.type==='WANDEL_DEV_SHARE'&&sender.id===chrome.runtime.id&&sender.tab?.id!==undefined&&isLocalDev()){void (async()=>{try{const token=await backgroundAccountToken();if(!token)throw new Error('Sign in to Wandel first.');const response=await fetch(devAccount.apiOrigin+(message.path||'/api/workflow-links'),{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify(message.body||{workflow:message.workflow})});reply(await response.json());}catch(error){reply({error:error instanceof Error?error.message:'Share failed.'});}})();return true;}
+if(LOCAL_DEV)chrome.runtime.onMessage.addListener((message,sender,reply)=>{
+ if(message?.type==='WANDEL_DEV_SHARE'&&sender.id===chrome.runtime.id&&sender.tab?.id!==undefined&&LOCAL_DEV){void (async()=>{try{const token=await backgroundAccountToken();if(!token)throw new Error('Sign in to Wandel first.');const response=await fetch(devAccount.apiOrigin+(message.path||'/api/workflow-links'),{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify(message.body||{workflow:message.workflow})});reply(await response.json());}catch(error){reply({error:error instanceof Error?error.message:'Share failed.'});}})();return true;}
  if(message?.type!=='WANDEL_DEV_PLAN'||sender.id!==chrome.runtime.id||sender.tab?.id===undefined)return;
  (async()=>{const token=await backgroundAccountToken();if(!token)throw new Error('Sign in to Wandel first.');const response=await fetch(devAccount.apiOrigin+'/api/assistant/plan',{method:'POST',credentials:'omit',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({...message.body,...(message.referenceURL?{referenceImage:await devImage(message.referenceURL)}:{})})});const data=await response.json();if(!response.ok)throw new Error(data.error?.message||'Plan request failed.');return {plan:data.plan};})().then(reply).catch(error=>reply({error:error instanceof Error?error.message:String(error)}));return true;
 });

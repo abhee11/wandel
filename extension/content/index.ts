@@ -2,7 +2,7 @@ import {pickElement} from './tabClipboard';
 import {resolveInspections} from '../assistant/inspection';
 import {rememberAppToasts} from './appToast';
 import {FloatingPanel} from './floatingPanel';
-import {isLocalDev} from '../sidepanel/devReload';
+import {LOCAL_DEV} from '../sidepanel/devReload';
 import {createRuntimeChannel} from './runtimeChannel';
 import {registerShareRelay} from './shareRelay';
 import {accountConfig} from '../shared/accountConfig';
@@ -30,23 +30,23 @@ const session=new Session(document.body,new Repository((freeBuild?new Persistent
 const floatingPanel=new FloatingPanel(()=>{void send({type:'WANDEL_INLINE_CLOSE'}).catch(ignore);},()=>{void ready.then(()=>session.dispatch({type:'restorePanel'})).catch(ignore);});
 const ready=session.init();
 // Local development: a page event opens the Wandel panel, so browser automation can test end to end.
-if(isLocalDev())window.addEventListener('wandel:dev-open',()=>{void send({type:'WANDEL_OPEN_CONNECTIONS'}).catch(ignore);},{signal:lifecycle.signal});
+if(LOCAL_DEV)window.addEventListener('wandel:dev-open',()=>{void send({type:'WANDEL_OPEN_CONNECTIONS'}).catch(ignore);},{signal:lifecycle.signal});
 // Local development: starts a pick on this page, so browser automation can test copying between tabs.
-if(isLocalDev())window.addEventListener('wandel:dev-pick',()=>{void pickElement().then(result=>window.dispatchEvent(new CustomEvent('wandel:dev-pick-result',{detail:JSON.stringify(result)})));},{signal:lifecycle.signal});
+if(LOCAL_DEV)window.addEventListener('wandel:dev-pick',()=>{void pickElement().then(result=>window.dispatchEvent(new CustomEvent('wandel:dev-pick-result',{detail:JSON.stringify(result)})));},{signal:lifecycle.signal});
 // Local development: the current workflow and its problems, for automated checks.
-if(isLocalDev())window.addEventListener('wandel:dev-state',()=>{void ready.then(()=>{const s=session.snapshot();window.dispatchEvent(new CustomEvent('wandel:dev-state-result',{detail:JSON.stringify({stateId:s.stateId,mode:s.mode,unresolved:s.unresolved,canUndo:s.canUndo,workflow:s.workflow})}));});},{signal:lifecycle.signal});
+if(LOCAL_DEV)window.addEventListener('wandel:dev-state',()=>{void ready.then(()=>{const s=session.snapshot();window.dispatchEvent(new CustomEvent('wandel:dev-state-result',{detail:JSON.stringify({stateId:s.stateId,mode:s.mode,unresolved:s.unresolved,canUndo:s.canUndo,workflow:s.workflow})}));});},{signal:lifecycle.signal});
 // Local development: create a real share link for the current workflow.
-if(isLocalDev())window.addEventListener('wandel:dev-share',()=>{void ready.then(async()=>{const reply=await send({type:'WANDEL_DEV_SHARE',workflow:session.snapshot().workflow});window.dispatchEvent(new CustomEvent('wandel:dev-share-result',{detail:JSON.stringify(reply)}));}).catch(error=>window.dispatchEvent(new CustomEvent('wandel:dev-share-result',{detail:JSON.stringify({error:String(error)})})));},{signal:lifecycle.signal});
+if(LOCAL_DEV)window.addEventListener('wandel:dev-share',()=>{void ready.then(async()=>{const reply=await send({type:'WANDEL_DEV_SHARE',workflow:session.snapshot().workflow});window.dispatchEvent(new CustomEvent('wandel:dev-share-result',{detail:JSON.stringify(reply)}));}).catch(error=>window.dispatchEvent(new CustomEvent('wandel:dev-share-result',{detail:JSON.stringify({error:String(error)})})));},{signal:lifecycle.signal});
 // Local development: publish a real no-install link for the current workflow.
-if(isLocalDev())window.addEventListener('wandel:dev-publish',event=>{void ready.then(async()=>{const mask=JSON.parse(String((event as CustomEvent).detail||'{"mask":true}')).mask!==false,snapshot=(await session.dispatch({type:'publicSnapshot',mask})).publicSnapshot!;const reply=await send({type:'WANDEL_DEV_SHARE',path:'/api/public-views',body:{workflow:snapshot.workflow,html:snapshot.html,masked:snapshot.masked}});window.dispatchEvent(new CustomEvent('wandel:dev-publish-result',{detail:JSON.stringify({...reply,bytes:snapshot.bytes})}));}).catch(error=>window.dispatchEvent(new CustomEvent('wandel:dev-publish-result',{detail:JSON.stringify({error:String(error)})})));},{signal:lifecycle.signal});
+if(LOCAL_DEV)window.addEventListener('wandel:dev-publish',event=>{void ready.then(async()=>{const mask=JSON.parse(String((event as CustomEvent).detail||'{"mask":true}')).mask!==false,snapshot=(await session.dispatch({type:'publicSnapshot',mask})).publicSnapshot!;const reply=await send({type:'WANDEL_DEV_SHARE',path:'/api/public-views',body:{workflow:snapshot.workflow,html:snapshot.html,masked:snapshot.masked}});window.dispatchEvent(new CustomEvent('wandel:dev-publish-result',{detail:JSON.stringify({...reply,bytes:snapshot.bytes})}));}).catch(error=>window.dispatchEvent(new CustomEvent('wandel:dev-publish-result',{detail:JSON.stringify({error:String(error)})})));},{signal:lifecycle.signal});
 // Local development: run one session command (undo, interact, reset…) from the page, for automated checks.
-if(isLocalDev())window.addEventListener('wandel:dev-command',event=>{void (async()=>{
+if(LOCAL_DEV)window.addEventListener('wandel:dev-command',event=>{void (async()=>{
  let result:Record<string,unknown>;
  try{await ready;const s=await session.dispatch(JSON.parse(String((event as CustomEvent).detail)));result={mode:s.mode,unresolved:s.unresolved,canUndo:s.canUndo,stateId:s.stateId,...(s.designEvidence?{designEvidence:s.designEvidence}:{}),...(s.assistant?.context?{context:{token:s.assistant.context.token,elements:s.assistant.context.elements.map(e=>({ref:e.ref,tag:e.tag,name:(e.name||e.text||'').slice(0,50)}))}}:{})};}catch(error){result={error:error instanceof Error?error.message:String(error)};}
  window.dispatchEvent(new CustomEvent('wandel:dev-command-result',{detail:JSON.stringify(result)}));
 })();},{signal:lifecycle.signal});
 // Local development: a chat request sent from the page runs the real context → plan → apply path; the result comes back as a page event.
-if(isLocalDev())window.addEventListener('wandel:dev-chat',event=>{void (async()=>{
+if(LOCAL_DEV)window.addEventListener('wandel:dev-chat',event=>{void (async()=>{
  let result:Record<string,unknown>;
  try{
   const {instruction,referenceURL,talk,model}=JSON.parse(String((event as CustomEvent).detail));await ready;
