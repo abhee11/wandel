@@ -1,0 +1,102 @@
+/* Wandel home page, in the logo's colours: purple, mint and deep ink. */
+.h{--brand:#6155db;--brand-deep:#4a40c2;--brand-soft:#efedfc;--mint:#a8f0d1;--mint-deep:#2f8a66;--ink:#1f1d33;--text:#4a4860;--muted:#7b7990;--line:#e8e6f2;--bg:#fbfbfe;--card:#fff;
+ min-height:100vh;background:var(--bg);color:var(--ink);font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}
+.h a{text-decoration:none}
+.h-head{position:sticky;top:0;z-index:10;display:flex;align-items:center;justify-content:space-between;gap:16px;max-width:1160px;margin:0 auto;padding:18px 24px;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(10px)}
+.h-brand{display:flex;align-items:center;gap:10px;color:var(--ink);font-size:20px;font-weight:700;letter-spacing:-.4px}
+.h-brand img{width:30px;height:30px;border-radius:8px}
+.h-head nav{display:flex;align-items:center;gap:22px;font-size:14px}
+.h-head nav a:not(.h-btn){color:var(--text)}
+.h-head nav a:not(.h-btn):hover{color:var(--brand)}
+.h-btn{display:inline-flex;align-items:center;justify-content:center;padding:13px 22px;border-radius:12px;background:var(--brand);color:#fff!important;font-weight:600;font-size:15px;box-shadow:0 8px 22px #6155db40;transition:background .15s,transform .15s}
+.h-btn:hover{background:var(--brand-deep);transform:translateY(-1px)}
+.h-btn-small{padding:9px 14px;font-size:13px;box-shadow:none}
+.h-link{color:var(--brand);font-weight:600;font-size:15px}
+.h-link:hover{color:var(--brand-deep)}
+.h-hero{max-width:1160px;margin:0 auto;padding:56px 24px 40px;text-align:center}
+.h-kicker{display:inline-flex;align-items:center;gap:10px;margin:0 0 22px;padding:5px 14px 5px 5px;border:1px solid var(--line);border-radius:999px;background:var(--card);color:var(--text);font-size:13px}
+.h-kicker span{padding:3px 10px;border-radius:999px;background:var(--mint);color:#11402e;font-weight:600;font-size:12px}
+.h-hero h1{margin:0;font-size:clamp(40px,6.4vw,76px);line-height:1.04;letter-spacing:-2.6px;font-weight:750}
+.h-hero h1 em{font-style:normal;color:var(--brand)}
+.h-lede{max-width:620px;margin:22px auto 0;color:var(--text);font-size:clamp(16px,2vw,19px);line-height:1.6}
+.h-cta{display:flex;justify-content:center;align-items:center;gap:22px;flex-wrap:wrap;margin:32px 0 56px}
+/* The showcase: an app with the panel beside it. */
+.h-show{position:relative;display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:0;max-width:1000px;margin:0 auto;border:1px solid var(--line);border-radius:20px;background:var(--card);box-shadow:0 30px 80px #2c255a1f,0 2px 6px #2c255a0d;overflow:hidden;text-align:left}
+.h-app{min-width:0;border-right:1px solid var(--line)}
+.h-bar{display:flex;align-items:center;gap:6px;padding:12px 16px;border-bottom:1px solid var(--line);background:#fafafd}
+.h-bar i{width:9px;height:9px;border-radius:50%;background:#e2e0ec}
+.h-bar span{margin-left:12px;padding:4px 12px;border-radius:7px;background:#f0eff6;color:var(--muted);font-size:11px}
+.h-page{display:grid;grid-template-columns:120px minmax(0,1fr);min-height:330px}
+.h-side{display:flex;flex-direction:column;gap:12px;padding:18px 16px;border-right:1px solid var(--line);background:#fcfcfe}
+.h-side b{width:28px;height:28px;border-radius:8px;background:#dcd8f6}
+.h-side span{height:8px;border-radius:4px;background:#ebe9f3}
+.h-side span:nth-child(3){width:70%}
+.h-main{padding:22px;display:flex;flex-direction:column;gap:16px}
+.h-title{width:42%;height:14px;border-radius:5px;background:#e3e1ee}
+.h-new{position:relative;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 16px;align-items:center;padding:16px 18px;border-radius:14px;background:linear-gradient(120deg,var(--brand),#7f73ec);color:#fff;outline:3px solid var(--mint);outline-offset:3px;animation:h-in .9s .3s both}
+.h-new strong{font-size:15px}
+.h-new span{grid-column:1;font-size:12px;opacity:.88}
+.h-new em{grid-column:2;grid-row:1/3;padding:8px 12px;border-radius:9px;background:#fff;color:var(--brand);font-style:normal;font-size:12px;font-weight:600}
+.h-new small{position:absolute;top:-13px;left:12px;padding:2px 8px;border-radius:6px;background:var(--mint);color:#11402e;font-size:10px;font-weight:700}
+.h-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.h-cards div{display:flex;flex-direction:column;gap:9px;padding:14px;border:1px solid var(--line);border-radius:12px}
+.h-cards span{height:8px;border-radius:4px;background:#ebe9f3}
+.h-cards span:first-child{width:60%;background:#dedbea}
+.h-cards b{height:26px;margin-top:8px;border-radius:7px;background:var(--brand-soft)}
+.h-panel{display:flex;flex-direction:column;gap:12px;padding:16px;background:#fafafe}
+.h-panel-top{display:flex;align-items:center;gap:8px;padding-bottom:12px;border-bottom:1px solid var(--line);font-weight:700;font-size:14px}
+.h-panel-top img{width:22px;height:22px;border-radius:6px}
+.h-msg{max-width:92%;padding:10px 12px;border-radius:14px;font-size:12.5px;line-height:1.5}
+.h-you{align-self:flex-end;background:var(--brand-soft);color:#2e2a52;border-bottom-right-radius:4px;animation:h-in .5s both}
+.h-wandel{align-self:flex-start;background:var(--card);border:1px solid var(--line);color:var(--text);border-bottom-left-radius:4px;animation:h-in .5s .6s both}
+.h-input{display:flex;align-items:center;justify-content:space-between;margin-top:auto;padding:12px;border:1.5px solid #cfc9f3;border-radius:14px;background:var(--card);color:var(--muted);font-size:12px;box-shadow:0 6px 18px #6155db1f}
+.h-input i{display:grid;place-items:center;width:26px;height:26px;border-radius:8px;background:var(--brand);color:#fff;font-style:normal}
+@keyframes h-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@media(prefers-reduced-motion:reduce){.h-new,.h-you,.h-wandel{animation:none}}
+/* Sections */
+.h-how,.h-features,.h-trust,.h-final{max-width:1160px;margin:0 auto;padding:72px 24px 0}
+.h h2{margin:0;font-size:clamp(28px,3.6vw,42px);line-height:1.12;letter-spacing:-1.2px;font-weight:720}
+.h-how h2{max-width:640px}
+.h-how ol{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;margin:36px 0 0;padding:0;list-style:none}
+.h-how li{padding:24px;border:1px solid var(--line);border-radius:16px;background:var(--card)}
+.h-how li b{display:grid;place-items:center;width:32px;height:32px;border-radius:10px;background:var(--brand);color:#fff;font-size:14px}
+.h h3{margin:16px 0 6px;font-size:17px;letter-spacing:-.2px}
+.h-how p,.h-features p{margin:0;color:var(--text);font-size:14.5px;line-height:1.6}
+.h-features{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}
+.h-features article{padding:24px;border-radius:16px;background:var(--card);border:1px solid var(--line)}
+.h-features i{display:grid;place-items:center;width:40px;height:40px;border-radius:12px;background:var(--brand-soft);color:var(--brand);font-style:normal;font-weight:700;font-size:15px}
+.h-features article:nth-child(3n+2) i{background:#e6f9f0;color:var(--mint-deep)}
+.h-trust{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;flex-wrap:wrap}
+.h-trust>div{max-width:620px}
+.h-trust h2{font-size:clamp(24px,2.8vw,32px)}
+.h-trust p{margin:10px 0 0;color:var(--text);font-size:16px;line-height:1.6}
+.h-final{padding-bottom:88px;text-align:center}
+.h-final>*{position:relative}
+.h-final p{margin:12px 0 26px;color:var(--text);font-size:17px}
+.h-final h2{max-width:640px;margin:0 auto}
+.h-foot{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;max-width:1160px;margin:0 auto;padding:26px 24px 40px;border-top:1px solid var(--line);color:var(--muted);font-size:13px}
+.h-foot span:last-child{display:flex;gap:20px}
+.h-foot a{color:var(--muted)}
+.h-foot a:hover{color:var(--brand)}
+@media(max-width:860px){
+ .h-show{grid-template-columns:1fr}
+ .h-app{border-right:0;border-bottom:1px solid var(--line)}
+ .h-page{grid-template-columns:1fr}
+ .h-side{display:none}
+ .h-how ol,.h-features{grid-template-columns:1fr}
+ .h-head nav a:not(.h-btn){display:none}
+}
+@media(max-width:520px){
+ .h-hero{padding-top:32px}
+ .h-new{grid-template-columns:1fr}
+ .h-new em{grid-column:1;grid-row:auto;justify-self:start;margin-top:8px}
+ .h-cards{grid-template-columns:1fr 1fr}
+ .h-cards div:last-child{display:none}
+ .h-page{min-height:0}
+ .h-panel{gap:10px}
+ .h-input{margin-top:4px}
+ .h-kicker{font-size:12px;white-space:nowrap}
+ .h-hero h1{font-size:38px;letter-spacing:-1.6px}
+ .h-head{padding:14px 16px}
+ .h-btn-small{padding:8px 12px;font-size:12px}
+}

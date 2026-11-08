@@ -261,7 +261,7 @@
 .dx-hero-mark{display:inline-flex;width:48px;height:48px;margin-bottom:12px;border-radius:14px;box-shadow:0 10px 26px #6155db55}
 .dx-hero-mark img{width:100%;height:100%;border-radius:14px}
 .dx-panel-chat .dx-chat-empty .dx-hero h2{font-size:22px!important;font-weight:700;line-height:1.2;letter-spacing:-.6px;margin:0 0 6px;color:#232635}
-.dx-hero h2 em{display:block;font-style:normal;background:linear-gradient(90deg,#6155db,#a855d8 55%,#f0785a);-webkit-background-clip:text;background-clip:text;color:transparent}
+.dx-hero h2 em{display:block;font-style:normal;background:linear-gradient(90deg,#6155db,#8a7cf2);-webkit-background-clip:text;background-clip:text;color:transparent}
 .dx-panel-chat .dx-chat-empty .dx-hero p{max-width:300px;margin:0 auto;font-size:13px;line-height:1.5;color:#5e6677}
 .dx-starters{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:16px;text-align:left}
 .dx-starters button{display:flex;align-items:flex-start;gap:8px;min-width:0;padding:10px;border:1px solid #e4e0f3;border-radius:12px;background:#ffffffd9;color:#2c3040;cursor:pointer;font:inherit;transition:transform .15s,border-color .15s,box-shadow .15s}
@@ -270,7 +270,7 @@
 .dx-starters span{display:flex;flex-direction:column;gap:1px;min-width:0}
 .dx-starters strong{font-size:12px;font-weight:600}
 .dx-starters small{font-size:10px;line-height:1.3;color:#79808e}
-.dx-panel-chat .dx-chat-empty .dx-chat-composer{border-color:transparent;background:linear-gradient(#fff,#fff) padding-box,linear-gradient(120deg,#6155db,#a855d8,#f0785a,#6155db) border-box;background-size:100% 100%,300% 100%;box-shadow:0 8px 28px #6155db2e;animation:dx-sheen 6s linear infinite}
+.dx-panel-chat .dx-chat-empty .dx-chat-composer{border-color:transparent;background:linear-gradient(#fff,#fff) padding-box,linear-gradient(120deg,#6155db,#8a7cf2,#a8f0d1,#6155db) border-box;background-size:100% 100%,300% 100%;box-shadow:0 8px 28px #6155db2e;animation:dx-sheen 6s linear infinite}
 .dx-panel-chat .dx-chat-empty .dx-chat-composer textarea::placeholder{color:#6d6890}
 @keyframes dx-rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 @keyframes dx-sheen{to{background-position:0 0,300% 0}}
@@ -315,7 +315,7 @@
 .dx-panel .dx-share-card>button.dx-primary{width:100%;margin:2px 0 0}
 
 /* Someone opened a shared link: they should know at once what this is. */
-.dx-shared-hero{display:flex;flex-direction:column;gap:4px;padding:16px;border-radius:14px;background:linear-gradient(120deg,#6155db,#a855d8 60%,#f0785a);color:#fff;box-shadow:0 10px 26px #6155db3d}
+.dx-shared-hero{display:flex;flex-direction:column;gap:4px;padding:16px;border-radius:14px;background:linear-gradient(120deg,#6155db,#7f73ec);color:#fff;box-shadow:0 10px 26px #6155db3d}
 .dx-shared-hero span{align-self:flex-start;padding:2px 8px;border-radius:999px;background:#ffffff2e;font-size:10px;font-weight:600;letter-spacing:.2px}
 .dx-shared-hero strong{margin-top:4px;font-size:18px;line-height:1.25;letter-spacing:-.3px;overflow-wrap:anywhere}
 .dx-shared-hero p{margin:0;font-size:12px;line-height:1.5;color:#ffffffe0}
