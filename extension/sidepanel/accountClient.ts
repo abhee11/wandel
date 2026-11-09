@@ -7,6 +7,8 @@ export async function accountAPI<T=any>(path:string,method='GET',body?:unknown,t
  const value=await response.json();if(!response.ok)throw new AccountError(value.error?.code||'REQUEST_FAILED',value.error?.message||'Please retry.');return value;
 }
 export async function signIn(){if(!accountConfig.publishableKey)throw new AccountError('AUTH_NOT_CONFIGURED','Add the Clerk keys to .env and rebuild Wandel. Temporary saves still work.');const result=await chrome.runtime.sendMessage({type:'WANDEL_ACCOUNT_SIGN_IN',tabId:Number(new URLSearchParams(location.search).get('tabId'))});if(result?.error)throw new Error(result.error);}
+/** Clerk refuses a sign-out sent from the extension, so sign out on Wandel's website, which the panel's synced session follows. */
+export async function signOutOnWeb(){await chrome.tabs.create({url:new URL('/extension/sign-out',accountConfig.appOrigin).href});}
 export async function startUpgrade(){const checkout=await accountAPI<{url:string}>('/billing/checkout','POST',{});const url=new URL(checkout.url);if(url.protocol!=='https:'||url.hostname!=='checkout.stripe.com')throw new Error('Stripe checkout is not available.');await chrome.tabs.create({url:url.href});}
 
 export async function previewPlan(prompt:string,selection:{tag:string;label:string}){

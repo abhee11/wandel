@@ -1,6 +1,12 @@
-import {useState} from 'react';
-import {ClerkProvider,SignIn,SignUp,UserButton,useUser} from '@clerk/react';
+import {useEffect,useState} from 'react';
+import {ClerkProvider,SignIn,SignUp,UserButton,useClerk,useUser} from '@clerk/react';
 const key=process.env.WANDEL_PUBLIC_CLERK_KEY||'';
+/** Wandel's panel follows this site's session, and Clerk only accepts sign-out from here. */
+function SignOut(){const {isLoaded,isSignedIn}=useUser();const clerk=useClerk();
+ useEffect(()=>{if(isLoaded&&isSignedIn)void clerk.signOut();},[isLoaded,isSignedIn,clerk]);
+ if(!isLoaded||isSignedIn)return <p>Signing you out…</p>;
+ return <><h1>You’re signed out.</h1><p>Close and reopen the Wandel panel. You can close this tab.</p></>;
+}
 function Auth(){const {isLoaded,isSignedIn,user}=useUser();
  const [returnError,setReturnError]=useState('');
  const query=new URLSearchParams(location.search);
@@ -20,5 +26,5 @@ function Auth(){const {isLoaded,isSignedIn,user}=useUser();
 }
 export function ExtensionAuth(){
  if(location.pathname==='/extension/return')return <main className="auth card"><h1>{new URLSearchParams(location.search).get('checkout')==='cancel'?'Checkout canceled. Your draft is safe.':'Return to Wandel.'}</h1><p>Open the original application tab and click Save to my account again. Your plan updates after Stripe confirms checkout.</p><button className="button" onClick={()=>window.close()}>Close this tab</button></main>;
- return <main className="auth card"><a href="/" className="brand">Wandel</a><p>After signing in, return to the extension to continue your flow.</p>{key?<ClerkProvider publishableKey={key}><Auth/></ClerkProvider>:<p role="alert">Clerk is not configured yet. Add the Clerk publishable and secret keys, then restart the server and rebuild the extension. Temporary local saves remain available.</p>}</main>;
+ return <main className="auth card"><a href="/" className="brand">Wandel</a>{location.pathname!=='/extension/sign-out'&&<p>After signing in, return to the extension to continue your flow.</p>}{key?<ClerkProvider publishableKey={key}>{location.pathname==='/extension/sign-out'?<SignOut/>:<Auth/>}</ClerkProvider>:<p role="alert">Clerk is not configured yet. Add the Clerk publishable and secret keys, then restart the server and rebuild the extension. Temporary local saves remain available.</p>}</main>;
 }

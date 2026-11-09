@@ -1,7 +1,7 @@
 import {BillingSettings} from './useBilling';
 import {stateURL} from '../shared/liveNavigation';
 import {useCallback,useEffect,useRef,useState} from 'react';
-import {accountAPI,signIn,AccountError} from './accountClient';
+import {accountAPI,signIn,signOutOnWeb,AccountError} from './accountClient';
 import type {Bridge} from './bridge';
 import {RecordSchema,type SavedRecord,type Snapshot} from '../shared/model';
 type Item={id:string;name:string;origin:string;route:string;version:number;revision:number};
@@ -30,15 +30,17 @@ export function Account({bridge,snapshot,onAuthChange,onCount,onMe}:{bridge:Brid
   const accountChanged=(message:{type?:string})=>{if(message.type==='WANDEL_ACCOUNT_CHANGED')void update();};
   chrome.runtime?.onMessage?.addListener(accountChanged);
   const show=()=>{setOpen(true);void run(refresh);};
+  const signOutRequested=()=>void run(signOut);
   // Opening a saved flow keeps the current work first, so nothing is lost and nothing needs confirming. The panel then shows the flow that opened.
   const openFlow=(event:Event)=>{const {item,mode}=(event as CustomEvent<{item:Item;mode:'view'|'edit'}>).detail;void run(async()=>{setStatus(`Opening “${item.name}”…`);const kept=latest.current?.dirty?await keepRef.current():'';if(await (mode==='view'?viewRef.current(item):loadRef.current(item))===false)return;setStatus(`Opened “${item.name}”.${kept}`);window.dispatchEvent(new Event('wandel-flow-opened'));});};
   window.addEventListener('wandel-account-flow',openFlow);
-  void update();window.addEventListener('focus',update);window.addEventListener('wandel-account-refresh',update);window.addEventListener('wandel-account-open',show);
-  return()=>{active=false;chrome.runtime?.onMessage?.removeListener(accountChanged);window.removeEventListener('focus',update);window.removeEventListener('wandel-account-refresh',update);window.removeEventListener('wandel-account-open',show);window.removeEventListener('wandel-account-flow',openFlow);};
+  void update();window.addEventListener('focus',update);window.addEventListener('wandel-account-refresh',update);window.addEventListener('wandel-account-open',show);window.addEventListener('wandel-sign-out',signOutRequested);
+  return()=>{active=false;chrome.runtime?.onMessage?.removeListener(accountChanged);window.removeEventListener('focus',update);window.removeEventListener('wandel-account-refresh',update);window.removeEventListener('wandel-account-open',show);window.removeEventListener('wandel-sign-out',signOutRequested);window.removeEventListener('wandel-account-flow',openFlow);};
  },[onAuthChange]);
  useEffect(()=>{if(!status.startsWith('Opened '))return;const timer=setTimeout(()=>setStatus(''),4000);return()=>clearTimeout(timer);},[status]);
  async function run(action:()=>Promise<void>){setBusy(true);setStatus('');try{await action();}catch(e){setStatus(e instanceof Error?e.message:'Please retry.');}finally{setBusy(false);}}
  async function refresh(){try{setMe(await accountAPI('/me'));onAuthChange?.('signed-in');const list=(await accountAPI('/workflows')).workflows;setItems(list);setCount(list.length);}catch(e){if(e instanceof AccountError&&e.code==='AUTH_REQUIRED'){setMe(null);onAuthChange?.('guest');}throw e;}}
+ async function signOut(){await signOutOnWeb();setOpen(true);setStatus('Finish signing out in the Wandel tab that just opened, then close and reopen this panel.');}
  async function view(item:Item,discardConfirmed=false){
   if(!snapshot)throw new Error('Open Wandel on an app page first.');
   const expectedWorkflowId=snapshot.workflow.id,result=await accountAPI<{record:SavedRecord;revision:number}>('/workflows/'+encodeURIComponent(item.id));
@@ -60,7 +62,7 @@ export function Account({bridge,snapshot,onAuthChange,onCount,onMe}:{bridge:Brid
  <button className="dx-small" disabled={busy} onClick={()=>void run(refresh)}>Refresh</button>{me.entitlements.access?.source==='subscription'&&<button className="dx-small" disabled={busy} onClick={()=>void run(async()=>{const {url}=await accountAPI('/billing/portal','POST',{});const target=new URL(url);if(target.protocol!=='https:'||target.hostname!=='billing.stripe.com')throw new Error('Stripe portal unavailable.');await chrome.tabs.create({url});})}>Manage subscription ↗</button>}
  {!betaAccess&&<form onSubmit={e=>{e.preventDefault();void run(async()=>{await accountAPI('/account/redeem','POST',{code});await refresh();window.dispatchEvent(new Event('wandel-account-refresh'));setCode('');setStatus('Beta access activated. Save your workflow again.');});}}><label className="dx-muted">Beta access code<input aria-label="Beta access code" maxLength={80} autoComplete="off" spellCheck={false} value={code} onChange={e=>setCode(e.target.value)}/></label><button className="dx-small" disabled={busy||!code.trim()}>Redeem code</button></form>}
  {confirm&&<p className="dx-alert">Replace the current unsaved draft with “{confirm.name}”? <button className="dx-small" onClick={()=>void run(async()=>{if(confirm.view)await view(confirm,true);else await load(confirm);})}>Replace draft</button><button className="dx-small" onClick={()=>setConfirm(null)}>Keep editing</button></p>}
- <button className="dx-small" disabled={busy} onClick={()=>void run(async()=>{const result=await chrome.runtime.sendMessage({type:'WANDEL_ACCOUNT_TOKEN',signOut:true});if(result.error)throw new Error(result.error);setMe(null);onAuthChange?.('guest');setItems([]);setCount(null);})}>Sign out</button></>}
+ <button className="dx-small" disabled={busy} onClick={()=>void run(signOut)}>Sign out</button></>}
  {legacy.length>0&&<details><summary>Previous local saves</summary><p className="dx-muted">These older persistent saves are still on this computer. Open one, then save to your account to sync it.</p>{legacy.map(record=><button key={record.draft.id} className="dx-library" disabled={busy||snapshot?.dirty||record.draft.origin!==snapshot?.workflow.origin||record.draft.route!==snapshot?.workflow.route} onClick={()=>void run(async()=>{await bridge.send({type:'loadRecord',record});setStatus('Opened previous local save. Use Save to my account to sync it.');})}>{record.draft.name}</button>)}</details>}
  </section>}</div>;
 }
