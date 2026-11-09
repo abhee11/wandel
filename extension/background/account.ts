@@ -17,15 +17,27 @@ export function registerAccountBridge(){
    return url.pathname==='/sidepanel.html'&&(!sender.tab||url.searchParams.get('embedded')==='1'&&String(sender.tab.id)===url.searchParams.get('tabId')||url.searchParams.get('floating')==='1'&&/^\d+$/.test(url.searchParams.get('tabId')||''))||url.pathname==='/recorder.html'&&sender.tab?.id!==undefined;
   }catch{return false;}
  };
- const notify=()=>{void chrome.runtime.sendMessage({type:'WANDEL_ACCOUNT_CHANGED'}).catch(()=>{});};
+ const notify=(reload=false)=>{void chrome.runtime.sendMessage({type:'WANDEL_ACCOUNT_CHANGED',reload}).catch(()=>{});};
  chrome.cookies?.onChanged?.addListener(change=>{
   const host=new URL(accountConfig.syncHost).hostname;
   if(['__clerk_db_jwt','__client','__session'].includes(change.cookie.name)&&change.cookie.domain.replace(/^\./,'')===host)notify();
  });
  chrome.runtime.onMessageExternal?.addListener((message,sender,reply)=>{
-  if(message?.type!=='WANDEL_AUTH_RETURN'||!sender.url||sender.frameId!==0||sender.tab?.id===undefined)return;
+  if(!['WANDEL_AUTH_RETURN','WANDEL_SIGNED_OUT'].includes(message?.type)||!sender.url||sender.frameId!==0||sender.tab?.id===undefined)return;
   const url=new URL(sender.url);
-  if(url.origin!==new URL(accountConfig.appOrigin).origin||url.pathname!=='/extension/sign-in')return;
+  if(url.origin!==new URL(accountConfig.appOrigin).origin||url.pathname!==(message.type==='WANDEL_SIGNED_OUT'?'/extension/sign-out':'/extension/sign-in'))return;
+  if(message.type==='WANDEL_SIGNED_OUT'){
+   (async()=>{
+    const key='wandelSignOut:'+sender.tab!.id;
+    const pending=(await chrome.storage.session.get(key))[key];
+    if(!pending||pending.nonce!==message.nonce||Date.now()-pending.created>10*60*1000)throw new Error('Sign-out link expired.');
+    await chrome.storage.session.remove(key);
+    reply({ok:true});
+    notify(true);
+    await chrome.tabs.remove(sender.tab!.id!);
+   })().catch(error=>reply({error:error instanceof Error?error.message:'Sign-out could not finish.'}));
+   return true;
+  }
   (async()=>{
    const key='wandelAuthReturn:'+sender.tab!.id;
    const pending=(await chrome.storage.session.get(key))[key];
@@ -34,7 +46,7 @@ export function registerAccountBridge(){
    if(tab.url!==pending.url)throw new Error('The original page changed. Return to your app tab and click the Wandel icon.');
    await chrome.tabs.update(pending.tabId,{active:true});
    if(tab.windowId!==undefined)await chrome.windows.update(tab.windowId,{focused:true});
-   notify();
+   notify(true);
    await chrome.storage.session.remove(key);
    reply({ok:true});
    await chrome.tabs.remove(sender.tab!.id!);
@@ -52,6 +64,17 @@ export function registerAccountBridge(){
     url.searchParams.set('extension',chrome.runtime.id);url.searchParams.set('state',nonce);
     const auth=await chrome.tabs.create({url:url.href});
     await chrome.storage.session.set({['wandelAuthReturn:'+auth.id]:{tabId:source,url:tab.url,nonce,created:Date.now()}});
+    return {ok:true};
+   })().then(reply).catch(error=>reply({error:error.message}));return true;
+  }
+  if(message?.type==='WANDEL_ACCOUNT_SIGN_OUT'){
+   if(!trustedSurface(sender))return;
+   (async()=>{
+    // Clerk only accepts sign-out from Wandel's website, so it runs there in a background tab that closes itself when done.
+    const nonce=crypto.randomUUID(),url=new URL('/extension/sign-out',accountConfig.appOrigin);
+    url.searchParams.set('extension',chrome.runtime.id);url.searchParams.set('state',nonce);
+    const tab=await chrome.tabs.create({url:url.href,active:false});
+    await chrome.storage.session.set({['wandelSignOut:'+tab.id]:{nonce,created:Date.now()}});
     return {ok:true};
    })().then(reply).catch(error=>reply({error:error.message}));return true;
   }

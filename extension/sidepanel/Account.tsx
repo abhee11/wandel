@@ -27,7 +27,8 @@ export function Account({bridge,snapshot,onAuthChange,onCount,onMe}:{bridge:Brid
  useEffect(()=>{
   let active=true;
   const update=async()=>{setStatus('');try{const result=await accountAPI('/me');if(active){setMe(result);onAuthChange?.('signed-in');}void accountAPI<{workflows:Item[]}>('/workflows').then(list=>{if(active){setItems(list.workflows);setCount(list.workflows.length);}}).catch(()=>{});}catch(e){if(active){setMe(null);setCount(null);onAuthChange?.(e instanceof AccountError&&['AUTH_REQUIRED','AUTH_NOT_CONFIGURED'].includes(e.code)?'guest':'unavailable');}}finally{if(active)setChecking(false);}const data=await chrome.storage.local.get('wandelGuestRemaining');if(active)setRemaining(typeof data.wandelGuestRemaining==='number'?data.wandelGuestRemaining:2);};
-  const accountChanged=(message:{type?:string})=>{if(message.type==='WANDEL_ACCOUNT_CHANGED')void update();};
+  // After an explicit sign-in or sign-out the panel reloads itself, as reopening it would.
+  const accountChanged=(message:{type?:string;reload?:boolean})=>{if(message.type!=='WANDEL_ACCOUNT_CHANGED')return;if(message.reload)location.reload();else void update();};
   chrome.runtime?.onMessage?.addListener(accountChanged);
   const show=()=>{setOpen(true);void run(refresh);};
   const signOutRequested=()=>void run(signOut);
@@ -40,7 +41,7 @@ export function Account({bridge,snapshot,onAuthChange,onCount,onMe}:{bridge:Brid
  useEffect(()=>{if(!status.startsWith('Opened '))return;const timer=setTimeout(()=>setStatus(''),4000);return()=>clearTimeout(timer);},[status]);
  async function run(action:()=>Promise<void>){setBusy(true);setStatus('');try{await action();}catch(e){setStatus(e instanceof Error?e.message:'Please retry.');}finally{setBusy(false);}}
  async function refresh(){try{setMe(await accountAPI('/me'));onAuthChange?.('signed-in');const list=(await accountAPI('/workflows')).workflows;setItems(list);setCount(list.length);}catch(e){if(e instanceof AccountError&&e.code==='AUTH_REQUIRED'){setMe(null);onAuthChange?.('guest');}throw e;}}
- async function signOut(){await signOutOnWeb();setOpen(true);setStatus('Finish signing out in the Wandel tab that just opened, then close and reopen this panel.');}
+ async function signOut(){await signOutOnWeb();setOpen(true);setStatus('Signing you out…');}
  async function view(item:Item,discardConfirmed=false){
   if(!snapshot)throw new Error('Open Wandel on an app page first.');
   const expectedWorkflowId=snapshot.workflow.id,result=await accountAPI<{record:SavedRecord;revision:number}>('/workflows/'+encodeURIComponent(item.id));
