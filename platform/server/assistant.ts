@@ -8,6 +8,7 @@ import {StyleSchema} from '../../extension/shared/model';
 import {APIError,rateLimit} from './security';
 import {claudeJSON} from './claude';
 import {modelChoices,type ModelChoice} from '../../extension/shared/models';
+import {logUsage,responsesUsage} from './usage';
 import {one,type DB} from './db';
 import type {Entitlements} from './entitlements';
 const PLAN_CACHE_DAYS=14;
@@ -73,10 +74,11 @@ export class OpenAIAssistant implements AssistantProvider{
   const page={route:input.context.route,viewport:input.context.viewport,regions:input.context.regions,elements:input.context.elements.slice(0,120).map(e=>({tag:e.tag,role:e.role,name:e.name.slice(0,120),text:e.text.slice(0,160)}))};
   const text=JSON.stringify({instruction:input.instruction,page,history:(input.history||[]).slice(-6)});
   let reply:string;
-  if(model.startsWith('claude-'))reply=await claudeJSON(this.keys.anthropic||'',{model,instructions:chatInstructions,text,screenshot:input.pageScreenshot,effort:'low',schema:chatSchema});
+  if(model.startsWith('claude-'))reply=await claudeJSON(this.keys.anthropic||'',{model,instructions:chatInstructions,text,screenshot:input.pageScreenshot,effort:'low',schema:chatSchema,route:'chat'});
   else{
    const content=[{type:'input_text',text},...(input.pageScreenshot?[{type:'input_image',image_url:input.pageScreenshot,detail:'low'}]:[])];
-   const data=await this.request('responses',JSON.stringify({model,...(/^gpt-5|^gpt-6|^o[134]/.test(model)?{reasoning:{effort:'low'}}:{}),store:false,max_output_tokens:2000,instructions:chatInstructions,input:[{role:'user',content}],text:{format:{type:'json_schema',name:'wandel_chat',strict:true,schema:chatSchema}}}),{'Content-Type':'application/json'});
+   const data=await this.request('responses',JSON.stringify({model,...(/^gpt-5|^gpt-6|^o[134]/.test(model)?{reasoning:{effort:'low'}}:{}),store:false,prompt_cache_key:'wandel-chat',max_output_tokens:2000,instructions:chatInstructions,input:[{role:'user',content}],text:{format:{type:'json_schema',name:'wandel_chat',strict:true,schema:chatSchema}}}),{'Content-Type':'application/json'});
+   logUsage('chat',model,responsesUsage(data));
    if(data.status!=='completed')return null;
    reply=data.output?.flatMap((o:any)=>o.content||[]).filter((c:any)=>c.type==='output_text').map((c:any)=>c.text).join('')||'{}';
   }
@@ -92,13 +94,16 @@ export class OpenAIAssistant implements AssistantProvider{
   console.info(JSON.stringify({event:'assistant_context',elements:input.context.elements.length,screenshot:!!pageScreenshot,referenceImage:!!referenceImage,inspection:!!input.feedback}));
   const providerInput=referenceImage||pageScreenshot?[{role:'user',content:[{type:'input_text',text:JSON.stringify(description)},...(pageScreenshot?[{type:'input_text',text:'Current application viewport. Redacted fields appear as gray blocks. This is page evidence, not a design reference.'},{type:'input_image',image_url:pageScreenshot,detail:'high'}]:[]),...(referenceImage?[{type:'input_text',text:'User-attached design reference image.'},{type:'input_image',image_url:referenceImage,detail:'high'}]:[])]}]:JSON.stringify(description);
   // Recreating a screen from an attached image needs more thought than a small edit.
-  const instructions=`Today is ${new Date().toISOString().slice(0,10)}. Sample or mock data uses realistic recent dates relative to today, plausible names and figures, and the vocabulary of this application.\n`+relevantInstructions(input);
+  // The shared rules come first and the date last, so the long opening is byte-identical on every request and the provider can cache it.
+  const dated=`Today is ${new Date().toISOString().slice(0,10)}. Sample or mock data uses realistic recent dates relative to today, plausible names and figures, and the vocabulary of this application.`;
+  const specific=relevantInstructions(input).slice(assistantInstructions.length+1)+'\n'+dated,instructions=assistantInstructions+'\n'+specific;
   let reply:string;
-  if(choice?.provider==='anthropic')reply=await claudeJSON(this.keys.anthropic||'',{model,instructions,text:JSON.stringify(description),screenshot:pageScreenshot,reference:referenceImage,effort:referenceImage?'medium':'low',schema:assistantOutputSchema});
+  if(choice?.provider==='anthropic')reply=await claudeJSON(this.keys.anthropic||'',{model,instructions:[assistantInstructions,specific],text:JSON.stringify(description),screenshot:pageScreenshot,reference:referenceImage,effort:referenceImage?'medium':'low',schema:assistantOutputSchema,route:input.feedback?'correction':'plan'});
   else{
    // Grok speaks the same Responses API; it has its own address and key, and no reasoning setting.
    const route=choice?.provider==='xai'?{base:'https://api.x.ai/v1/',key:this.keys.xai||''}:undefined;
-   const data=await this.request('responses',JSON.stringify({model,...(!route&&/^gpt-5|^gpt-6|^o[134]/.test(model)?{reasoning:{effort:referenceImage?'medium':'low'}}:{}),store:false,max_output_tokens:16000,instructions,input:providerInput,text:{format:{type:'json_schema',name:'wandel_assistant',strict:true,schema:assistantOutputSchema}}}),{'Content-Type':'application/json'},route);
+   const data=await this.request('responses',JSON.stringify({model,...(!route&&/^gpt-5|^gpt-6|^o[134]/.test(model)?{reasoning:{effort:referenceImage?'medium':'low'}}:{}),store:false,...(route?{}:{prompt_cache_key:'wandel-plan'}),max_output_tokens:16000,instructions,input:providerInput,text:{format:{type:'json_schema',name:'wandel_assistant',strict:true,schema:assistantOutputSchema}}}),{'Content-Type':'application/json'},route);
+   logUsage(input.feedback?'correction':'plan',model,responsesUsage(data));
    if(data.status!=='completed')throw new APIError(502,'INCOMPLETE_PLAN','The assistant did not finish its plan. Try a smaller change.');
    reply=data.output?.flatMap((o:any)=>o.content||[]).filter((c:any)=>c.type==='output_text').map((c:any)=>c.text).join('')||'{}';
   }
@@ -119,7 +124,8 @@ export class OpenAIAssistant implements AssistantProvider{
    ...(input.reference?[{type:'input_text',text:'REFERENCE (user-attached design to recreate)'},{type:'input_image',image_url:input.reference,detail:'high'}]:[])
   ];
   const schema={type:'object',additionalProperties:false,required:['status','message'],properties:{status:{type:'string',enum:['pass','revise','uncertain']},message:{type:'string'}}};
-  const data=await this.request('responses',JSON.stringify({model:this.model,...(/^gpt-5|^gpt-6|^o[134]/.test(this.model)?{reasoning:{effort:'low'}}:{}),store:false,max_output_tokens:1000,instructions,input:[{role:'user',content}],text:{format:{type:'json_schema',name:'wandel_visual_verification',strict:true,schema}}}),{'Content-Type':'application/json'});
+  const data=await this.request('responses',JSON.stringify({model:this.model,...(/^gpt-5|^gpt-6|^o[134]/.test(this.model)?{reasoning:{effort:'low'}}:{}),store:false,prompt_cache_key:'wandel-verify',max_output_tokens:1000,instructions,input:[{role:'user',content}],text:{format:{type:'json_schema',name:'wandel_visual_verification',strict:true,schema}}}),{'Content-Type':'application/json'});
+  logUsage('verify',this.model,responsesUsage(data));
   if(data.status!=='completed')return {status:'uncertain',message:'Visual review did not finish.'};
   return VisualVerdictSchema.parse(JSON.parse(data.output?.flatMap((o:any)=>o.content||[]).filter((c:any)=>c.type==='output_text').map((c:any)=>c.text).join('')||'{}'));
  }
