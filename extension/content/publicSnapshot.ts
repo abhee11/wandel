@@ -64,7 +64,7 @@ export function publicSnapshot(doc:Document,workflow:Workflow,owned:Map<string,H
  const pageText=(doc.body.textContent||'').toLowerCase();
  for(const state of published.states)state.operations=state.operations.filter(op=>{if(op.kind!=='behavior'||!op.when?.text)return true;const holds=pageText.includes(op.when.text.toLowerCase())===op.when.present;delete op.when;return holds;});
  // A viewer needs neither the conversation that built this nor pictures of the real screens.
- delete published.assistantMemory;for(const state of published.states)delete state.screen;
+ delete published.assistantMemory;delete published.projectContext;for(const state of published.states)delete state.screen;
  if(mask){
   const real=new Set<string>(),walk=doc.createTreeWalker(doc.body,NodeFilter.SHOW_TEXT);
   for(let node=walk.nextNode();node;node=walk.nextNode()){const text=node.textContent?.trim();if(text&&!node.parentElement?.closest('[data-dx-ignore],[data-dx-owned],script,style'))real.add(text);}

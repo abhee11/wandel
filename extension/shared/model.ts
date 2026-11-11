@@ -89,7 +89,12 @@ export const ConnectionEventSchema=z.enum(['click','change','enter','finish']);
 export const ConnectionSpecSchema=z.object({to:id.optional(),newTitle:label.optional(),screen:VisitedScreenSchema.optional(),event:ConnectionEventSchema,conditions:z.array(ConnectionConditionSchema).max(8),otherwise:id.optional()}).strict().refine(c=>[c.to,c.newTitle,c.screen].filter(Boolean).length===1,'Choose one existing view, capture a screen or create a new view.');
 export type ConnectionCondition=z.infer<typeof ConnectionConditionSchema>;
 export type ConnectionEvent=z.infer<typeof ConnectionEventSchema>;
+/** Background the user pastes for a prototype (a PRD, spec, brand rules or sample data). Sent with every request while on; never published in a share link. */
+export const PROJECT_CONTEXT_LIMIT=40000;
+export const ProjectContextSchema=z.object({text:z.string().max(PROJECT_CONTEXT_LIMIT),on:z.boolean()}).strict();
+export type ProjectContext=z.infer<typeof ProjectContextSchema>;
 export const WorkflowSchema = z.object({
+  projectContext:ProjectContextSchema.optional(),
   /** Edits that already weren't showing when a link was shared, so they don't stop someone opening it. */
   shareBaseline:z.array(z.string().max(400)).max(300).optional(),
   assistantMemory:AssistantMemorySchema.optional(),schemaVersion: z.literal(1), id, name: label, origin: z.string(), route: z.string(), createdAt: z.string(), updatedAt: z.string(),
@@ -115,6 +120,7 @@ export type Command =
  | {type:'assistantContext';inspect?:string[];instruction?:string;chat?:boolean}
  | {type:'assistantReset'}
  | {type:'assistantRemember';memory:AssistantMemory}
+ | {type:'assistantProjectContext';context:ProjectContext|null}
  | {type:'assistantStyle';ref:string}
  | {type:'assistantApply';plan:unknown;token:string}
  | {type:'assistantRollback';token:string}

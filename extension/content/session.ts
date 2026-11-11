@@ -32,7 +32,7 @@ import {BatchSchema} from '../ai/planSchema';
 import {duplicateIntent} from '../ai/duplicateIntent';
 import {copyWithHeading} from './duplicateHeading';
 import { captureCopy } from './duplicate';
-import { VisitedScreenSchema, ConnectionSpecSchema, RecordSchema, OperationSchema, StyleSchema, clone, routeOf, uid, type Workflow, type Selection, type Snapshot, type Command, type SavedRecord, type CopyNode, type ConnectionEvent,type ConnectionWorkspace } from '../shared/model';
+import { ProjectContextSchema, VisitedScreenSchema, ConnectionSpecSchema, RecordSchema, OperationSchema, StyleSchema, clone, routeOf, uid, type Workflow, type Selection, type Snapshot, type Command, type SavedRecord, type CopyNode, type ConnectionEvent,type ConnectionWorkspace } from '../shared/model';
 import { renderLineage } from '../prototype/engine';
 import { createWorkflow, addOperation, addChild, addCapturedScreen, addLiveScreen, transition, History, validateWorkflow } from '../prototype/engine';
 import { operationFromPlan } from '../ai/planner';
@@ -628,6 +628,7 @@ export class Session {
         if(c.chat){const inactive=!this.projectionActive;this.cancelDrag();this.interacting=true;this.projectionActive=true;this.picking=false;this.dragging=false;this.replay=false;this.outline.style.display='none';if(inactive||this.workflow.states.find(state=>state.id===this.stateId)?.view==='panel'&&!this.renderer.owned.get('view:'+this.stateId)?.isConnected)this.render();}
         this.assistant.collect(this.workflow,this.stateId,this.selected,this.hovered,c.inspect,c.instruction);
       }
+      if(c.type==='assistantProjectContext'){if(c.context?.text.trim())this.workflow.projectContext=ProjectContextSchema.parse(c.context);else delete this.workflow.projectContext;this.dirty=true;this.scheduleDraft();}
       if(c.type==='assistantRemember'){this.workflow.assistantMemory=AssistantMemorySchema.parse(c.memory);this.dirty=true;this.scheduleDraft();}
       if(c.type==='assistantReset')this.assistant.reset();
       if(c.type==='assistantStyle')this.assistant.style(c.ref);
