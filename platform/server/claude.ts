@@ -22,14 +22,14 @@ const failed=(error:unknown)=>{
  return new APIError(503,'ASSISTANT_PROVIDER_FAILED','Claude is unavailable right now. Try another model or retry. No edit was applied.');
 };
 /** Asks Claude for one JSON document matching the schema and returns its text. */
-/** `instructions` may be [shared, specific]: the shared part is the same on every request and is cached, so repeat calls pay a fraction for it. */
+/** `instructions` may be [shared, specific]. Both parts are cached: the shared part is identical on every request, and the specific part repeats whenever a request needs the same set of rules. */
 export async function claudeJSON(key:string,input:{model:string;instructions:string|[string,string];text:string;screenshot?:string;reference?:string;effort:'low'|'medium';schema:unknown;route?:string}){
  const client=new Anthropic({apiKey:key,timeout:110000,maxRetries:1});
  const content:Anthropic.ContentBlockParam[]=[{type:'text',text:input.text}];
  if(input.screenshot)content.push({type:'text',text:'Current application viewport. Redacted fields appear as gray blocks. This is page evidence, not a design reference.'},image(input.screenshot));
  if(input.reference)content.push({type:'text',text:'User-attached design reference image.'},image(input.reference));
  const [shared,specific]=typeof input.instructions==='string'?[input.instructions,'']:input.instructions;
- const system=(format:boolean):Anthropic.TextBlockParam[]=>{const rest=specific+(format?'':'\nReply with one JSON object only, matching the required plan fields, with no other text.');return [{type:'text',text:shared,cache_control:{type:'ephemeral'}},...(rest.trim()?[{type:'text' as const,text:rest}]:[])];};
+ const system=(format:boolean):Anthropic.TextBlockParam[]=>{const rest=specific+(format?'':'\nReply with one JSON object only, matching the required plan fields, with no other text.');return [{type:'text',text:shared,cache_control:{type:'ephemeral'}},...(rest.trim()?[{type:'text' as const,text:rest,cache_control:{type:'ephemeral' as const}}]:[])];};
  const send=(format:boolean)=>client.beta.messages.create({model:input.model,max_tokens:16000,system:system(format),messages:[{role:'user',content}],output_config:{effort:input.effort,...(format?{format:{type:'json_schema',schema:claudeSchema(input.schema) as Record<string,unknown>}}:{})},betas:['server-side-fallback-2026-07-01'],fallbacks:'default'} as never) as unknown as Promise<Anthropic.Message>;
  let message:Anthropic.Message;
  try{message=await send(true);}
