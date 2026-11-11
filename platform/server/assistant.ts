@@ -10,6 +10,9 @@ import {claudeJSON} from './claude';
 import {modelChoices,type ModelChoice} from '../../extension/shared/models';
 import {one,type DB} from './db';
 import type {Entitlements} from './entitlements';
+const PLAN_CACHE_DAYS=14;
+/** Failure reports carry the request trimmed to 400 characters, so saved plans are found by the same trimmed form. */
+const planInstructionKey=(instruction:string)=>createHash('sha256').update(instruction.trim().toLowerCase().replace(/\s+/g,' ').slice(0,400)).digest('hex');
 export type AssistantInput={model?:string;instruction:string;context:PageContext;history?:ConversationHistory;feedback?:string;referenceImage?:string;pageScreenshot?:string;steps?:boolean};
 /** The instruction blocks a request can use. Anything that is not clearly a small edit gets every block; a duplicate, rename, move, hide or restyle that adds nothing new gets only the blocks its words call for. */
 export function relevantInstructions(input:AssistantInput){
@@ -138,6 +141,7 @@ export function assistantService(db:DB,entitlements:Entitlements,provider:Assist
    console.warn(JSON.stringify({event:'edit_failed',user:userId.slice(0,8),...input}));
    // Also kept in the database, so a failed edit can be diagnosed later without reproducing it.
    db.prepare('INSERT INTO analytics_events (id,user_id,name,properties,created_at) VALUES (?,?,?,?,?)').run(randomUUID(),userId,'edit_failed',JSON.stringify(input),clock().toISOString());
+   if(input.instruction)db.prepare('DELETE FROM plan_cache WHERE user_id=? AND instruction_key=?').run(userId,planInstructionKey(input.instruction));
    return {ok:true};
   }
   if(path.endsWith('/verify')){
@@ -145,9 +149,14 @@ export function assistantService(db:DB,entitlements:Entitlements,provider:Assist
    if(!provider.verify)return {verdict:{status:'uncertain',message:'Visual review is unavailable for this provider.'}};
    return metered(userId,input.requestId,createHash('sha256').update(raw).digest('hex'),async()=>({verdict:await provider.verify!(input)}),input.turnId);
   }
-  const input=z.object({model:z.string().max(60).optional(),instruction:z.string().trim().min(1).max(1600),context:PageContextSchema,history:ConversationHistorySchema.optional(),referenceImage:ReferenceImageSchema.optional(),pageScreenshot:ReferenceImageSchema.optional(),requestId:z.string().uuid(),turnId:z.string().uuid().optional(),steps:z.boolean().optional()}).strict().parse(decoded);
+  const input=z.object({model:z.string().max(60).optional(),instruction:z.string().trim().min(1).max(1600),context:PageContextSchema,history:ConversationHistorySchema.optional(),referenceImage:ReferenceImageSchema.optional(),pageScreenshot:ReferenceImageSchema.optional(),requestId:z.string().uuid(),turnId:z.string().uuid().optional(),steps:z.boolean().optional(),retry:z.boolean().optional()}).strict().parse(decoded);
   // Sanitize again at the trust boundary; no free-form transcript or page markup is retained.
   const context=PageContextSchema.parse(JSON.parse(JSON.stringify(input.context,(_key,value)=>typeof value==='string'?cleanText(value,2048):value)));
+  // The same request on the same screen returns the plan it got before: the models' own sampling can't be fixed, so the answer is kept.
+  // The key covers the request, the page description, history, model and the instructions in use, not the screenshot's pixels.
+  const instructionKey=planInstructionKey(input.instruction);
+  const cacheKey=createHash('sha256').update(JSON.stringify({instruction:input.instruction.trim().toLowerCase().replace(/\s+/g,' '),context,history:input.history||[],model:input.model||'default',steps:!!input.steps,reference:input.referenceImage?createHash('sha256').update(input.referenceImage).digest('hex'):null,rules:createHash('sha256').update(relevantInstructions({instruction:input.instruction,context,history:input.history,referenceImage:input.referenceImage,steps:input.steps})).digest('hex')})).digest('hex');
+  if(!input.retry){const saved=one<{plan:string}>(db,'SELECT plan FROM plan_cache WHERE user_id=? AND cache_key=? AND created_at>?',userId,cacheKey,new Date(clock().getTime()-PLAN_CACHE_DAYS*864e5).toISOString());if(saved){console.info(JSON.stringify({event:'plan_cache_hit',user:userId.slice(0,8)}));return {plan:AssistantPlanSchema.parse(JSON.parse(saved.plan))};}}
   return metered(userId,input.requestId,createHash('sha256').update(JSON.stringify({instruction:input.instruction,context,history:input.history,referenceImage:input.referenceImage,pageScreenshot:input.pageScreenshot})).digest('hex'),async()=>{
    const history=input.history?ConversationHistorySchema.parse(JSON.parse(JSON.stringify(input.history,(_key,value)=>typeof value==='string'?cleanText(value,1600):value))):undefined;
    let plan:AssistantPlan|undefined,feedback:string|undefined;
@@ -169,6 +178,8 @@ export function assistantService(db:DB,entitlements:Entitlements,provider:Assist
    if(!plan)throw new APIError(502,'INVALID_PLAN','I could not produce a valid layout plan. Nothing was applied.');
    // Panels before 0.3.5 check plans strictly: no next field and at most 8 targets per action.
    if(!input.steps){const {next:_next,...earlier}=plan;plan={...earlier,actions:earlier.actions.flatMap(action=>action.targets.length<=8?[action]:Array.from({length:Math.ceil(action.targets.length/8)},(_,i)=>({...action,targets:action.targets.slice(i*8,i*8+8)}))).slice(0,12)};}
+   db.prepare('DELETE FROM plan_cache WHERE user_id=? AND created_at<=?').run(userId,new Date(clock().getTime()-PLAN_CACHE_DAYS*864e5).toISOString());
+   db.prepare('INSERT OR REPLACE INTO plan_cache (user_id,cache_key,instruction_key,plan,created_at) VALUES (?,?,?,?,?)').run(userId,cacheKey,instructionKey,JSON.stringify(plan),clock().toISOString());
    return {plan};
   },input.turnId);
  }};

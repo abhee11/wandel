@@ -176,11 +176,13 @@ export function AssistantPanel({bridge,snapshot,onSave,onBusyChange,onVisualEdit
    let c=await context(undefined,value);
    // Selection is optional; the collector recovers or drops expired handles.
    // appliedSteps counts plans applied for this request, so a result the visual review rejects can be undone exactly.
-   let verificationNote='',reviewIssue='',appliedSteps=0,lastVerdict='',undone='';const combined=followUp&&recordTurn&&followUp.scope===origin?'Continue this request: '+followUp.text+'\nUser clarification: '+value:value;const image=referenceRef.current;setProgress('Looking at the page…');let pageScreenshot=await capture(c);
+   let verificationNote='',reviewIssue='',appliedSteps=0,lastVerdict='',undone='';
+   // Asking the exact same thing twice in a row means "try again": skip the saved answer for this request.
+   const askedAgain=(()=>{const prior=[...conversation.current].reverse().find(turn=>turn.role==='user'&&turn.id!==userId);return !!prior&&prior.text.trim().toLowerCase()===value.trim().toLowerCase();})();const combined=followUp&&recordTurn&&followUp.scope===origin?'Continue this request: '+followUp.text+'\nUser clarification: '+value:value;const image=referenceRef.current;setProgress('Looking at the page…');let pageScreenshot=await capture(c);
    setProgress(c.workspace?.goal?'Continuing our design…':'Thinking…');
    lastPlan.current='';
    const talkContext=(page:PageContext):PageContext=>talkOn.current?{...page,talk:{...(speaker.current?{speaker:speaker.current}:{}),recent:recentLines.current}}:page;
-   let plan=await planConversation(combined,talkContext(c),controller.signal,conversation.current.filter(turn=>turn.id!==userId),image,pageScreenshot,userId);spokenLine.current=plan.spoken||'';
+   let plan=await planConversation(combined,talkContext(c),controller.signal,conversation.current.filter(turn=>turn.id!==userId),image,pageScreenshot,userId,askedAgain);spokenLine.current=plan.spoken||'';
    const inspectPlan=async(input:AssistantPlan,current:PageContext,allowNavigation:boolean)=>resolveInspections(input,current,{
     active:stillHere,
     inspect:async refs=>{

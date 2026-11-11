@@ -70,3 +70,16 @@ it('sends step plans only to panels that run steps, and keeps older panels withi
  expect(newer.status).toBe(200);const current=(await newer.json()).plan;
  expect(current.next).toBe('Set the level on every card to 1 (Developing).');expect(current.actions[0].targets).toHaveLength(12);
 });
+it('returns the saved plan for the same request on the same screen, and asks again on retry or after a failure report',async()=>{
+ const same={instruction:'Add a Review button below this.',context};
+ const first=await request('/api/assistant/plan',{...same,requestId:crypto.randomUUID(),steps:true});expect(first.status).toBe(200);
+ const again=await request('/api/assistant/plan',{...same,requestId:crypto.randomUUID(),steps:true});
+ expect(again.status).toBe(200);expect((await again.json()).plan).toEqual((await first.json()).plan);expect(provider.plan).toHaveBeenCalledTimes(1);
+ // A different screen is a different request.
+ await request('/api/assistant/plan',{...same,context:{...context,route:'/billing'},requestId:crypto.randomUUID(),steps:true});expect(provider.plan).toHaveBeenCalledTimes(2);
+ // "Try again" skips the saved answer.
+ await request('/api/assistant/plan',{...same,requestId:crypto.randomUUID(),steps:true,retry:true});expect(provider.plan).toHaveBeenCalledTimes(3);
+ // A failed edit clears it, so the next attempt is fresh.
+ expect((await request('/api/assistant/diagnostic',{detail:'undone after review: overlap',instruction:same.instruction})).status).toBe(200);
+ await request('/api/assistant/plan',{...same,requestId:crypto.randomUUID(),steps:true});expect(provider.plan).toHaveBeenCalledTimes(4);
+});
