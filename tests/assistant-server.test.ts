@@ -83,3 +83,20 @@ it('returns the saved plan for the same request on the same screen, and asks aga
  expect((await request('/api/assistant/diagnostic',{detail:'undone after review: overlap',instruction:same.instruction})).status).toBe(200);
  await request('/api/assistant/plan',{...same,requestId:crypto.randomUUID(),steps:true});expect(provider.plan).toHaveBeenCalledTimes(4);
 });
+it('sends conversation to the cheap chat model and everything else to the planner',async()=>{
+ const {chatOnly}=await import('../platform/server/assistant');
+ for(const chat of ['hi','Thanks!','What do you think of this layout?','Review this page’s current layout. Briefly explain what works, identify the three most useful improvements','is this accessible?','why does the header feel heavy'])expect(chatOnly(chat),chat).toBe(true);
+ for(const edit of ['Add a promo banner above the cards','can you add a button?','make it bigger','Rename Engagement on all cards','undo','move the chart left','how do I make this better?','Continue this request: add a card\nUser clarification: the second'])expect(chatOnly(edit),edit).toBe(false);
+ provider.chat=vi.fn().mockResolvedValue({status:'answer',message:'The cards compete with the header; give the metrics more space.'});
+ const answered=await request('/api/assistant/plan',{...payload(),instruction:'What do you think of this layout?',steps:true});
+ expect(answered.status).toBe(200);const reply=(await answered.json()).plan;
+ expect(reply.status).toBe('answer');expect(reply.message).toMatch(/cards compete/);expect(provider.plan).not.toHaveBeenCalled();
+ // The chat model hands back a request that is really an edit; the planner takes it.
+ vi.mocked(provider.chat!).mockResolvedValueOnce({status:'edit',message:''});
+ await request('/api/assistant/plan',{...payload(),instruction:'Could the cards sit in two columns?',steps:true});expect(provider.plan).toHaveBeenCalledTimes(1);
+ // A failing chat model never blocks the reply.
+ vi.mocked(provider.chat!).mockRejectedValueOnce(new Error('model not found'));
+ const fallback=await request('/api/assistant/plan',{...payload(),instruction:'Why is the header so tall?',steps:true});expect(fallback.status).toBe(200);expect(provider.plan).toHaveBeenCalledTimes(2);
+ // Edits never touch the chat model.
+ await request('/api/assistant/plan',{...payload(),instruction:'Add a promo banner above the cards',steps:true});expect(provider.chat).toHaveBeenCalledTimes(3);
+});
