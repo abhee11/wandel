@@ -58,3 +58,15 @@ it('repairs one invalid plan internally before execution and meters the successf
  vi.mocked(provider.plan).mockResolvedValueOnce(response('edit','Bad ref',[action('style',['missing'],{style:{alignItems:'center'}})])).mockResolvedValueOnce(response('edit','Aligned',[action('style',['e1'],{style:{alignItems:'center'}})]));
  const result=await request('/api/assistant/plan',{...payload(),instruction:'Align this vertically'});expect(result.status).toBe(200);expect(provider.plan).toHaveBeenCalledTimes(2);expect(vi.mocked(provider.plan).mock.calls[1][0].feedback).toContain('unknown element');expect(db.prepare("SELECT count(*) n FROM ai_actions WHERE status='succeeded'").get()).toEqual({n:1});
 });
+it('sends step plans only to panels that run steps, and keeps older panels within 8 targets per action',async()=>{
+ // Panels before 0.3.5 (including a build under store review) parse plans strictly: an unknown next field or 9+ targets would fail every edit.
+ const elements=Array.from({length:12},(_,i)=>({...context.elements[0],ref:'e'+(i+1),name:'Engagement',text:'Engagement'}));
+ const stepPlan={...response('edit','Renamed every card.',[action('text',elements.map(e=>e.ref),{text:'Achieving expectations'})]),next:'Set the level on every card to 1 (Developing).'};
+ vi.mocked(provider.plan).mockResolvedValue(stepPlan);
+ const older=await request('/api/assistant/plan',{...payload(),instruction:'Rename Engagement on all cards',context:{...context,elements}});
+ expect(older.status).toBe(200);const old=(await older.json()).plan;
+ expect('next' in old).toBe(false);expect(old.actions.map((a:{targets:string[]})=>a.targets.length)).toEqual([8,4]);
+ const newer=await request('/api/assistant/plan',{...payload(),instruction:'Rename Engagement on all cards',context:{...context,elements},steps:true});
+ expect(newer.status).toBe(200);const current=(await newer.json()).plan;
+ expect(current.next).toBe('Set the level on every card to 1 (Developing).');expect(current.actions[0].targets).toHaveLength(12);
+});

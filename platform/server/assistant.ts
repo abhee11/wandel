@@ -2,7 +2,7 @@ import {normalizePlan,validatePlanReferences,planContractIssues} from '../../ext
 import {createHash,randomUUID} from 'node:crypto';
 import {z} from 'zod';
 import {AssistantPlanSchema,PageContextSchema,ConversationHistorySchema,ReferenceImageSchema,VisualVerdictSchema,type VisualVerdict,response,type AssistantPlan,type PageContext,type ConversationHistory} from '../../extension/assistant/schema';
-import {assistantOutputSchema,assistantInstructions,layoutInstructions,pageDesignInstructions,referenceInstructions,layoutConversationInstructions,fieldInstructions,conversationInstructions,prototypePageInstructions,chartSectionInstructions,blockInstructions,continuityInstructions,completionInstructions} from '../../extension/assistant/providerSchema';
+import {assistantOutputSchema,assistantInstructions,stepInstructions,layoutInstructions,pageDesignInstructions,referenceInstructions,layoutConversationInstructions,fieldInstructions,conversationInstructions,prototypePageInstructions,chartSectionInstructions,blockInstructions,continuityInstructions,completionInstructions} from '../../extension/assistant/providerSchema';
 import {cleanText} from '../../extension/assistant/privacy';
 import {StyleSchema} from '../../extension/shared/model';
 import {APIError,rateLimit} from './security';
@@ -10,14 +10,14 @@ import {claudeJSON} from './claude';
 import {modelChoices,type ModelChoice} from '../../extension/shared/models';
 import {one,type DB} from './db';
 import type {Entitlements} from './entitlements';
-export type AssistantInput={model?:string;instruction:string;context:PageContext;history?:ConversationHistory;feedback?:string;referenceImage?:string;pageScreenshot?:string};
+export type AssistantInput={model?:string;instruction:string;context:PageContext;history?:ConversationHistory;feedback?:string;referenceImage?:string;pageScreenshot?:string;steps?:boolean};
 /** The instruction blocks a request can use. Anything that is not clearly a small edit gets every block; a duplicate, rename, move, hide or restyle that adds nothing new gets only the blocks its words call for. */
 export function relevantInstructions(input:AssistantInput){
  const request=input.instruction.toLowerCase(),asked=(request+' '+(input.feedback||'')+' '+JSON.stringify(input.history||[]).slice(-2000)).toLowerCase();
  const adding=/\b(add|adds|adding|create|insert|build|include|compose|put|place|show|new|more|another|section|banner|modal|dialog|page|screen|form|table|chart|graph)\b/.test(asked);
  const small=!input.referenceImage&&!adding&&/\b(duplicate|copy|copies|rename|move|swap|reorder|stack|hide|remove|delete|restyle|recolou?r|colou?r|purple|blue|red|green|black|white|grey|gray|bold|italic|bigger|smaller|larger|font|rounded|border|align|center|spacing|padding|margin|title)\b/.test(request);
  const has=(pattern:RegExp)=>!small||pattern.test(asked);
- return [assistantInstructions,layoutInstructions,
+ return [assistantInstructions,input.steps&&stepInstructions,layoutInstructions,
   has(/\b(theme|dark|light|page|screen|header|redesign|rearrange|reorganize|layout|navigation|nav|region)\b/)&&pageDesignInstructions,
   referenceInstructions,
   has(/\b(grid|columns?|2x2|rows?|layout|arrange|stack|side by side|swap|reorder)\b/)&&layoutConversationInstructions,
@@ -145,7 +145,7 @@ export function assistantService(db:DB,entitlements:Entitlements,provider:Assist
    if(!provider.verify)return {verdict:{status:'uncertain',message:'Visual review is unavailable for this provider.'}};
    return metered(userId,input.requestId,createHash('sha256').update(raw).digest('hex'),async()=>({verdict:await provider.verify!(input)}),input.turnId);
   }
-  const input=z.object({model:z.string().max(60).optional(),instruction:z.string().trim().min(1).max(1600),context:PageContextSchema,history:ConversationHistorySchema.optional(),referenceImage:ReferenceImageSchema.optional(),pageScreenshot:ReferenceImageSchema.optional(),requestId:z.string().uuid(),turnId:z.string().uuid().optional()}).strict().parse(decoded);
+  const input=z.object({model:z.string().max(60).optional(),instruction:z.string().trim().min(1).max(1600),context:PageContextSchema,history:ConversationHistorySchema.optional(),referenceImage:ReferenceImageSchema.optional(),pageScreenshot:ReferenceImageSchema.optional(),requestId:z.string().uuid(),turnId:z.string().uuid().optional(),steps:z.boolean().optional()}).strict().parse(decoded);
   // Sanitize again at the trust boundary; no free-form transcript or page markup is retained.
   const context=PageContextSchema.parse(JSON.parse(JSON.stringify(input.context,(_key,value)=>typeof value==='string'?cleanText(value,2048):value)));
   return metered(userId,input.requestId,createHash('sha256').update(JSON.stringify({instruction:input.instruction,context,history:input.history,referenceImage:input.referenceImage,pageScreenshot:input.pageScreenshot})).digest('hex'),async()=>{
@@ -154,7 +154,7 @@ export function assistantService(db:DB,entitlements:Entitlements,provider:Assist
    for(let attempt=0;attempt<2;attempt++){
     plan=undefined;
     try{
-     plan=normalizePlan(await provider.plan({instruction:input.instruction,context,...(input.referenceImage?{referenceImage:input.referenceImage}:{}),...(input.pageScreenshot?{pageScreenshot:input.pageScreenshot}:{}),...history?{history}:{},...feedback?{feedback}:{}}));
+     plan=normalizePlan(await provider.plan({instruction:input.instruction,context,...(input.steps?{steps:true}:{}),...(input.referenceImage?{referenceImage:input.referenceImage}:{}),...(input.pageScreenshot?{pageScreenshot:input.pageScreenshot}:{}),...history?{history}:{},...feedback?{feedback}:{}}));
      for(const action of plan.actions){if(action.kind!=='duplicate'||!action.labels.length)continue;const source=context.elements.find(e=>e.ref===action.targets[0]);if(source?.attributes['wandel-control-count']==='0')throw new APIError(502,'INVALID_PLAN','This feature card has no buttons. Duplicate it with text for the heading and description for the body; labels must be empty. Edit a copied badge through a separate text action using its captured ref.');}
      try{validatePlanReferences(plan,[...context.elements.map(e=>e.ref),...(plan.status==='inspect'?context.views.map(view=>'view:'+view.id):[])]);}catch(error){throw new APIError(502,'INVALID_REFERENCES',(error as Error).message+' Nothing was applied.');}
      // Reject shapes the executor cannot build here, so the repair names the exact rule.
@@ -167,6 +167,8 @@ export function assistantService(db:DB,entitlements:Entitlements,provider:Assist
     }
    }
    if(!plan)throw new APIError(502,'INVALID_PLAN','I could not produce a valid layout plan. Nothing was applied.');
+   // Panels before 0.3.5 check plans strictly: no next field and at most 8 targets per action.
+   if(!input.steps){const {next:_next,...earlier}=plan;plan={...earlier,actions:earlier.actions.flatMap(action=>action.targets.length<=8?[action]:Array.from({length:Math.ceil(action.targets.length/8)},(_,i)=>({...action,targets:action.targets.slice(i*8,i*8+8)}))).slice(0,12)};}
    return {plan};
   },input.turnId);
  }};

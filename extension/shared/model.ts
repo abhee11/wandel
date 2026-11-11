@@ -8,7 +8,7 @@ const id = z.string().min(1).max(100);
 const label = z.string().min(1).max(300);
 export const LocatorSchema = z.object({
   popup:z.object({role:z.enum(["listbox","menu"]),id:z.string().max(2048),label:z.string().max(2048)}).strict().optional(),
-  structure:z.object({anchorId:z.string().min(1).max(2048),path:z.array(z.number().int().min(0).max(10000)).min(1).max(32)}).strict().optional(),
+  structure:z.object({anchorId:z.string().min(1).max(2048),path:z.array(z.number().int().min(0).max(10000)).max(32)}).strict().optional(),
   textPath:z.array(z.number().int().min(0).max(10000)).min(1).max(32).optional(),
   ancestorTags:z.array(z.string().max(40)).max(32).optional(),
   owned: id.optional(), tag: z.string().max(40), role: z.string().max(60), name: z.string().max(300), text: z.string().max(300),

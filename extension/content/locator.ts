@@ -23,7 +23,13 @@ export function nameOf(el:Element) {
 }
 /** The page's own children: an address must not shift because Wandel added something beside them. */
 const pageChildren=(el:Element)=>[...el.children].filter(child=>!child.hasAttribute('data-dx-owned'));
+const ownedAnchor='dx-owned:';
 function atAddress(l:Locator,root:ParentNode){
+ if(l.structure!.anchorId.startsWith(ownedAnchor)){
+  const id=l.structure!.anchorId.slice(ownedAnchor.length),anchors=deepElements(root,'[data-dx-owned]').filter(el=>(el as HTMLElement).dataset.dxOwned===id);
+  if(anchors.length!==1)return undefined;
+  let node:Element|undefined=anchors[0];for(const index of l.structure!.path)node=node&&node.children[index];return node;
+ }
  const anchors=deepElements(root,'[id]').filter(el=>el.id===l.structure!.anchorId);
  if(root instanceof HTMLElement&&root.id===l.structure!.anchorId)anchors.unshift(root);
  if(anchors.length!==1)return undefined;
@@ -39,7 +45,11 @@ function ancestorTags(el:Element){const tags:string[]=[];for(let node=el.parentE
 export function structuralIdentity(el:Element):Locator['structure'] {
   const path:number[]=[];
   for(let node=el;node.parentElement&&path.length<32;node=node.parentElement){
-    const parent=node.parentElement;path.unshift(pageChildren(parent).indexOf(node));
+    // Inside something Wandel added, the address starts at that addition: the page-only count below skips Wandel's
+    // own elements, so it cannot find them (it used to record -1 and fail on any follow-up to Wandel's additions).
+    const owned=(node as HTMLElement).dataset?.dxOwned;
+    if(owned)return {anchorId:ownedAnchor+owned,path};
+    const parent=node.parentElement;path.unshift((parent.closest('[data-dx-owned]')?[...parent.children]:pageChildren(parent)).indexOf(node));
     if(parent.id&&[...parent.ownerDocument.querySelectorAll('[id]')].filter(n=>n.id===parent.id).length===1)return {anchorId:parent.id,path};
   }
   return undefined;

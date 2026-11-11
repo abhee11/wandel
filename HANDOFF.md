@@ -26,6 +26,9 @@ All planned and finished tests, including the complex build requests, are in `do
 - Type check: `npx tsc --noEmit -p .`
 - The repo's `node_modules` are macOS builds; run builds on the Mac.
 
+## Plan format compatibility
+From 0.3.5 the panel sends `steps:true` with each plan request. Only then does the server add `stepInstructions`, return `next` (the follow-up step the panel runs by itself, up to 4 in a row) and allow up to 24 targets per action. Older panels, including any build still in store review, parse plans strictly, so for them the server removes `next` and splits actions into groups of 8 targets (test: "sends step plans only to panels that run steps"). Keep this until no pre-0.3.5 build is in use.
+
 ## Chrome Web Store reviews
 The store reviewer signs in as `host+review@studio447.ai` (password with the owner, never in the repo). Clerk's new-device check (Client Trust) emails a code the reviewer cannot read, so turn it off in the production Clerk dashboard before each store submission and back on after approval. The store item ID is `lnmebcccoalcpdcfkggmcmjmnblihbmi`; listing and privacy answers are in `releases/STORE-LISTING.md`.
 

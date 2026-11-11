@@ -55,6 +55,8 @@ export function AssistantPanel({bridge,snapshot,onSave,onBusyChange,onVisualEdit
  async function capture(c:PageContext){if(!bridge.capturePage){setVisualContext('DOM context only: this browser connection has no screenshot capture.');return undefined;}try{const image=await bridge.capturePage(c);setVisualContext('Redacted viewport screenshot and DOM context.');return image;}catch(error){setVisualContext('DOM context only. Capture diagnostic: '+(error instanceof Error?error.message:'Viewport capture was unavailable.'));return undefined;}}
  // The last plan's steps, for failure reports.
  const lastPlan=useRef('');
+ // A large request runs as a few steps, each planned against the page as the previous step left it.
+ const continuation=useRef<string|null>(null),autoSteps=useRef(0);
  function recover(detail:string,applied=false){spokenLine.current='';const asked=[...conversation.current].reverse().find(turn=>turn.role==='user')?.text||'';reportFailure({detail:detail.slice(0,600),instruction:asked.slice(0,400),plan:lastPlan.current.slice(0,400),page:(snapshot.workflow.route||'').slice(0,300),applied});const reply=conversationRecovery(detail,applied);setError('');setMessage(reply.text);say('assistant',reply.text,{status:'failed',error:detail.slice(0,300)});speak(reply.text);}
 
  const clarificationRequest=useRef<{text:string;id:string;scope:string}|null>(null);
@@ -162,9 +164,10 @@ export function AssistantPanel({bridge,snapshot,onSave,onBusyChange,onVisualEdit
  async function submit(text:string,prepared?:Promise<PageContext>,recordTurn=true,expectedSelection?:string|null,existingId?:string,capturedSelection?:string){
   // The first request explains what leaves the browser, once, before anything is sent.
   if(recordTurn&&!dataNoticeAccepted()){setDataNotice(()=>()=>void submit(text,prepared,recordTurn,expectedSelection,existingId,capturedSelection));return;}
+  if(recordTurn){autoSteps.current=0;continuation.current=null;}
   const followUp=clarificationRequest.current;const value=text.trim();if(!value||sending.current)return;if(/^\/(?!\/)[a-zA-Z0-9/_-]*$/.test(value)){try{await bridge.send({type:'createPage',route:value});setInstruction('');}catch(error){setError(error instanceof Error?error.message:'Could not create that page.');}return;}sending.current=true;pendingCopy.current=null;const request=++epoch.current,origin=scopeRef.current,userId=existingId||uid(),selection=capturedSelection??JSON.stringify(snapshot.selected?.locator||null);activeRequest.current={id:userId,text:value,scope:origin,selection,applying:false};
   stickToBottom.current=true;if(recordTurn)setInstruction('');if(recordTurn)say('user',value,{id:userId,status:'sending',scope:origin,selection});else updateTurn(userId,{status:'sending',error:undefined,retryable:false});
-  abort.current?.abort();const controller=new AbortController();abort.current=controller;const requestDeadline=setTimeout(()=>controller.abort(),180000);let failed=false,waiting=false;
+  abort.current?.abort();const controller=new AbortController();abort.current=controller;let timedOut=false;const requestDeadline=setTimeout(()=>{timedOut=true;controller.abort();},180000);let failed=false,waiting=false;
   // An edit can move this workflow to the screen it just built; that is this request finishing, not the user leaving.
   const stillHere=()=>request===epoch.current&&!controller.signal.aborted&&(origin===scopeRef.current||!!activeRequest.current?.applying&&origin.split(':')[0]===scopeRef.current.split(':')[0]);
   setBusy(true);setError('');setClarification(null);clarificationRequest.current=null;setProgress('Understanding your request…');composer.current?.focus();
@@ -172,7 +175,8 @@ export function AssistantPanel({bridge,snapshot,onSave,onBusyChange,onVisualEdit
   try{
    let c=await context(undefined,value);
    // Selection is optional; the collector recovers or drops expired handles.
-   let verificationNote='',reviewIssue='';const combined=followUp&&recordTurn&&followUp.scope===origin?'Continue this request: '+followUp.text+'\nUser clarification: '+value:value;const image=referenceRef.current;setProgress('Looking at the page…');let pageScreenshot=await capture(c);
+   // appliedSteps counts plans applied for this request, so a result the visual review rejects can be undone exactly.
+   let verificationNote='',reviewIssue='',appliedSteps=0,lastVerdict='',undone='';const combined=followUp&&recordTurn&&followUp.scope===origin?'Continue this request: '+followUp.text+'\nUser clarification: '+value:value;const image=referenceRef.current;setProgress('Looking at the page…');let pageScreenshot=await capture(c);
    setProgress(c.workspace?.goal?'Continuing our design…':'Thinking…');
    lastPlan.current='';
    const talkContext=(page:PageContext):PageContext=>talkOn.current?{...page,talk:{...(speaker.current?{speaker:speaker.current}:{}),recent:recentLines.current}}:page;
@@ -228,10 +232,12 @@ export function AssistantPanel({bridge,snapshot,onSave,onBusyChange,onVisualEdit
      // The exact plan being applied, with each step's target, goes into any failure report.
      lastPlan.current=proposed.actions.map(action=>{const target=current.elements.find(element=>element.ref===action.targets[0]);return action.kind+(action.element?' '+action.element:'')+(action.position?' '+action.position:'')+' → '+(target?target.tag+(target.attributes?.role?'['+target.attributes.role+']':'')+' "'+(target.name||target.text||'').slice(0,30)+'"':action.targets[0]);}).join(' | ');
      try{await bridge.send({type:'assistantApply',plan:proposed,token:current.token});}catch(e){const m=e instanceof Error?e.message:'';if(!m.startsWith(keptPreview))throw e;kept=m.slice(keptPreview.length);}
+     appliedSteps++;
      verificationNote='';reviewIssue='';
      // Review the applied page, including warnings. A warning is evidence, not a veto.
      // One targeted correction and one recheck bound latency and cost; never replay the original request here.
      for(let repair=0;repair<2;repair++){
+      lastVerdict='';
       if(!stillHere())throw new Error('Request canceled.');
       if(!kept&&!requiresVisualReview(proposed,!!image)&&repair===0)break;
       setProgress(repair?'Checking the correction…':'Checking the rendered result…');
@@ -241,6 +247,7 @@ export function AssistantPanel({bridge,snapshot,onSave,onBusyChange,onVisualEdit
        afterContext=await context(undefined,combined);after=await capture(afterContext);
        if(before&&after){
         const verdict=await verifyConversation(combined.slice(0,1350)+revealNote(proposed)+(revealed?'\nAFTER is scrolled to the changed area. Judge the edit, not the scroll position.':'')+(kept?'\nLayout diagnostic (a clue, not proof of failure): '+kept.slice(0,700):''),proposed,before,after,controller.signal,userId,image);
+        lastVerdict=verdict.status;
         if(verdict.status==='pass'){reviewIssue='';break;}
         if(verdict.status==='uncertain'){verificationNote='The change is visible, but visual review could not confirm it: '+verdict.message;reviewIssue=kept;break;}
         issue=verdict.message;
@@ -270,6 +277,7 @@ export function AssistantPanel({bridge,snapshot,onSave,onBusyChange,onVisualEdit
        kept='';
        try{await bridge.send({type:'assistantApply',plan:correction,token:afterContext!.token});}
        catch(error){const message=error instanceof Error?error.message:'';if(!message.startsWith(keptPreview))throw error;kept=message.slice(keptPreview.length);}
+       appliedSteps++;
       }catch(error){
        if(controller.signal.aborted||request!==epoch.current)throw error;
        // A failed correction must not replay (and duplicate) the already-applied original edit.
@@ -277,13 +285,27 @@ export function AssistantPanel({bridge,snapshot,onSave,onBusyChange,onVisualEdit
       }
      }
     },refresh:async()=>{const fresh=await context(undefined,combined);pageScreenshot=await capture(fresh);return fresh;},inspect:(refs)=>context(refs,combined),replan:(feedback,current)=>planConversation(combined,current,controller.signal,[...conversation.current.filter(turn=>turn.id!==userId),{role:'assistant',text:'The last proposed edit was not applied or its preview was fully rolled back. Repair only the current request; inspect or ask a concise clarification when the target is genuinely ambiguous. '+feedback,status:'failed'}],image,pageScreenshot,userId),active:stillHere,repairing:()=>setProgress('Checking a safer way to apply your request…')});}
+   // The review still rejects the result after one correction: undo what this request applied rather than leave a broken page.
+   if(lastVerdict==='revise'&&reviewIssue&&appliedSteps&&request===epoch.current){
+    try{for(let step=0;step<appliedSteps;step++)await bridge.send({type:'undo'});undone=reviewIssue;reviewIssue='';
+     const asked=[...conversation.current].reverse().find(turn=>turn.role==='user')?.text||'';
+     reportFailure({detail:('undone after review: '+undone).slice(0,600),instruction:asked.slice(0,400),plan:lastPlan.current.slice(0,400),page:(snapshot.workflow.route||'').slice(0,300),applied:false});
+    }catch{/* Undo was refused (newer work on the page); keep the result and say it needs attention. */}
+   }
    spokenLine.current=plan.spoken||'';
    lastPlan.current=plan.status+': '+plan.actions.map(action=>action.kind+(action.element?' '+action.element:'')+(action.position?' '+action.position:'')).join(', ');
    if(plan.status==='clarify'||plan.status==='unsupported'){setClarification(plan);if(plan.status!=='unsupported'){waiting=true;clarificationRequest.current={text:combined,id:userId,scope:origin};}if(plan.candidates.length)await bridge.send({type:'assistantCandidates',refs:plan.candidates});answer(plan.status==='clarify'?(plan.question||plan.message):plan.message);return;}
-   if(request===epoch.current){await remember(plan);answer(plan.status==='edit'?(plan.reply||'Applied: '+plan.actions.map(action=>action.kind==='create'?'added '+(action.text||action.element):action.kind==='duplicate'?'duplicated '+(action.text||'the referenced element'):action.kind==='theme'?'updated the theme':action.kind==='layout'?'updated the layout':action.kind==='text'?'updated the text':action.kind==='remove'?'removed the element':action.kind==='connect'?'connected the views':'updated the element').join('; ')+'. Undo is available.')+(reviewIssue?' The edit still needs attention: '+reviewIssue.replace(/\s*\([^)]*\)/g,'')+' I couldn’t resolve this automatically. Undo is available.':verificationNote?' '+verificationNote:''):plan.message,plan.status==='edit',plan.status==='edit'?reviewIssue:'');}
-  }catch(e){if(request===epoch.current){failed=true;void bridge.send({type:'assistantRemember',memory:{...emptyAssistantMemory(),...snapshot.workflow.assistantMemory,pending:value.slice(0,300)}}).catch(()=>{});const detail=e instanceof Error?e.message:'Could not get a reply.',applyingNow=!!activeRequest.current?.applying;
+   if(request===epoch.current){await remember(plan);answer(undone?'I undid that change because the result wasn’t right: '+undone.replace(/\s*\([^)]*\)/g,'').trim().replace(/\.?$/,'.')+' The page is back to how it was. Say “redo” to see it anyway, or ask for it in smaller steps.':plan.status==='edit'?(plan.reply||'Applied: '+plan.actions.map(action=>action.kind==='create'?'added '+(action.text||action.element):action.kind==='duplicate'?'duplicated '+(action.text||'the referenced element'):action.kind==='theme'?'updated the theme':action.kind==='layout'?'updated the layout':action.kind==='text'?'updated the text':action.kind==='remove'?'removed the element':action.kind==='connect'?'connected the views':'updated the element').join('; ')+'. Undo is available.')+(reviewIssue?' The edit still needs attention: '+reviewIssue.replace(/\s*\([^)]*\)/g,'')+' I couldn’t resolve this automatically. Undo is available.':verificationNote?' '+verificationNote:''):plan.message,!undone&&plan.status==='edit',!undone&&plan.status==='edit'?reviewIssue:'');}
+   if(request===epoch.current&&!undone&&plan.status==='edit'&&plan.next?.trim())continuation.current=plan.next.trim();
+  }catch(e){if(request===epoch.current){failed=true;void bridge.send({type:'assistantRemember',memory:{...emptyAssistantMemory(),...snapshot.workflow.assistantMemory,pending:value.slice(0,300)}}).catch(()=>{});const detail=timedOut?'[ASSISTANT_TIMEOUT]':e instanceof Error?e.message:'Could not get a reply.',applyingNow=!!activeRequest.current?.applying;
    // The request stays one tap away whenever repeating it cannot duplicate an applied change.
-   updateTurn(userId,{status:'failed',error:undefined,retryable:conversationRecovery(detail,applyingNow).retryable});recover(detail,applyingNow);}}finally{clearTimeout(requestDeadline);if(request===epoch.current){if(!failed)updateTurn(userId,{status:waiting?'waiting':'sent'});activeRequest.current=null;sending.current=false;setBusy(false);}}
+   updateTurn(userId,{status:'failed',error:undefined,retryable:conversationRecovery(detail,applyingNow).retryable});recover(detail,applyingNow);}}finally{clearTimeout(requestDeadline);if(request===epoch.current){if(!failed)updateTurn(userId,{status:waiting?'waiting':'sent'});activeRequest.current=null;sending.current=false;setBusy(false);
+   const next=continuation.current;continuation.current=null;
+   if(next&&!failed&&!waiting){
+    if(autoSteps.current>=4)say('assistant','There’s more to do: '+next+' Say “continue” and I’ll carry on.');
+    else{autoSteps.current++;const id=uid();say('user','Next step: '+next,{id,status:'sending',scope:origin});void submit(next,undefined,false,undefined,id);}
+   }
+  }}
 
  }
  async function resumeClarification(ref:string){

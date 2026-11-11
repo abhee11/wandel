@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Wandel \u2014 Workflow Prototyper",
   "description": "Change your live web app by just asking. Prototype new features on real pages and share them as a link.",
-  "version": "0.3.4",
+  "version": "0.3.5",
   "minimum_chrome_version": "116",
   "permissions": [
     "sidePanel",
