@@ -27,3 +27,10 @@ it('keeps project context on a saved prototype',()=>{
  const parsed=WorkflowSchema.safeParse({projectContext:{text:'Spec',on:true},schemaVersion:1,id:'w1',name:'Test',origin:'https://example.test',route:'/',createdAt:now,updatedAt:now,entry:'s1',maxStates:10,states:[{id:'s1',title:'Existing application',parent:null,view:'base',operations:[]}],edges:[]});
  expect(parsed.success?parsed.data.projectContext:parsed.error.issues).toEqual({text:'Spec',on:true});
 });
+it('puts the app data map after the project context and before the date',async()=>{
+ const body=await sent({elements:[],projectContext:'Spec',appMap:'GET /api/invoices\n  returns: list'});
+ const i=body.instructions;
+ expect(i.indexOf('<project_context>')).toBeLessThan(i.indexOf('<app_data_map>'));
+ expect(i.indexOf('<app_data_map>')).toBeLessThan(i.indexOf('Today is'));
+ expect(body.input).not.toContain('/api/invoices');
+});

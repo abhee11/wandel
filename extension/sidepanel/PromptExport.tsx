@@ -2,10 +2,11 @@ import {useState,useRef} from 'react';
 import {copyText} from './copyText';
 import {implementationPrompt,implementationBundle} from '../implementation/brief';
 import type {Snapshot} from '../shared/model';
+import {readMap} from '../appmap/store';
 export function PromptExport({prepare,disabled=false}:{prepare:()=>Promise<Snapshot>;disabled?:boolean}){
  const [prompt,setPrompt]=useState(''),[message,setMessage]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');const preview=useRef<HTMLTextAreaElement>(null);
  async function run(action:'copy'|'preview'|'bundle'){
-  setBusy(true);setMessage('');setError('');try{const {workflow,designEvidence}=await prepare(),text=implementationPrompt(workflow,designEvidence);setPrompt(text);
+  setBusy(true);setMessage('');setError('');try{const {workflow,designEvidence}=await prepare(),appMap=typeof chrome!=='undefined'&&chrome.storage?.local?await readMap(workflow.origin).catch(()=>null):null,text=implementationPrompt(workflow,designEvidence,appMap);setPrompt(text);
    if(action==='copy'){if(await copyText(text))setMessage('Implementation prompt copied. Paste it into your coding agent with access to the application repository.');else{setMessage('Clipboard access is unavailable. Select the prompt below and copy it.');requestAnimationFrame(()=>preview.current?.select());}}
    if(action==='bundle'){const url=URL.createObjectURL(new Blob([JSON.stringify(implementationBundle(workflow,designEvidence),null,2)],{type:'application/json'})),a=document.createElement('a');a.href=url;a.download=(workflow.name.replace(/[^a-z0-9 -]/gi,'').slice(0,70)||'Workflow')+'.implementation.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);setMessage('Bundle downloaded with the prompt, structured changes, and available screen references. Review captured images before sharing.');}
   }catch(e){setError(e instanceof Error?e.message:'Could not export this flow.');}finally{setBusy(false);}

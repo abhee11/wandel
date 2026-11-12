@@ -26,6 +26,8 @@ describe('shapes',()=>{
   expect(shapeOf({note:'Ships in two days'})!.fields!.note.personal).toBeUndefined();
   expect(shapeOf({contact:'+1 415 555 0100'})!.fields!.contact.personal).toBe(true);
   expect(shapeOf({x:'a@b.co'})!.fields!.x.personal).toBe(true);
+  expect(shapeOf({due_date:'2026-01-01',created_at:'2026-01-01T10:00:00Z'})!.fields!.due_date.personal).toBeUndefined();
+  expect(shapeOf({date_of_birth:'1990-01-01'})!.fields!.date_of_birth.personal).toBe(true);
  });
  it('stops keeping values once a set grows past eight',()=>{
   let shape=shapeOf({status:'a'})!;
@@ -109,5 +111,40 @@ describe('what the page may send',()=>{
   expect(validObservations([good,{method:'GET'},{...good,status:'200'},{...good,response:{evil:true}},'junk'])).toHaveLength(1);
   expect(validObservations('nope')).toEqual([]);
   expect(validObservations(Array(80).fill(good))).toHaveLength(50);
+ });
+});
+describe('using the map',()=>{
+ const build=async()=>{
+  const now='2026-11-10T00:00:00Z';let map=emptyMap('https://app.acme.com',now);
+  map=record(map,{method:'GET',path:'/api/invoices',query:['status'],status:200,response:shapeOf([{id:'inv_1x',amount:10,status:'due'},{id:'inv_2x',amount:5,status:'paid'}])},now);
+  map=record(map,{method:'POST',path:'/api/invoices',query:[],status:422,request:shapeOf({amount:0}),message:'Amount must be above 0'},now);
+  map=record(map,{method:'GET',path:'/api/team/members',query:[],status:200,response:shapeOf([{role:'admin',email:'a@b.co'}])},now);
+  return map;
+ };
+ it('picks endpoints that match the request and describes them without values',async()=>{
+  const {relevantEndpoints}=await import('../extension/appmap/relevant');
+  const text=relevantEndpoints(await build(),'Add a filter for overdue invoices','/billing',6000,new Date('2026-11-12'));
+  expect(text.indexOf('GET /api/invoices?status')).toBe(0);
+  expect(text).toContain('status: string, one of due | paid');
+  expect(text).toContain('list of objects:\n      id: string');
+  expect(text).toContain('rules: 422: Amount must be above <n>');
+  expect(text).not.toContain('/api/team/members');
+  expect(text).not.toMatch(/inv_1x|a@b\.co/);
+ });
+ it('gives the same words for the same map and request',async()=>{
+  const {relevantEndpoints}=await import('../extension/appmap/relevant');const map=await build(),day=new Date('2026-11-12');
+  expect(relevantEndpoints(map,'invoices','/',6000,day)).toBe(relevantEndpoints(map,'invoices','/',6000,day));
+ });
+ it('falls back to the most used reads, leaves out stale ones and respects the limit',async()=>{
+  const {relevantEndpoints}=await import('../extension/appmap/relevant');const map=await build();
+  expect(relevantEndpoints(map,'make it purple','/',6000,new Date('2026-11-12'))).toContain('GET ');
+  expect(relevantEndpoints(map,'invoices','/',6000,new Date('2027-06-01'))).toBe('');
+  expect(relevantEndpoints(map,'invoices','/',60,new Date('2026-11-12')).length).toBeLessThanOrEqual(60);
+ });
+ it('adds an existing API section to the build prompt only when something was learned',async()=>{
+  const {existingApiSection}=await import('../extension/implementation/brief');
+  const workflow:any={name:'Invoice filters',route:'/billing',states:[{id:'s',title:'Invoices',operations:[]}]};
+  expect(existingApiSection(await build(),workflow)).toContain('## Existing API');
+  expect(existingApiSection(null,workflow)).toBe('');
  });
 });

@@ -31,7 +31,8 @@ export const PERSONAL_KEY=new RegExp('^('+WHO+'[_-]?)?name$|[_-]'+WHO+'[_-]?name
 const SET_KEY=/(^|_|-)(status|state|type|kind|role|plan|tier|category|priority|stage|level|mode|severity|visibility|frequency|interval|unit|currency|method|channel|source|direction|format|variant|size|color|colour|theme|locale|lang(uage)?)$/i;
 const EMAIL=/[^\s@]+@[^\s@]+\.[^\s@]+/,PHONE=/^\+?[\d\s().-]{7,}$/,LONG_DIGITS=/\d{6,}/;
 /** A value that looks personal whatever its key. */
-export function personalValue(value:string){return EMAIL.test(value)||PHONE.test(value.trim())||LONG_DIGITS.test(value.replace(/[\s-]/g,''));}
+const DATE=/^\d{4}-\d{2}-\d{2}([T ]\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})?)?$/;
+export function personalValue(value:string){if(DATE.test(value.trim()))return false;return EMAIL.test(value)||PHONE.test(value.trim())||LONG_DIGITS.test(value.replace(/[\s-]/g,''));}
 const setWord=(value:string)=>/^[a-z][a-z_ -]{0,23}$/i.test(value)&&!/\d/.test(value);
 const typeOf=(value:unknown):ShapeType=>value===null?'null':Array.isArray(value)?'array':typeof value==='number'?'number':typeof value==='boolean'?'boolean':typeof value==='object'?'object':'string';
 export function shapeOf(value:unknown,key='',depth=0):Shape|null{
@@ -84,7 +85,7 @@ export function mergeShape(a:Shape,b:Shape):Shape{
 /** One line per field, for the AI and for people: `amount: number`, `status: paid | due`. */
 export function describeShape(shape:Shape,indent=''):string{
  const kind=shape.types.filter(t=>t!=='null').join(' or ')||'null',nullable=shape.types.includes('null')&&shape.types.length>1?' (can be empty)':'';
- const extra=shape.values?': '+shape.values.join(' | '):'',personal=shape.personal?' (personal)':'';
+ const extra=shape.values?', one of '+shape.values.join(' | '):'',personal=shape.personal?' (personal)':'';
  if(shape.fields)return Object.entries(shape.fields).map(([name,child])=>{
   const head=indent+name+(child.optional?'?':'');
   if(child.fields)return head+':\n'+describeShape(child,indent+'  ');
@@ -92,6 +93,7 @@ export function describeShape(shape:Shape,indent=''):string{
   if(child.items)return head+': list of '+describeShape(child.items,'').trim();
   return head+': '+describeShape(child,'').trim();
  }).join('\n');
+ if(shape.items?.fields)return indent+'list of objects:\n'+describeShape(shape.items,indent+'  ');
  if(shape.items)return indent+'list of '+describeShape(shape.items,'').trim();
  return indent+kind+nullable+extra+personal;
 }
