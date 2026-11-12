@@ -18,6 +18,8 @@ await mkdir(out,{recursive:true});
 await Promise.all([
   build({entryPoints:[free?'extension/background/free.ts':'extension/background/index.ts'],outfile:out+'/background.js',bundle:true,format:'esm',target:'chrome116',minifySyntax:true,define:defines}),
   build({entryPoints:['extension/content/index.ts'],outfile:out+'/content.js',bundle:true,format:'iife',target:'chrome116',minifySyntax:true,define:defines}),
+  // Injected into the page's own world, only on domains where app-map capture is on.
+  build({entryPoints:['extension/appmap/inject.ts'],outfile:out+'/appmap.js',bundle:true,format:'iife',target:'chrome116',minify:true,define:defines}),
   build({entryPoints:[free?'extension/sidepanel/free.tsx':'extension/sidepanel/index.tsx'],outfile:out+'/sidepanel.js',bundle:true,format:'esm',target:'chrome116',minify:true,define:defines})
 ]);
 await build({entryPoints:[free?'extension/recording/free.tsx':'extension/recording/index.tsx'],outfile:out+'/recorder.js',bundle:true,format:'esm',target:'chrome116',minify:true,define:defines});
