@@ -340,3 +340,17 @@
 .dx-context-chip.is-off{background:#fafafc;border-color:#e6e4ee;color:#7b7990}
 .dx-context-editor textarea{width:100%;box-sizing:border-box;min-height:180px;max-height:50vh;resize:vertical;padding:10px;border:1px solid #d9d4f5;border-radius:8px;font-family:inherit;font-size:12px;line-height:1.5;color:#232635}
 .dx-context-editor small{color:#7b7990;font-size:11px}
+/* App map: what Wandel learns from the app's own requests. */
+.dx-app-map{margin:8px 0;padding:10px 12px;border:1px solid #e3e0f0;border-radius:10px;font-size:12px}
+.dx-app-map summary{cursor:pointer;font-weight:600;color:#2e2a52}
+.dx-app-map p{margin:8px 0;color:#4e5466;line-height:1.5}
+.dx-app-map-switch{display:flex;align-items:center;gap:8px;margin:6px 0;font-weight:600}
+.dx-app-map-block{display:flex;flex-direction:column;gap:4px;margin:8px 0;color:#4e5466}
+.dx-app-map-block textarea{width:100%;box-sizing:border-box;padding:6px 8px;border:1px solid #d9d4f5;border-radius:8px;font-family:ui-monospace,Menlo,monospace;font-size:11px}
+.dx-app-map-list{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-direction:column;gap:10px;max-height:50vh;overflow:auto}
+.dx-app-map-list li{padding:8px;border:1px solid #eeecf5;border-radius:8px}
+.dx-app-map-list li.is-stale{opacity:.6}
+.dx-app-map-list strong{font-family:ui-monospace,Menlo,monospace;font-size:11.5px;word-break:break-all}
+.dx-app-map-list small{color:#7b7990}
+.dx-app-map-list em{display:block;margin-top:6px;font-style:normal;font-weight:600;color:#6155db}
+.dx-app-map-list pre{margin:2px 0 0;white-space:pre-wrap;font-size:11px;color:#2e2a52}

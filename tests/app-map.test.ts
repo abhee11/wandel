@@ -102,3 +102,12 @@ describe('watcher',()=>{
   post.mockRestore();vi.useRealTimers();
  });
 });
+describe('what the page may send',()=>{
+ it('keeps only well-formed observations',async()=>{
+  const {validObservations}=await import('../extension/appmap/store');
+  const good={method:'GET',path:'/a',query:['x'],status:200,response:{types:['object'],fields:{}}};
+  expect(validObservations([good,{method:'GET'},{...good,status:'200'},{...good,response:{evil:true}},'junk'])).toHaveLength(1);
+  expect(validObservations('nope')).toEqual([]);
+  expect(validObservations(Array(80).fill(good))).toHaveLength(50);
+ });
+});

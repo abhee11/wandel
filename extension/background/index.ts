@@ -29,6 +29,8 @@ import {registerScreenCatalog} from './screens';
 registerScreenCatalog();
 import {registerAccountBridge} from './account';
 registerAccountBridge();
+import {registerAppMap} from './appMap';
+registerAppMap();
 chrome.runtime.onMessage.addListener((message,sender,reply)=>{
  if(!['WANDEL_COLLAPSE','WANDEL_OPEN_CONNECTIONS'].includes(message?.type)||sender.id!==chrome.runtime.id||sender.tab?.id===undefined||sender.frameId!==0)return;
  if(message.type==='WANDEL_OPEN_CONNECTIONS'){
