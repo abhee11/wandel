@@ -4,7 +4,7 @@ export function Privacy(){
  return <main className="legal">
   <a className="brand" href="/"><img src="/brand/wandel-mark.svg" alt=""/>Wandel</a>
   <h1>Privacy policy</h1>
-  <p className="legal-date">Last updated November 8, 2026</p>
+  <p className="legal-date">Last updated November 12, 2026</p>
   <p>Wandel is made by Studio447. It is a Chrome extension that lets you prototype changes to the web pages you use, by describing them in chat or editing them directly. This policy explains what Wandel collects, why, who else handles it, and how to reach us. Questions go to <a href={'mailto:'+contact}>{contact}</a>.</p>
 
   <h2>What we collect</h2>
@@ -12,8 +12,17 @@ export function Privacy(){
   <p>When you sign in we receive your email address and name, through our sign-in provider Clerk, or Google if you choose “Continue with Google”. We use them to identify your account, keep your saved work and show your remaining AI edits.</p>
   <h3>What you ask Wandel</h3>
   <p>Your chat messages, images you attach or paste, and the AI’s replies. If you use voice, your recording is sent for transcription and is not kept by us. Spoken replies are generated from the reply text.</p>
+  <h3>Project context you paste</h3>
+  <p>If you paste background into a prototype’s Project context, such as a product spec, requirements, brand rules or sample data, it is saved with that prototype and sent with each request while it is switched on. It is never included in share links. Only paste what you are allowed to share with the AI providers below.</p>
   <h3>The page you are working on</h3>
   <p>Only when you send a request, Wandel sends a description of the page so the AI can understand it: visible element names, labels, text and styles, the page address, and a screenshot of the visible page. Before anything leaves your browser, form field contents, password fields, payment card fields and areas a site marks as private are left out or covered, and email addresses and things that look like keys or passwords are removed from text. Wandel does not read other tabs unless you choose an element to copy from one.</p>
+  <h3>How an app’s data is shaped (optional, off by default)</h3>
+  <p>If you switch on “Learn how this app works” for a site, Wandel notes the shape of the requests that site’s own pages make to its own servers, so prototypes can use the app’s real fields, statuses and rules. It runs only on sites you switch on, and only reads: it never changes, delays or blocks a request.</p>
+  <ul>
+   <li><strong>What is kept:</strong> the request address with ids replaced by placeholders, the names of query parameters, field names and their types (text, number, date, true or false, list), short status-style values such as “paid” or “overdue”, and error messages with any values removed.</li>
+   <li><strong>What is never kept:</strong> the values in your app’s data, anything you type into forms, passwords, sign-in tokens, cookies, keys and other secrets, and requests to other companies’ services. Fields that look personal, such as names, email addresses, phone numbers, addresses and card numbers, are marked as personal and only their type is kept.</li>
+   <li><strong>Where it goes:</strong> this happens inside the page, before anything leaves it. The result is stored in your browser, and the part related to a request is sent with that request to the AI provider, like the page description. It is not stored on our servers.</li>
+  </ul>
   <h3>What you save and share</h3>
   <ul>
    <li><strong>Saved prototypes</strong> you choose to keep in your account: their names, the pages they run on, the changes you made and the text they contain.</li>
@@ -29,7 +38,7 @@ export function Privacy(){
   <p>If you upgrade, payment is handled by Stripe. We receive your plan and payment status, never your full card details.</p>
 
   <h2>What stays on your computer</h2>
-  <p>Drafts of your prototypes, your chat history, your settings and chosen AI model, elements you copy between tabs and values shared between your tabs are kept in your browser’s storage for the extension. They are not sent to us unless you save, share or ask the AI about them, and they are removed when you remove Wandel.</p>
+  <p>Drafts of your prototypes, your chat history, your settings and chosen AI model, what Wandel has learned about how an app’s data is shaped, elements you copy between tabs and values shared between your tabs are kept in your browser’s storage for the extension. They are not sent to us unless you save, share or ask the AI about them, and they are removed when you remove Wandel.</p>
 
   <h2>Who else handles it</h2>
   <p>We do not sell your information or use it for advertising. We share it only with the services that run Wandel:</p>
@@ -51,6 +60,8 @@ export function Privacy(){
   <h2>Your choices</h2>
   <ul>
    <li>Remove share links and videos from Wandel’s Share view at any time.</li>
+   <li>Switch “Learn how this app works” off for any site, list paths it must never record, or delete everything it learned about a site, from the chat options in Wandel.</li>
+   <li>Switch off or remove a prototype’s project context at any time.</li>
    <li>Ask us for a copy of your data, a correction, or deletion of your account by emailing <a href={'mailto:'+contact}>{contact}</a>.</li>
    <li>Remove the extension from Chrome to delete what it keeps on your computer.</li>
   </ul>
