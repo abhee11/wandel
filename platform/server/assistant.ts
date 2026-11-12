@@ -202,7 +202,7 @@ export function assistantService(db:DB,entitlements:Entitlements,provider:Assist
   // The key covers the request, the page description, history, model and the instructions in use, not the screenshot's pixels.
   const instructionKey=planInstructionKey(input.instruction);
   const cacheKey=createHash('sha256').update(JSON.stringify({instruction:input.instruction.trim().toLowerCase().replace(/\s+/g,' '),context,history:input.history||[],model:input.model||'default',steps:!!input.steps,reference:input.referenceImage?createHash('sha256').update(input.referenceImage).digest('hex'):null,rules:createHash('sha256').update(relevantInstructions({instruction:input.instruction,context,history:input.history,referenceImage:input.referenceImage,steps:input.steps})).digest('hex')})).digest('hex');
-  if(!input.retry){const saved=one<{plan:string}>(db,'SELECT plan FROM plan_cache WHERE user_id=? AND cache_key=? AND created_at>?',userId,cacheKey,new Date(clock().getTime()-PLAN_CACHE_DAYS*864e5).toISOString());if(saved){console.info(JSON.stringify({event:'plan_cache_hit',user:userId.slice(0,8)}));return {plan:AssistantPlanSchema.parse(JSON.parse(saved.plan))};}}
+  if(!input.retry){const saved=one<{plan:string}>(db,'SELECT plan FROM plan_cache WHERE user_id=? AND cache_key=? AND created_at>?',userId,cacheKey,new Date(clock().getTime()-PLAN_CACHE_DAYS*864e5).toISOString());const cached=saved?AssistantPlanSchema.safeParse(JSON.parse(saved.plan)):null;if(cached?.success&&cached.data.status==='edit'){console.info(JSON.stringify({event:'plan_cache_hit',user:userId.slice(0,8)}));return {plan:cached.data};}}
   return metered(userId,input.requestId,createHash('sha256').update(JSON.stringify({instruction:input.instruction,context,history:input.history,referenceImage:input.referenceImage,pageScreenshot:input.pageScreenshot})).digest('hex'),async()=>{
    const history=input.history?ConversationHistorySchema.parse(JSON.parse(JSON.stringify(input.history,(_key,value)=>typeof value==='string'?cleanText(value,1600):value))):undefined;
    let plan:AssistantPlan|undefined,feedback:string|undefined,chatted=false;
@@ -232,8 +232,11 @@ export function assistantService(db:DB,entitlements:Entitlements,provider:Assist
    if(!plan)throw new APIError(502,'INVALID_PLAN','I could not produce a valid layout plan. Nothing was applied.');
    // Panels before 0.3.5 check plans strictly: no next field and at most 8 targets per action.
    if(!input.steps){const {next:_next,...earlier}=plan;plan={...earlier,actions:earlier.actions.flatMap(action=>action.targets.length<=8?[action]:Array.from({length:Math.ceil(action.targets.length/8)},(_,i)=>({...action,targets:action.targets.slice(i*8,i*8+8)}))).slice(0,12)};}
+   // Only finished edits are kept. Inspect, clarify and "can't do" answers are steps on the way: replaying one
+   // would send the same request round the same loop every time it is asked.
+   if(plan.status==='edit'){
    db.prepare('DELETE FROM plan_cache WHERE user_id=? AND created_at<=?').run(userId,new Date(clock().getTime()-PLAN_CACHE_DAYS*864e5).toISOString());
-   db.prepare('INSERT OR REPLACE INTO plan_cache (user_id,cache_key,instruction_key,plan,created_at) VALUES (?,?,?,?,?)').run(userId,cacheKey,instructionKey,JSON.stringify(plan),clock().toISOString());
+   db.prepare('INSERT OR REPLACE INTO plan_cache (user_id,cache_key,instruction_key,plan,created_at) VALUES (?,?,?,?,?)').run(userId,cacheKey,instructionKey,JSON.stringify(plan),clock().toISOString());}
    return {plan};
   },input.turnId);
  }};
