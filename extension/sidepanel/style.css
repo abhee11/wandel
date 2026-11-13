@@ -354,3 +354,9 @@
 .dx-app-map-list small{color:#7b7990}
 .dx-app-map-list em{display:block;margin-top:6px;font-style:normal;font-weight:600;color:#6155db}
 .dx-app-map-list pre{margin:2px 0 0;white-space:pre-wrap;font-size:11px;color:#2e2a52}
+.dx-app-docs .dx-row{flex-wrap:wrap;gap:6px}
+.dx-app-docs-prompt{margin:8px 0}
+.dx-app-docs-prompt summary{font-weight:500;color:#51458a}
+.dx-app-docs-prompt pre{white-space:pre-wrap;max-height:30vh;overflow:auto;padding:8px;border:1px solid #eeecf5;border-radius:8px;font-size:11px;background:#fbfaff}
+.dx-app-docs .dx-app-map-list li{display:flex;align-items:center;gap:6px}
+.dx-app-docs .dx-app-map-list li small{flex:1}

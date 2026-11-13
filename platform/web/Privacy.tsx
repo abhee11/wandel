@@ -14,6 +14,8 @@ export function Privacy(){
   <p>Your chat messages, images you attach or paste, and the AI’s replies. If you use voice, your recording is sent for transcription and is not kept by us. Spoken replies are generated from the reply text.</p>
   <h3>Project context you paste</h3>
   <p>If you paste background into a prototype’s Project context, such as a product spec, requirements, brand rules or sample data, it is saved with that prototype and sent with each request while it is switched on. It is never included in share links. Only paste what you are allowed to share with the AI providers below.</p>
+  <h3>Codebase context you add</h3>
+  <p>If you add codebase context for a site, such as a Markdown file your own coding AI wrote about your app’s routes, API, data model, components and rules, Wandel stores it in your browser for that site. Before it is saved, things that look like keys, tokens, passwords, connection strings, email addresses and card numbers are removed. When you send a request, only the sections related to it are sent to the AI provider, like the page description. It is not stored on our servers or included in share links. Only add what you are allowed to share with the AI providers below.</p>
   <h3>The page you are working on</h3>
   <p>Only when you send a request, Wandel sends a description of the page so the AI can understand it: visible element names, labels, text and styles, the page address, and a screenshot of the visible page. Before anything leaves your browser, form field contents, password fields, payment card fields and areas a site marks as private are left out or covered, and email addresses and things that look like keys or passwords are removed from text. Wandel does not read other tabs unless you choose an element to copy from one.</p>
   <h3>How an app’s data is shaped (optional, off by default)</h3>
@@ -62,6 +64,7 @@ export function Privacy(){
    <li>Remove share links and videos from Wandel’s Share view at any time.</li>
    <li>Switch “Learn how this app works” off for any site, list paths it must never record, or delete everything it learned about a site, from the chat options in Wandel.</li>
    <li>Switch off or remove a prototype’s project context at any time.</li>
+   <li>Remove any codebase context file for a site at any time, from the chat options in Wandel.</li>
    <li>Ask us for a copy of your data, a correction, or deletion of your account by emailing <a href={'mailto:'+contact}>{contact}</a>.</li>
    <li>Remove the extension from Chrome to delete what it keeps on your computer.</li>
   </ul>

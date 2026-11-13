@@ -1,6 +1,7 @@
 import {pickElement} from './tabClipboard';
 import {APP_MAP_MESSAGE} from '../appmap/watch';
 import {currentAppMap} from '../appmap/cache';
+import {currentAppDocs} from '../appdocs/cache';
 import {resolveInspections} from '../assistant/inspection';
 import {rememberAppToasts} from './appToast';
 import {FloatingPanel} from './floatingPanel';
@@ -97,7 +98,7 @@ const onConnect=(port:chrome.runtime.Port)=>{
 try{if(channel.available()){chrome.runtime.onMessage.addListener(onMessage);chrome.runtime.onConnect.addListener(onConnect);stopRelay=freeBuild?undefined:registerShareRelay(accountConfig.apiOrigin);}}catch(error){ignore(error);}
 
 // Load this site's app map now, so the first request already has it.
-try{if(channel.available())currentAppMap();}catch(error){ignore(error);}
+try{if(channel.available()){currentAppMap();currentAppDocs();}}catch(error){ignore(error);}
 // The app-map watcher in the page's own world hands over request shapes; only shapes, and only from this window.
 window.addEventListener('message',event=>{if(event.source!==window||event.data?.type!==APP_MAP_MESSAGE||!channel.available())return;void chrome.runtime.sendMessage({type:'WANDEL_APP_MAP_OBSERVATIONS',observations:event.data.observations}).catch(ignore);},{signal:lifecycle.signal});
 window.addEventListener('pagehide',()=>{if(channel.available())session.pageLeaving();},{signal:lifecycle.signal});
