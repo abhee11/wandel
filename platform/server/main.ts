@@ -37,8 +37,11 @@ const server=createServer(async(req,res)=>{
    const asset=extname(file);const data=await readFile(asset?file:resolve(webRoot,'index.html'));
    res.writeHead(200,{'Content-Type':({'.js':'text/javascript','.css':'text/css','.svg':'image/svg+xml','.png':'image/png'} as Record<string,string>)[asset]||'text/html','Content-Security-Policy':webCSP,...(url.pathname==='/flow'?{'Cache-Control':'no-store','X-Robots-Tag':'noindex, nofollow'}:{}),'Referrer-Policy':'no-referrer','X-Content-Type-Options':'nosniff'});res.end(data);return;
   }
-  const limit=url.pathname==='/api/recordings'&&req.method==='POST'?MAX_RECORDING_BYTES:url.pathname==='/api/public-views'?7340032:url.pathname==='/api/assistant/verify'?1258291:1048576;
-  let size=0;const chunks:Buffer[]=[];for await(const chunk of req){size+=chunk.length;if(size>limit){res.writeHead(413,{'Content-Type':'application/json'});res.end(JSON.stringify({error:{code:'BODY_TOO_LARGE',message:limit===MAX_RECORDING_BYTES?'Videos must be under 20 MB.':'Request exceeds 1 MB.'}}));return;}chunks.push(chunk);}
+  // A plan or chat request carries a screenshot, a reference image and the page description, so it gets more room than other calls.
+  const limit=url.pathname==='/api/recordings'&&req.method==='POST'?MAX_RECORDING_BYTES:url.pathname==='/api/public-views'?7340032:/^\/api\/assistant\/(plan|chat|verify)$/.test(url.pathname)?3145728:1048576;
+  // An oversized body is read to the end before the answer: replying mid-upload drops the connection, and the browser then reports only "Failed to fetch".
+  let size=0,tooLarge=false;const chunks:Buffer[]=[];for await(const chunk of req){size+=chunk.length;if(size>limit)tooLarge=true;else chunks.push(chunk);if(size>limit*4)break;}
+  if(tooLarge){console.error(JSON.stringify({event:'body_too_large',path:url.pathname,bytes:size,limit}));res.writeHead(413,{'Content-Type':'application/json',Connection:'close'});res.end(JSON.stringify({error:{code:'BODY_TOO_LARGE',message:limit===MAX_RECORDING_BYTES?'Videos must be under 20 MB.':'This request is too large. Start a new chat or select a smaller part of the page, then try again.'}}));return;}
   const headers=new Headers();for(const [key,value]of Object.entries(req.headers))if(value)headers.set(key,Array.isArray(value)?value.join(','):value);
   const result=await app.handle(new Request(url,{method:req.method,headers,...(!['GET','HEAD'].includes(req.method||'GET')?{body:Buffer.concat(chunks)}:{})}),req.socket.remoteAddress||'unknown');
   res.writeHead(result.status,Object.fromEntries(result.headers));res.end(Buffer.from(await result.arrayBuffer()));

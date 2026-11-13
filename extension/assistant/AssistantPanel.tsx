@@ -293,8 +293,25 @@ export function AssistantPanel({bridge,snapshot,onSave,onBusyChange,onVisualEdit
        if(correction.status!=='edit'){verificationNote='The change is applied, but I could not complete its layout correction.';break;}
        const latest=await bridge.send({type:'snapshot'});
        if(latest.workflow.id!==afterContext!.workflowId||latest.stateId!==afterContext!.stateId)throw new Error('The page changed during review.');
+       // A correction that adds elements on top of an attempt that added elements stacks a second copy (two chevrons, two banners).
+       // Remove the attempt and plan the request again on the clean page, told what went wrong, so there is only ever one.
+       let token=afterContext!.token;
+       if(correction.actions.some(action=>action.kind==='create')&&proposed.actions.some(action=>action.kind==='create')){
+        setProgress('Redoing the change cleanly…');
+        for(;appliedSteps>0;appliedSteps--)await bridge.send({type:'undo'});
+        const retryRequest=combined+'\nA first attempt at this was removed because: '+issue.slice(0,500)+'\nDo it once, with the smallest change: place it exactly where asked, keep existing text on one line, and do not add anything else.';
+        let clean=await context(undefined,retryRequest),shot=await capture(clean);
+        const redo=await resolveInspections(await planConversation(retryRequest,clean,controller.signal,conversation.current.filter(turn=>turn.id!==userId),image,shot,userId),clean,{
+         limit:2,active:stillHere,
+         inspect:async refs=>{const expanded=await context(refs,retryRequest);shot=await capture(expanded);return expanded;},
+         replan:(expanded,note)=>planConversation(retryRequest,expanded,controller.signal,[...conversation.current.filter(turn=>turn.id!==userId),{role:'assistant',text:note,status:'sent'}],image,shot,userId)
+        });
+        if(!stillHere())throw new Error('Request canceled.');
+        if(redo.exhausted||redo.plan.status!=='edit'){verificationNote='I removed the first attempt because '+issue.replace(/\.?$/,'.')+' I couldn’t find a cleaner way to make the change, so the page is back to how it was.';reviewIssue='';lastVerdict='';break;}
+        correction=redo.plan;token=redo.context.token;clean=redo.context;afterContext=clean;
+       }
        kept='';
-       try{await bridge.send({type:'assistantApply',plan:correction,token:afterContext!.token});}
+       try{await bridge.send({type:'assistantApply',plan:correction,token});}
        catch(error){const message=error instanceof Error?error.message:'';if(!message.startsWith(keptPreview))throw error;kept=message.slice(keptPreview.length);}
        appliedSteps++;
       }catch(error){

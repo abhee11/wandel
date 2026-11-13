@@ -257,13 +257,16 @@ export function compileAssistant(workflow:Workflow,stateId:string,planInput:unkn
    if(over&&getComputedStyle(anchor).position==='static')add({id:uid(),kind:'style',target:anchorLocator,style:{position:'relative'}});
    if(position==='inside'&&anchor.matches('button,a,input,textarea,select,img'))throw new Error('Place a block inside a container, not a control.');
    // A section placed before or after an item of a horizontal row would squeeze into that row and shift its title, so it moves up to the row itself and gets its own line. Only beside keeps it in the row.
-   const resolvedBlock=placedBlock?null:resolvePlacement('section',anchor,anchorLocator,action.position,id,{crumbs:block.nodes[0].type==='crumbs'}),lifted=!!resolvedBlock?.lifted;
+   // A compact block (an icon, badge, small button or a small piece of markup) next to or inside a title, label or row
+   // is an inline item there: it keeps its own size and stays on the line, instead of a full-width section that squeezes the title and wraps it.
+   const compact=!over&&!placedBlock&&compactBlock(block)&&inlineContext(anchor,position);
+   const resolvedBlock=placedBlock?null:resolvePlacement('section',anchor,anchorLocator,compact?'beside':action.position,id,{crumbs:block.nodes[0].type==='crumbs'}),lifted=!!resolvedBlock?.lifted;
    if(resolvedBlock){anchor=resolvedBlock.anchor;anchorLocator=resolvedBlock.locator;}
    // A bar or lifted section lines up with the row it sits next to, so its content starts where that row's content does.
    const inset=!placedBlock&&(lifted||block.nodes[0].type==='crumbs')&&position!=='inside'?(()=>{const css=getComputedStyle(anchor);return `0 ${css.paddingRight} 0 ${css.paddingLeft}`;})():'0';
    const offset=(value:unknown)=>typeof value==='number'?value+'px':typeof value==='string'&&/^-?\d+(\.\d+)?(px|%)$/.test(value)?value:undefined,spot=action.style as Record<string,unknown>|null;
    const floating=over?{position:'absolute','z-index':'20',width:'max-content','max-width':'100%',...Object.fromEntries((['top','right','bottom','left'] as const).map(side=>[side,offset(spot?.[side])]).filter(([,value])=>value)),...(!['top','bottom'].some(side=>offset(spot?.[side]))?{top:'0'}:{}),...(!['left','right'].some(side=>offset(spot?.[side]))?{left:'0'}:{})}:{};
-   add({id:uid(),kind:'insert',target:anchorLocator,position,node:{id,kind:'panel',text:block.nodes.find(part=>part.type==='heading')?.text||'Section',block,appearance:{display:'block','box-sizing':'border-box',width:'100%','max-width':'100%','min-width':'0',height:'auto',padding:inset,'border-radius':'0',margin:over?'0':position==='before'?'0 0 24px':'24px 0 0','font-family':'inherit',color:'inherit',...floating}}});created.push(id);group=id;
+   add({id:uid(),kind:'insert',target:anchorLocator,position,node:{id,kind:'panel',text:block.nodes.find(part=>part.type==='heading')?.text||'Section',block,appearance:compact?{display:'inline-flex','align-items':'center','vertical-align':'middle','box-sizing':'border-box',width:'auto','max-width':'100%','min-width':'0',height:'auto',padding:'0','border-radius':'0',margin:position==='before'?'0 8px 0 0':position==='inside'?'0 0 0 8px':'0 0 0 8px','flex-shrink':'0','background-color':'transparent','font-family':'inherit',color:'inherit'}:{display:'block','box-sizing':'border-box',width:'100%','max-width':'100%','min-width':'0',height:'auto',padding:inset,'border-radius':'0',margin:over?'0':position==='before'?'0 0 24px':'24px 0 0','font-family':'inherit',color:'inherit',...floating}}});created.push(id);group=id;
    const parts=block.nodes.length;
    checks.push(()=>{const host=collector.ownedNode(id);if(!host)throw new Error('The new block is missing.');const rendered=host.querySelectorAll('[data-dx-owned]').length;if(rendered!==parts)throw new Error(`The block rendered ${rendered} of its ${parts} parts.`);verifyContent(host);if(!over)verifyNoOverlap(position==='inside'?(targets[0].id&&collector.ownedNode(targets[0].id))||anchor:host);});
    plannedBlocks.set(id,block);
@@ -475,4 +478,16 @@ export function compileAssistant(workflow:Workflow,stateId:string,planInput:unkn
  // is waiting for that content, not failing; everything else reports as before.
  const waiting=()=>created.some(id=>isDeferred(id)&&!collector.ownedNode(id));
  return {workflow:validateWorkflow(next),stateId:nextState,created,group,view,cardId,verify:()=>{for(const check of checks){try{check();}catch(error){if(waiting()&&/missing|disappeared/i.test(error instanceof Error?error.message:''))continue;throw error;}}}};
+}
+
+/** A block that is only a few small inline things: icons, badges, small buttons or links, avatars, toggles, or a small piece of custom markup. */
+export function compactBlock(block:{nodes:{type:string;html?:string|null;parent?:number|null}[]}){
+ const small=new Set(['icon','badge','button','link','avatar','toggle','checkbox','custom']),wrappers=block.nodes.filter(node=>node.type==='row'||node.type==='stack'),parts=block.nodes.filter(node=>node.type!=='row'&&node.type!=='stack');
+ // One plain row or stack around the small things is still small.
+ return wrappers.length<=1&&parts.length>=1&&parts.length<=3&&parts.every(node=>small.has(node.type)&&(node.type!=='custom'||(node.html||'').length<1500&&!/<(?:h[1-6]|p|table|ul|ol|section|article|img)\b/i.test(node.html||'')));
+}
+/** Inside a title, label, text or a horizontal row, or next to an item of one: the place reads as a line, not a stack of sections. */
+export function inlineContext(anchor:HTMLElement,position:string){
+ const line=(el:HTMLElement|null)=>{if(!el)return false;if(el.matches('h1,h2,h3,h4,h5,h6,p,span,label,a,button,strong,em,small,[role=heading]'))return true;const css=getComputedStyle(el);return /^inline/.test(css.display)||/flex/.test(css.display)&&/^row/.test(css.flexDirection||'row');};
+ return position==='inside'?line(anchor):(position==='before'||position==='after'||position==='beside')&&(anchor.matches('h1,h2,h3,h4,h5,h6,span,label,a,button,strong,small,[role=heading]')||line(anchor.parentElement));
 }
