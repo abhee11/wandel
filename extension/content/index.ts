@@ -17,7 +17,10 @@ import { Session } from './session';
 import { TemporaryChromeStorage, PersistentChromeStorage, Repository } from '../storage/store';
 // Chrome may inject on demand while a declarative injection is still starting.
 const runtime=globalThis as typeof globalThis & {__wandelContentStarted?:boolean};
-if(!runtime.__wandelContentStarted){
+// A published prototype on Wandel's own site is a finished preview for whoever opens it, not an app to edit:
+// Wandel stays out of it, so a viewer who has Wandel installed sees exactly what someone without it sees.
+const publishedView=(()=>{try{return location.origin===new URL(accountConfig.appOrigin).origin&&location.pathname.startsWith('/view/');}catch{return false;}})();
+if(!runtime.__wandelContentStarted&&!publishedView){
 const lifecycle=new AbortController();
 let cleanup=()=>{};
 const channel=createRuntimeChannel(()=>cleanup());

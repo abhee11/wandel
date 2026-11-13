@@ -30,7 +30,7 @@ function scrub(value:unknown,real:Set<string>):void{
 }
 function collectStyles(doc:Document){
  const origin=doc.location.origin,parts:string[]=[],links:string[]=[];
- for(const sheet of [...doc.styleSheets,...doc.adoptedStyleSheets]){
+ for(const sheet of [...doc.styleSheets,...(doc.adoptedStyleSheets||[])]){
   if((sheet.ownerNode as Element|null)?.closest?.('[data-dx-ignore]'))continue;
   try{parts.push([...sheet.cssRules].map(rule=>rule.cssText).join('\n').replace(/url\(\s*(["']?)\/(?!\/)/g,`url($1${origin}/`));}catch{if(sheet.href)links.push(sheet.href);}
  }
@@ -79,6 +79,9 @@ export function publicSnapshot(doc:Document,workflow:Workflow,owned:Map<string,H
   for(const node of copy.querySelectorAll('[data-dx-stamp]'))node.removeAttribute('data-dx-stamp');
   const head=copy.querySelector('head')||copy.insertBefore(doc.createElement('head'),copy.firstChild);
   const charset=doc.createElement('meta');charset.setAttribute('charset','utf-8');head.prepend(charset);
+  // Phones lay out a page without a viewport setting at desktop width and shrink it, so the page's own setting is kept.
+  const viewport=doc.querySelector('meta[name="viewport"]')?.getAttribute('content')||'';
+  if(/^[\w\s=,.-]{1,200}$/.test(viewport)){const meta=doc.createElement('meta');meta.setAttribute('name','viewport');meta.setAttribute('content',viewport);charset.after(meta);}
   for(const href of links){const link=doc.createElement('link');link.rel='stylesheet';link.href=href;head.append(link);}
   const style=doc.createElement('style');style.textContent=css;head.append(style);
   const title=head.querySelector('title')||head.appendChild(doc.createElement('title'));title.textContent=workflow.name;
