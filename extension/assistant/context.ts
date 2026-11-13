@@ -58,7 +58,11 @@ export class ContextCollector{
   const groups=cardGroups(surface),regions=pageRegions(surface);
   const sceneNodes=[...regions.flatMap(region=>[region.node,...(parentOf(region.node)?[parentOf(region.node)!]:[])]),...groups.flatMap(group=>[group.container,...group.members]),...regions.flatMap(region=>[...region.node.children].filter((n):n is HTMLElement=>n instanceof HTMLElement).slice(0,6))];
   const cardContainers=[...new Set(deepElements(scopeNode,'button,a,[role=button],[role=link]').map(node=>findCard(node)?.root).filter((node):node is HTMLElement=>!!node))];
-  const expanded=inspect.slice(0,8).flatMap(ref=>{let node:HTMLElement;try{node=this.get(ref);}catch{return [];}return [node,...deepElements(node,'button,a,input,select,textarea,[role=button],[role=link]'),...deepElements(node,'h1,h2,h3,h4,h5,h6,[role=heading]'),...deepElements(node,'*').slice(0,80)];});
+  // Each inspected element gets an equal share, filled level by level: four long sections each show their header and
+  // body, instead of the first one's deepest lines (and a button per line) using up the whole budget.
+  const inspected=inspect.slice(0,8),share=Math.max(16,Math.floor(96/Math.max(1,inspected.length)));
+  const breadth=(root:HTMLElement)=>{const out:HTMLElement[]=[];let level=[root];for(let depth=0;depth<8&&level.length&&out.length<share;depth++){level=level.flatMap(node=>[...node.children].filter((child):child is HTMLElement=>child instanceof HTMLElement));out.push(...level);}return out.slice(0,share);};
+  const expanded=inspected.flatMap(ref=>{let node:HTMLElement;try{node=this.get(ref);}catch{return [];}const quarter=Math.ceil(share/4);return [node,...deepElements(node,'h1,h2,h3,h4,h5,h6,[role=heading]').slice(0,quarter),...breadth(node),...deepElements(node,'button,a,input,select,textarea,[role=button],[role=link]').slice(0,quarter)];});
   const request=instruction.toLowerCase().replace(/\s+/g,' ');
   // "On all cards" needs every match in view: up to 40, with full card context only for the first 6 so the element budget lasts.
   const bulk=!!request&&/\b(all|every|each|everywhere|throughout)\b/i.test(request);

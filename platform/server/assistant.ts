@@ -232,6 +232,8 @@ export function assistantService(db:DB,entitlements:Entitlements,provider:Assist
    if(!plan)throw new APIError(502,'INVALID_PLAN','I could not produce a valid layout plan. Nothing was applied.');
    // Panels before 0.3.5 check plans strictly: no next field and at most 8 targets per action.
    if(!input.steps){const {next:_next,...earlier}=plan;plan={...earlier,actions:earlier.actions.flatMap(action=>action.targets.length<=8?[action]:Array.from({length:Math.ceil(action.targets.length/8)},(_,i)=>({...action,targets:action.targets.slice(i*8,i*8+8)}))).slice(0,12)};}
+   // Why a request didn't become an edit: the AI's own words, so a loop or dead end can be diagnosed from the logs.
+   if(plan.status!=='edit')console.info(JSON.stringify({event:'plan_outcome',user:userId.slice(0,8),status:plan.status,message:plan.message.slice(0,400),question:plan.question?.slice(0,200)||undefined,candidates:plan.candidates.map(ref=>context.elements.find(e=>e.ref===ref)?.name||ref).slice(0,8).map(name=>String(name).slice(0,60))}));
    // Only finished edits are kept. Inspect, clarify and "can't do" answers are steps on the way: replaying one
    // would send the same request round the same loop every time it is asked.
    if(plan.status==='edit'){

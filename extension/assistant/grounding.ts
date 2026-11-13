@@ -7,8 +7,19 @@ export function groundPlan(instruction:string,c:PageContext,plan:AssistantPlan):
  const outputs=new Set<string>();for(const ref of [...groundedCategoryRefs(instruction,c),...regionLayoutRefs(instruction,c)])anchored.add(ref);
  if(/\b(?:original|source)\b/.test(language)&&c.copySource)anchored.add(c.copySource);
  const selected=c.elements.find(e=>e.ref===c.selected);if(selected?.parent)anchored.add(selected.parent);
+ // "For each section…": the same change on two or more matching elements (same tag, same kind of parent) is
+ // grounded by the request's own words, for actions that can't delete or rewrite anything.
+ const safe=new Set(['behavior','style','layout','create']),repeated=new Set<string>();
+ if(/\b(?:all|every|each|both)\b/.test(language)){
+  const groups=new Map<string,Set<string>>();
+  for(const a of plan.actions)if(safe.has(a.kind))for(const ref of [...a.targets,...(a.effects||[]).flatMap(effect=>effect.targets||[])]){const e=elements.get(ref);if(!e)continue;const key=e.tag+'|'+(e.parent?elements.get(e.parent)?.tag||'':'');if(!groups.has(key))groups.set(key,new Set());groups.get(key)!.add(ref);}
+  for(const group of groups.values())if(group.size>=2)group.forEach(ref=>repeated.add(ref));
+ }
  for(const a of plan.actions){
   for(const ref of [...a.targets,...a.relativeTo?[a.relativeTo]:[]]){if(outputs.has(ref))continue;const target=elements.get(ref);if(!target)return response('clarify','The referenced element is no longer in this context. Select it again.');if(anchored.has(ref))continue;
+   if(safe.has(a.kind)&&repeated.has(ref))continue;
+   // A page-load behavior only hosts its effects: it is grounded when everything it changes is.
+   if(a.kind==='behavior'&&a.event==='load'&&(a.effects||[]).length&&(a.effects||[]).every(effect=>(effect.targets||[]).length&&(effect.targets||[]).every(t=>repeated.has(t))))continue;
    const groups=referencedCardGroups(instruction,c);if(groups.length>1&&groups.some(group=>group.ref===ref||group.members.includes(ref))&&!language.includes((target.attributes['wandel-heading']||target.name).toLowerCase()))return response('clarify','Which group of cards do you mean?',[],groups.map(group=>group.ref));
    // Page design actions operate on captured structure, not a forced selection.
    // Broad scope never authorizes destructive actions or arbitrary text replacement.
