@@ -25,6 +25,8 @@ export function publicViews(db:DB,origin:string,pepper:string,clock:()=>Date){
     return view(row);
    }).immediate();
   },
+  /** One of this person's own published links, or not found. */
+  find(userId:string,id:string){cleanup();const row=one<Row>(db,'SELECT id,name,masked,created_at,expires_at FROM public_views WHERE id=? AND user_id=?',id,userId);if(!row)throw new APIError(404,'NOT_FOUND','Published link not found.');return view(row);},
   revoke(userId:string,id:string){if(!db.prepare('DELETE FROM public_views WHERE id=? AND user_id=?').run(id,userId).changes)throw new APIError(404,'NOT_FOUND','Published link not found.');},
   page(value:string){
    const unavailable=new Response('<!doctype html><title>Wandel</title><p>This link has expired, been removed, or is unavailable.</p>',{status:404,headers:{'Content-Type':'text/html; charset=utf-8'}});

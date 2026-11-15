@@ -13,6 +13,7 @@ import {randomUUID,createHash} from 'node:crypto';
 import {z} from 'zod';
 import {WorkflowSchema,type Workflow} from '../../extension/shared/model';
 import {publicViews,MAX_PUBLIC_VIEW_BYTES} from './publicViews';
+import {recipients,type ShareMailer} from './shareMail';
 import {validateWorkflow,createWorkflow,workflowDepth} from '../../extension/prototype/engine';
 import {BatchSchema} from '../../extension/ai/planSchema';
 import type {DB} from './db';
@@ -33,7 +34,7 @@ const update=z.object({name:z.string().trim().min(1).max(300).optional(),descrip
 const publicUser=(u:User)=>({id:u.id,email:u.email,name:u.name,createdAt:u.created_at,updatedAt:u.updated_at});
 const publicPrototype=(p:Prototype)=>({id:p.id,name:p.name,description:p.description,targetDomain:p.target_domain,currentVersion:p.current_version,revision:p.revision,createdAt:p.created_at,updatedAt:p.updated_at,...(p.definition?{definition:JSON.parse(p.definition)}:{})});
 const json=(data:unknown,status=200,headers:Record<string,string>={})=>new Response(JSON.stringify(data),{status,headers:{'Content-Type':'application/json','Cache-Control':'no-store',...headers}});
-export function createPlatform(options:{db:DB;config:Config;ai:AIProvider;mail:MailProvider;clock?:()=>Date;analytics?:Analytics;billing?:BillingProvider;identity?:IdentityProvider;assistant?:AssistantProvider;github?:GitHubProvider;implementation?:ImplementationProvider}){
+export function createPlatform(options:{db:DB;config:Config;ai:AIProvider;mail:MailProvider;clock?:()=>Date;analytics?:Analytics;billing?:BillingProvider;identity?:IdentityProvider;assistant?:AssistantProvider;github?:GitHubProvider;implementation?:ImplementationProvider;shareMail?:ShareMailer}){
  const {db,config,ai,mail}=options,clock=options.clock||(()=>new Date()),entitlements=new Entitlements(db,config,clock),analytics=options.analytics||new LocalAnalytics(db,clock),billing:BillingProvider=options.billing||new MockBillingProvider(db,config,clock);
  const implementation=implementationService(db,config.pepper,config.publicAPIOrigin||config.origin,options.github,options.implementation,clock,entitlements);
  const assistant=assistantService(db,entitlements,options.assistant,clock);
@@ -96,6 +97,18 @@ export function createPlatform(options:{db:DB;config:Config;ai:AIProvider;mail:M
   if(path==='/api/workflow-links'&&method==='GET')return json({links:links.list(u.id)});
   if(path==='/api/public-views'&&method==='GET')return json({views:views.list(u.id)});
   if(path==='/api/public-views'&&method==='POST'){rateLimit(db,'public-view-publish:'+u.id,5,clock().getTime(),60000);const raw=await req.text();if(Buffer.byteLength(raw)>MAX_PUBLIC_VIEW_BYTES+1048576)throw new APIError(413,'BODY_TOO_LARGE','This page is too large to publish.');return json({view:views.create(u.id,JSON.parse(raw))},201);}
+  // Email a published link to up to 10 people, from Wandel on this person's behalf; replies go to them. Limits keep it from becoming a way to send mail at volume.
+  const sendMatch=path.match(/^\/api\/public-views\/([^/]+)\/send$/);
+  if(sendMatch&&method==='POST'){
+   if(!options.shareMail)throw new APIError(503,'EMAIL_NOT_CONFIGURED','Sending by email isn’t set up yet. Copy the link and send it yourself.');
+   const data=z.object({emails:z.array(z.string().max(320)).max(50),note:z.string().max(500).optional()}).strict().parse(await body(req));
+   const to=recipients(data.emails),view=views.find(u.id,decodeURIComponent(sendMatch[1])),now=clock().getTime();
+   rateLimit(db,'share-email-send:'+u.id,10,now,3600000);
+   for(const _ of to)rateLimit(db,'share-email-daily:'+u.id,50,now,86400000);
+   for(const email of to)await options.shareMail.send({to:email,sender:{name:u.name,email:u.email},title:view.name,url:view.url,expiresAt:view.expiresAt,note:data.note?.trim()||undefined});
+   console.info(JSON.stringify({event:'share_email_sent',user:u.id.slice(0,8),count:to.length}));
+   return json({sent:to.length});
+  }
   if(path.startsWith('/api/public-views/')&&method==='DELETE'){views.revoke(u.id,decodeURIComponent(path.slice('/api/public-views/'.length)));return json({ok:true});}
   if(path==='/api/workflow-links'&&method==='POST'){rateLimit(db,'workflow-publish:'+u.id,5,clock().getTime(),60000);return json({link:links.create(u.id,await body(req))},201);}
   const workflowLink=path.match(/^\/api\/workflow-links\/([a-f0-9-]{36})$/);

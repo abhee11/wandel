@@ -31,6 +31,7 @@ export function Privacy(){
    <li><strong>Share links</strong> for the live app: a copy of the prototype that anyone with the link can open. Kept for 30 days, or until you revoke it.</li>
    <li><strong>Links anyone can view</strong>: a copy of the page with your prototype, with real text and images replaced by placeholders unless you turn that off. Kept for 30 days, or until you remove it.</li>
    <li><strong>Walkthrough videos</strong> you upload to share. Kept for 7 days.</li>
+   <li><strong>Email addresses you share with</strong>: when you share a link by email, we send one message to each address you enter, from Wandel on your behalf, with your name and email so they can reply to you. We use the addresses only to send that message and don’t store them in our database; our email provider keeps a delivery record.</li>
   </ul>
   <h3>Code from GitHub</h3>
   <p>Only if you connect GitHub and ask Wandel to implement a prototype: we read files from the repository you choose and send them, with the prototype’s description, to OpenAI to propose changes. You review those changes before Wandel opens a draft pull request. Your GitHub access token is stored encrypted and expires after a few hours, and you can disconnect at any time.</p>
@@ -49,6 +50,7 @@ export function Privacy(){
    <li><strong>Clerk</strong> for sign-in, and <strong>Google</strong> if you sign in with Google.</li>
    <li><strong>GitHub</strong>, only if you connect it.</li>
    <li><strong>Railway</strong>, which hosts our server and database.</li>
+   <li><strong>Resend</strong>, which delivers the emails you send when sharing a link.</li>
    <li><strong>Stripe</strong>, if you upgrade.</li>
   </ul>
   <p>We may disclose information if the law requires it, or to protect Wandel and its users from fraud or abuse.</p>
