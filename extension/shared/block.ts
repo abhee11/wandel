@@ -1,6 +1,6 @@
 import {z} from 'zod';
 /** A composed section described as data. The renderer owns all markup; text is set with textContent only. */
-export const blockTypes=['card','stack','row','grid','heading','text','eyebrow','link','button','icon','stat','tile','field','choice','select','crumbs','input','textarea','tabs','badge','avatar','progress','stream','toggle','checkbox','table','alert','menu','custom','list','quote','image','disclosure','divider'] as const;
+export const blockTypes=['card','stack','row','grid','heading','text','eyebrow','link','button','icon','stat','tile','field','choice','select','crumbs','input','textarea','tabs','badge','avatar','progress','stream','toggle','checkbox','table','alert','menu','custom','list','quote','image','disclosure','divider','chart'] as const;
 export const blockContainers=['card','stack','row','grid','disclosure'] as const;
 export const blockTones=['none','pink','peach','yellow','lime','mint','sky','lilac','gray'] as const;
 const httpImage=z.string().max(2048).refine(value=>{try{const url=new URL(value);return ['https:','http:'].includes(url.protocol)&&!url.username&&!url.password;}catch{return false;}},'Use an HTTP(S) image link.');
@@ -67,7 +67,14 @@ export const BlockSchema=z.object({
   if(node.type==='crumbs'&&(node.items?.length||0)<2)issue('A crumbs part needs at least two items.');
   if(node.type==='crumbs'&&node.options&&node.options.length<2)issue('A crumbs switcher needs at least two options.');
   if(node.type==='icon'&&!node.icon)issue('An icon part needs an icon name.');
+  if(node.type==='chart'){const points=chartPoints(node.items);if(points.length<2||points.length!==(node.items?.length||0))issue('A chart needs 2 to 10 items written as "Label: number", for example "Feedback: 68".');if(node.options?.some(kind=>!(chartKinds as readonly string[]).includes(kind)))issue('A chart’s options are its kinds: bar, line or both.');}
  });
 });
 export type Block=z.infer<typeof BlockSchema>;
 export type BlockNode=z.infer<typeof BlockNodeSchema>;
+
+export const chartKinds=['bar','line'] as const;
+/** A chart part's items as points: "Feedback: 68" or "Feedback | 68". Items that aren't a label and a number are left out. */
+export function chartPoints(items:readonly string[]|null|undefined){
+ return (items||[]).map(item=>item.match(/^\s*(.+?)\s*[:|]\s*(-?\d+(?:\.\d+)?)\s*%?\s*$/)).filter((m):m is RegExpMatchArray=>!!m).map(m=>({label:m[1].slice(0,40),value:Number(m[2])}));
+}

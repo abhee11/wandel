@@ -1,7 +1,7 @@
 import {safeImage} from './customMarkup';
 import {namedIcon,renderIcon} from './copyIcon';
 import {sanitizeMarkup,sanitizeCss} from './customMarkup';
-import type {Block,BlockNode} from '../shared/block';
+import {chartPoints,type Block,type BlockNode} from '../shared/block';
 const tones:Record<string,string>={none:'#ffffff',pink:'#ffebed',peach:'#fff1e3',yellow:'#fff6dc',lime:'#f3ffe0',mint:'#e3fbf5',sky:'#e9f1ff',lilac:'#f1ebff',gray:'#f3f3f6'};
 const ink='#14131b',muted='#6e6c7f',line='#eae6f1';
 const toneInk:Record<string,string>={pink:'#b4234a',peach:'#a8521a',yellow:'#7a5a00',lime:'#4d7a0c',mint:'#11745c',sky:'#2357b5',lilac:'#6234c9',gray:'#55536a'};
@@ -91,6 +91,17 @@ function render(node:BlockNode,accent:string,parent?:string):HTMLElement{
    if(node.detail)field.placeholder=node.detail;if(!text)field.setAttribute('aria-label',node.detail||'Text');
    if(node.icon&&node.type==='input'){const mark=icon(node.icon,18,muted);mark.style.cssText+=';position:absolute;left:12px;top:50%;transform:translateY(-50%);pointer-events:none;';box.append(mark);}
    box.append(field);wrap.append(box);return wrap;}
+  case 'chart':{
+   // Values are drawn as SVG from the part's own data, so the chart always shows its numbers; with both kinds it carries its own Bar/Line switch.
+   const kinds=(node.options?.filter(kind=>kind==='bar'||kind==='line')||[]) as ('bar'|'line')[],shown=kinds[0]||'bar';
+   const box=el('div',`display:flex;flex-direction:column;gap:12px;min-width:0;width:100%;box-sizing:border-box;color:${ink};`);box.dataset.dxChart=JSON.stringify({points:chartPoints(node.items),unit:node.detail||'',max:typeof node.max==='number'&&node.max>0?node.max:null});box.dataset.dxChartKind=shown;
+   const head=el('div','display:flex;flex-direction:row;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;');
+   if(text)head.append(el('strong','font-size:16px;line-height:1.4;font-weight:600;',text));
+   if(kinds.length>1){const bar=el('div','display:inline-flex;gap:4px;padding:4px;border-radius:10px;background:#f3f3f6;margin-left:auto;');bar.setAttribute('role','group');bar.setAttribute('aria-label','Chart type');for(const kind of kinds){const b=el('button','all:unset;cursor:pointer;padding:6px 14px;border-radius:8px;font-size:14px;line-height:1.4;font-family:inherit;',kind==='bar'?'Bar':'Line');b.type='button';b.dataset.dxChartKind=kind;bar.append(b);}head.append(bar);}
+   if(head.childElementCount)box.append(head);
+   const plot=el('div','width:100%;min-width:0;');plot.dataset.dxChartPlot='true';box.append(plot);
+   box.append(el('div',`font-size:12px;line-height:1.4;color:${muted};`,'Sample data'));
+   drawChart(box,accent);return box;}
   case 'tabs':{
    // Underlined tabs by default; variant outline draws a segmented control. Only the selection changes; connect a tab to show another view.
    const segmented=node.variant==='outline',bar=el('div',segmented?`display:inline-flex;flex-direction:row;${hug}gap:4px;padding:4px;border-radius:12px;background:#f3f3f6;`:`display:flex;flex-direction:row;flex-wrap:wrap;gap:24px;border-bottom:1px solid ${line};`);bar.setAttribute('role','tablist');bar.dataset.dxTabs=segmented?'segmented':'line';
@@ -196,6 +207,8 @@ export function blockInteract(target:EventTarget|null){
  if(check){paintCheck(check,check.getAttribute('aria-checked')!=='true',accent);return true;}
  const menu=target.closest<HTMLElement>('[data-dx-menu]');
  if(menu){menu.dataset.dxMenu=target.closest('[data-dx-menu-toggle]')&&menu.dataset.dxMenu!=='open'?'open':'closed';paintMenu(menu);return true;}
+ const kind=target.closest<HTMLElement>('button[data-dx-chart-kind]'),chart=kind?.closest<HTMLElement>('[data-dx-chart]');
+ if(kind&&chart){chart.dataset.dxChartKind=kind.dataset.dxChartKind;drawChart(chart,accent);return true;}
  const tab=target.closest<HTMLElement>('[data-dx-tab]');
  if(tab){const segmented=tab.parentElement?.dataset.dxTabs==='segmented';for(const sibling of tab.parentElement?.querySelectorAll<HTMLElement>(':scope > [data-dx-tab]')||[])paintTab(sibling,sibling===tab,accent,segmented);return true;}
  const choice=target.closest<HTMLElement>('[data-dx-choice]');
@@ -203,4 +216,24 @@ export function blockInteract(target:EventTarget|null){
  const toggle=target.closest<HTMLElement>('[data-dx-toggle]'),box=toggle?.closest<HTMLElement>('[data-dx-disclosure]');
  if(box){box.dataset.dxDisclosure=box.dataset.dxDisclosure==='open'?'closed':'open';paintDisclosure(box);return true;}
  return false;
+}
+
+/** Draws a chart part's points as bars or a line, with a round-numbered scale, value labels and a readable list of the values. */
+function drawChart(box:HTMLElement,accent:string){
+ const plot=box.querySelector<HTMLElement>(':scope > [data-dx-chart-plot]');if(!plot)return;
+ let spec:{points:{label:string;value:number}[];unit:string;max:number|null};try{spec=JSON.parse(box.dataset.dxChart||'');}catch{return;}
+ const kind=box.dataset.dxChartKind==='line'?'line':'bar',points=spec.points.slice(0,10);
+ for(const button of box.querySelectorAll<HTMLElement>('button[data-dx-chart-kind]')){const on=button.dataset.dxChartKind===kind;button.setAttribute('aria-pressed',String(on));button.style.background=on?'#fff':'transparent';button.style.color=on?ink:muted;button.style.fontWeight=on?'600':'400';button.style.boxShadow=on?'0 1px 2px #14131b1f':'none';}
+ plot.textContent='';if(points.length<2)return;
+ const top=Math.max(spec.max||0,...points.map(p=>p.value),1),step=[1,2,2.5,5].map(m=>m*10**Math.floor(Math.log10(top/4))).find(s=>s*4>=top)||10**Math.ceil(Math.log10(top/4)),ceiling=step*4;
+ const ns='http://www.w3.org/2000/svg',W=600,H=240,left=44,right=12,topPad=20,bottom=36,inner=H-topPad-bottom,band=(W-left-right)/points.length;
+ const svg=document.createElementNS(ns,'svg');svg.setAttribute('viewBox',`0 0 ${W} ${H}`);svg.setAttribute('role','img');svg.setAttribute('aria-label',(kind==='bar'?'Bar':'Line')+' chart: '+points.map(p=>p.label+' '+p.value+(spec.unit?' '+spec.unit:'')).join(', '));svg.style.cssText='display:block;width:100%;height:auto;overflow:visible;';
+ const add=(tag:string,attrs:Record<string,string>,text?:string)=>{const n=document.createElementNS(ns,tag);for(const [k,v] of Object.entries(attrs))n.setAttribute(k,v);if(text!==undefined)n.textContent=text;svg.append(n);return n;};
+ const y=(value:number)=>topPad+inner-(Math.max(0,value)/ceiling)*inner,font='font-family:inherit;';
+ for(let i=0;i<=4;i++){const v=step*i,yy=y(v);add('line',{x1:String(left),x2:String(W-right),y1:String(yy),y2:String(yy),stroke:line});add('text',{x:String(left-8),y:String(yy+4),'text-anchor':'end',fill:muted,'font-size':'11',style:font},String(Number(v.toPrecision(6))));}
+ const centers=points.map((_,i)=>left+band*i+band/2);
+ if(kind==='bar'){points.forEach((p,i)=>{const w=Math.min(56,band*.6),yy=y(p.value);add('rect',{x:String(centers[i]-w/2),y:String(yy),width:String(w),height:String(topPad+inner-yy),rx:'6',fill:accent});});}
+ else{add('polyline',{points:points.map((p,i)=>centers[i]+','+y(p.value)).join(' '),fill:'none',stroke:accent,'stroke-width':'3','stroke-linejoin':'round','stroke-linecap':'round'});points.forEach((p,i)=>add('circle',{cx:String(centers[i]),cy:String(y(p.value)),r:'5',fill:'#fff',stroke:accent,'stroke-width':'3'}));}
+ points.forEach((p,i)=>{add('text',{x:String(centers[i]),y:String(y(p.value)-8),'text-anchor':'middle',fill:ink,'font-size':'12','font-weight':'600',style:font},String(p.value));add('text',{x:String(centers[i]),y:String(H-bottom+18),'text-anchor':'middle',fill:muted,'font-size':'12',style:font},p.label.length>14?p.label.slice(0,13)+'…':p.label);});
+ plot.append(svg);
 }
