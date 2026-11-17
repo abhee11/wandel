@@ -79,7 +79,12 @@ export function resolve(l:Locator,root:ParentNode,owned:Map<string,HTMLElement>)
   if(!/^[a-z][a-z0-9-]*$/.test(l.tag)) return null;
   // An open popup marks the page behind it aria-hidden; that says nothing about the elements themselves.
   const popupOpen=deepElements(root,'[role=listbox],[role=menu],[role=dialog]').some(el=>el.getBoundingClientRect().height>0);
-  const candidates=[...(root instanceof HTMLElement&&root.matches(l.tag)?[root]:[]),...deepElements(root,l.tag)].filter(el=>!el.closest('[data-dx-ignore],[data-dx-owned]') && !el.matches('script,style,noscript,option,[contenteditable="true"],[data-dx-ignore]') && !el.hidden && (popupOpen || el.getAttribute('aria-hidden')!=='true'));
+  const all=[...(root instanceof HTMLElement&&root.matches(l.tag)?[root]:[]),...deepElements(root,l.tag)].filter(el=>!el.closest('[data-dx-ignore],[data-dx-owned]') && !el.matches('script,style,noscript,option,[contenteditable="true"],[data-dx-ignore]') && !el.hidden );
+  // Elements marked aria-hidden are only hidden from screen readers. They are tried second, so an element found today is found the same way,
+  // and a visible label marked aria-hidden (a carousel slide that announces it elsewhere) can still be found.
+  const heard=all.filter(el=>popupOpen||el.getAttribute('aria-hidden')!=='true');
+  return among(heard)||(heard.length<all.length?among(all):null);
+  function among(candidates:HTMLElement[]):HTMLElement|null {
   // Stable element identity outranks matching descendant text. A selected card's
   // contents can change without turning the selection into its inner wrapper.
   const identity=Object.entries(l.attrs).filter(([key])=>['id','data-testid','data-test','data-qa','data-block-id'].includes(key));
@@ -113,4 +118,6 @@ export function resolve(l:Locator,root:ParentNode,owned:Map<string,HTMLElement>)
     return contextual.length===1?contextual[0].el:null;
   }
   return ranked[0].el;
+  }
+
 }

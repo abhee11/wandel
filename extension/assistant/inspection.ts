@@ -1,7 +1,7 @@
 import {normalizePlan} from './plan';
 import {response,type AssistantPlan,type PageContext} from './schema';
 
-const stalled='Inspection is not revealing new information. Use the DOM details already supplied to complete the request. Do not request the same inspection again. If a genuine user decision is missing, return clarify with a concrete question. If the available evidence cannot support the edit, return answer explaining the specific missing evidence without promising further work or asking the user to select an already identified element. No edit has been performed by this inspection step.';
+const stalled='Inspection is not revealing new information. Use the DOM details already supplied to complete the request. Do not inspect again: this response must be edit, clarify or answer. People name things on screen in their own words: when no element carries the words they used (a modal, a section, rubrics, metrics), map those words to the visible structures that fit best (repeated cards, slides or groups that look alike) and complete the edit on them; if two readings are equally likely, or what they name is not on the page, clarify with one question that names what you see. If a genuine user decision is missing, return clarify with a concrete question. If the available evidence cannot support the edit, return answer explaining the specific missing evidence without promising further work or asking the user to select an already identified element. No edit has been performed by this inspection step.';
 /** Inspection is internal work, not a user choice. Bound it by new evidence as well as calls. */
 export async function resolveInspections(initial:AssistantPlan,context:PageContext,options:{
  inspect:(refs:string[])=>Promise<PageContext|null>;

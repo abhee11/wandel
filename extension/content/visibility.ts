@@ -42,7 +42,7 @@ export function hiddenByDesign(el:HTMLElement){const reason=expectation(el);retu
 export function hidingAncestor(el:HTMLElement){
  for(let p:HTMLElement|null=el;p&&p!==document.body;p=p.parentElement){
   const css=getComputedStyle(p);
-  if(p.hidden||css.display==='none'||css.visibility==='hidden'||p.getAttribute('aria-hidden')==='true'){
+  if(p.hidden||css.display==='none'||css.visibility==='hidden'){
    if(p===el)return 'it is set to hidden';
    const heading=p.querySelector('h1,h2,h3,h4,[role=heading]')?.textContent?.trim().slice(0,40);
    const name=p.getAttribute('aria-label')||heading||(p.id?'#'+p.id:'')||p.tagName.toLowerCase();

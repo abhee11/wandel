@@ -11,4 +11,5 @@ export function contextName(el:HTMLElement):string{
  return cleanText(text);
 }
 
-function readable(el:HTMLElement){for(let node:HTMLElement|null=el;node;node=parentOf(node)){const style=getComputedStyle(node);if(node.hidden||node.matches('[aria-hidden=true],[disabled],[aria-disabled=true]')||style.display==='none'||style.visibility==='hidden')return false;}return true;}
+function readable(el:HTMLElement){for(let node:HTMLElement|null=el;node;node=parentOf(node)){const style=getComputedStyle(node);// aria-hidden text is still on screen (a slide's label announced elsewhere, say), so the AI sees it too.
+  if(node.hidden||node.matches('[disabled],[aria-disabled=true]')||style.display==='none'||style.visibility==='hidden')return false;}return true;}
