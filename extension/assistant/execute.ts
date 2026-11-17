@@ -45,7 +45,8 @@ export function compileAssistant(workflow:Workflow,stateId:string,planInput:unkn
  const resolveLayoutSource=(locator:Locator)=>locator.owned?collector.ownedNode(locator.owned):resolve(locator,collector.rootNode,new Map());
  // The real card each section built in this plan sits beside; it has no position of its own until it renders.
  const sectionSource=new Map<string,HTMLElement>();
- const locate=(ref:string)=>{if(outputs.has(ref))return outputs.get(ref)!;const node=collector.get(ref),id=collector.ownedId(node);const locator=id?owned(id):describe(node).locator;if(!id){locator.structure=structuralIdentity(node);const classes=node.getAttribute('class');if(classes)locator.attrs.class=classes;}return {node,id,locator};};
+ const locateNode=(node:HTMLElement)=>{const id=collector.ownedId(node);const locator=id?owned(id):describe(node).locator;if(!id){locator.structure=structuralIdentity(node);const classes=node.getAttribute('class');if(classes)locator.attrs.class=classes;}return {node,id,locator};};
+ const locate=(ref:string)=>outputs.has(ref)?outputs.get(ref)!:locateNode(collector.get(ref));
  // Layout-level placement, shared by every action: end adds the next item of the list, grid or row the target belongs to, after
  // any item added there earlier in this plan; row-below opens one full-width row under that structure, laid out as a grid, and
  // fills it in order. The row leaves narrow columns so its items keep a usable width.
@@ -291,8 +292,11 @@ export function compileAssistant(workflow:Workflow,stateId:string,planInput:unkn
    }else{
     if(action.labels.length<2||new Set(action.labels.map(s=>s.toLowerCase())).size!==action.labels.length)throw new Error('Give two to eight distinct option labels.');
     const design=captureDesign(targets[0].node),heading=(styleReference?.closest('section,article')||targets[0].node.parentElement)?.querySelector<HTMLElement>('h2,h3,h4');
-    if(!appearance&&!insert.node.choices)throw new Error('Select an existing pill or button as the style reference.');
-    insert.node.choices={options:action.labels,selected:0,headingTag:'h3',headingStyle:heading?readStyle(heading):design.heading,buttonStyle:appearance||insert.node.choices!.buttonStyle,sectionStyle:{display:'block',margin:'20px 0',padding:'0',border:'0','box-shadow':'none','background-color':'transparent'}};
+    // No style named: options look like a pill already in the group (a copied section brings its own), else one beside it.
+    const pills='button:not([data-dx-choice]),[role=button],[role=radio]',near=targets[0].node instanceof HTMLElement?targets[0].node.querySelector<HTMLElement>(pills)||targets[0].node.parentElement?.closest('section,article,[role=dialog]')?.querySelector<HTMLElement>(pills):null;
+    const look=appearance||(near?readStyle(near):undefined);
+    if(!look&&!insert.node.choices)throw new Error('Select an existing pill or button as the style reference.');
+    insert.node.choices={options:action.labels,selected:0,headingTag:'h3',headingStyle:heading?readStyle(heading):design.heading,buttonStyle:look||insert.node.choices!.buttonStyle,sectionStyle:{display:'block',margin:'20px 0',padding:'0',border:'0','box-shadow':'none','background-color':'transparent'}};
     created.push(...action.labels.map((_,i)=>id+':choice:'+i));group=id;
    }
   }else if(action.kind==='paste'){
@@ -317,8 +321,13 @@ export function compileAssistant(workflow:Workflow,stateId:string,planInput:unkn
    if(!action.effects?.length)throw new Error('Say what the behavior changes: show, hide, toggle, text or style, and on which elements.');
    // A toast belongs to no element of its own; it is carried by the control that shows it, with the app's look when one of its toasts has been seen.
    const look=appToastLook()||undefined;
-   const effects=action.effects.flatMap(effect=>(effect.action==='toast'?[action.targets[0]]:effect.targets).map(ref=>({action:effect.action,target:locate(ref).locator,...(effect.value!=null?{value:effect.value}:{}),...(effect.action==='toast'?{...(effect.seconds?{seconds:effect.seconds}:{}),...(look?{look}:{})}:{})})));
+   // Showing or hiding every line of one container is showing or hiding the container: one effect, and lines added later follow.
+   const effectTargets=(effect:NonNullable<typeof action.effects>[number])=>{const found=(effect.action==='toast'?[action.targets[0]]:effect.targets).map(locate);
+    if(!['show','hide','toggle'].includes(effect.action)||found.length<2||found.some(item=>!(item.node instanceof HTMLElement)||!item.node.isConnected))return found;
+    return coverElements(found.map(item=>item.node as HTMLElement),collector.rootNode).map(node=>found.find(item=>item.node===node)||locateNode(node));};
+   const effects=action.effects.flatMap(effect=>effectTargets(effect).map(found=>({action:effect.action,target:found.locator,...(effect.value!=null?{value:effect.value}:{}),...(effect.action==='toast'?{...(effect.seconds?{seconds:effect.seconds}:{}),...(look?{look}:{})}:{})})));
    if(action.effects.some(effect=>effect.action!=='toast'&&!effect.targets.length))throw new Error('Say which elements the behavior changes.');
+   if(effects.length>MAX_BEHAVIOR_EFFECTS)throw new Error(`One click would have to change ${effects.length} separate elements, more than the ${MAX_BEHAVIOR_EFFECTS} I can handle. Point it at the section that holds them instead.`);
    if(action.effects.some(effect=>effect.action==='toast'&&!effect.value?.trim()))throw new Error('Say what the toast should say.');
    const condition=action.condition,when=condition&&(condition.key?.trim()||condition.ref||condition.text?.trim())?{...(condition.key?.trim()?{key:condition.key.trim(),...(condition.is!=null?{is:condition.is}:{})}:condition.ref?{target:locate(condition.ref).locator}:{text:condition.text!.trim()}),present:condition.present}:undefined;
    const byValue=!!condition?.key?.trim();
@@ -487,7 +496,20 @@ export function compactBlock(block:{nodes:{type:string;html?:string|null;parent?
  return wrappers.length<=1&&parts.length>=1&&parts.length<=3&&parts.every(node=>small.has(node.type)&&(node.type!=='custom'||(node.html||'').length<1500&&!/<(?:h[1-6]|p|table|ul|ol|section|article|img)\b/i.test(node.html||'')));
 }
 /** Inside a title, label, text or a horizontal row, or next to an item of one: the place reads as a line, not a stack of sections. */
+export const MAX_BEHAVIOR_EFFECTS=40;
 export function inlineContext(anchor:HTMLElement,position:string){
  const line=(el:HTMLElement|null)=>{if(!el)return false;if(el.matches('h1,h2,h3,h4,h5,h6,p,span,label,a,button,strong,em,small,[role=heading]'))return true;const css=getComputedStyle(el);return /^inline/.test(css.display)||/flex/.test(css.display)&&/^row/.test(css.flexDirection||'row');};
  return position==='inside'?line(anchor):(position==='before'||position==='after'||position==='beside')&&(anchor.matches('h1,h2,h3,h4,h5,h6,span,label,a,button,strong,small,[role=heading]')||line(anchor.parentElement));
+}
+
+/** Elements that are every element child of one parent are replaced by that parent, repeatedly; ones inside another listed element are dropped. Never climbs to the root. */
+export function coverElements(nodes:HTMLElement[],root:Element){
+ let set=new Set(nodes);
+ for(let changed=true;changed;){changed=false;
+  const parents=new Map<HTMLElement,HTMLElement[]>();
+  for(const node of set){const parent=node.parentElement;if(parent&&parent!==root&&root.contains(parent)){if(!parents.has(parent))parents.set(parent,[]);parents.get(parent)!.push(node);}}
+  for(const [parent,children] of parents){const all=[...parent.children].filter(child=>child instanceof HTMLElement&&!child.matches('script,style,template'));
+   if(set.size>=2&&all.length===children.length){for(const child of children)set.delete(child);set.add(parent);changed=true;}}
+ }
+ const list=[...set];return list.filter(node=>!list.some(other=>other!==node&&other.contains(node)));
 }

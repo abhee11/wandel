@@ -225,7 +225,10 @@ export function assistantService(db:DB,entitlements:Entitlements,provider:Assist
      for(const action of plan.actions){if(action.kind!=='duplicate'||!action.labels.length)continue;const source=context.elements.find(e=>e.ref===action.targets[0]);if(source?.attributes['wandel-control-count']==='0')throw new APIError(502,'INVALID_PLAN','This feature card has no buttons. Duplicate it with text for the heading and description for the body; labels must be empty. Edit a copied badge through a separate text action using its captured ref.');}
      try{validatePlanReferences(plan,[...context.elements.map(e=>e.ref),...(plan.status==='inspect'?context.views.map(view=>'view:'+view.id):[])]);}catch(error){throw new APIError(502,'INVALID_REFERENCES',(error as Error).message+' Nothing was applied.');}
      // Reject shapes the executor cannot build here, so the repair names the exact rule.
-     const issues=planContractIssues(plan);if(issues.length)throw new APIError(502,'INVALID_PLAN','Plan not supported: '+issues.join(' ').slice(0,600)+' Nothing was applied.');
+     const issues=planContractIssues(plan);
+     // Renaming a box with no words of its own can't be found again on the page: send the AI to the element that shows the words.
+     plan.actions.forEach((action,i)=>{if(action.kind!=='text')return;const target=context.elements.find(e=>e.ref===action.targets[0]);if(target&&!(target.text||'').trim()&&!(target.name||'').trim())issues.push(`Action ${i+1} (text) targets ${target.tag} ${target.ref}, which shows no words. Target the element whose visible text is being changed; if it isn't listed, inspect the section that contains it.`);});
+     if(issues.length)throw new APIError(502,'INVALID_PLAN','Plan not supported: '+issues.join(' ').slice(0,600)+' Nothing was applied.');
      break;
     }catch(error){
      const repairable=error instanceof z.ZodError||error instanceof APIError&&['INVALID_REFERENCES','INVALID_DUPLICATE','INVALID_PLAN'].includes(error.code);

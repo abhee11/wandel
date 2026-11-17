@@ -4,7 +4,10 @@ export function normalizePlan(input:unknown):AssistantPlan{
  const plan=AssistantPlanSchema.parse(input);
  const aliases=new Map(plan.actions.filter(a=>a.kind==='duplicate'&&a.resultRef).map(a=>[a.resultRef+'/button',a.resultRef+':button']));
  const canonical=(ref:string)=>aliases.get(ref)||ref;
- return {...plan,actions:plan.actions.map(a=>({...a,targets:a.targets.map(canonical),styleRef:a.styleRef?canonical(a.styleRef):a.styleRef,
+ // A style step with no style changes nothing: drop it, so one empty step doesn't sink the rest of the plan.
+ const empty=(a:AssistantPlan['actions'][number])=>a.kind==='style'&&!a.styleRef&&!(a.style&&Object.keys(a.style).length);
+ const actions=plan.actions.some(a=>!empty(a))?plan.actions.filter(a=>!empty(a)):plan.actions;
+ return {...plan,actions:actions.map(a=>({...a,targets:a.targets.map(canonical),styleRef:a.styleRef?canonical(a.styleRef):a.styleRef,
   inputType:a.kind==='create'&&a.element==='field'?a.inputType:undefined,
   required:a.kind==='create'&&a.element==='field'?a.required:undefined,
   options:a.kind==='create'&&a.element==='field'?a.options:undefined,

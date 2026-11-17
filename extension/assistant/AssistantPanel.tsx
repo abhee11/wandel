@@ -250,7 +250,7 @@ export function AssistantPanel({bridge,snapshot,onSave,onBusyChange,onVisualEdit
      const before=pageScreenshot;let kept='';
      // A change that rendered but failed a layout check is left on the page; the user decides.
      // The exact plan being applied, with each step's target, goes into any failure report.
-     lastPlan.current=proposed.actions.map(action=>{const target=current.elements.find(element=>element.ref===action.targets[0]);return action.kind+(action.element?' '+action.element:'')+(action.position?' '+action.position:'')+' → '+(target?target.tag+(target.attributes?.role?'['+target.attributes.role+']':'')+' "'+(target.name||target.text||'').slice(0,30)+'"':action.targets[0]);}).join(' | ');
+     lastPlan.current=proposed.actions.map(action=>{const target=current.elements.find(element=>element.ref===action.targets[0]);return action.kind+(action.element?' '+action.element:'')+(action.position?' '+action.position:'')+' → '+(target?target.tag+(target.attributes?.role?'['+target.attributes.role+']':'')+' "'+(target.name||target.text||'').slice(0,30)+'"'+(!(target.name||target.text||'').trim()&&target.classes?.length?' .'+target.classes[0].slice(0,40):''):action.targets[0]);}).join(' | ');
      try{await bridge.send({type:'assistantApply',plan:proposed,token:current.token});}catch(e){const m=e instanceof Error?e.message:'';if(!m.startsWith(keptPreview))throw e;kept=m.slice(keptPreview.length);}
      appliedSteps++;
      verificationNote='';reviewIssue='';

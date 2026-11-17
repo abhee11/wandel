@@ -1,5 +1,7 @@
 /** Internal check output (validation JSON, engine wording) becomes a sentence a designer can act on. */
 export function plainReason(reason:string){
+ const issue=/"code"\s*:\s*"too_big"[^]*?"maximum"\s*:\s*(\d+)[^]*?"path"\s*:\s*\[([^\]]*)\]/.exec(reason);
+ if(issue)return /effects/.test(issue[2])?`that needed more separate changes on one click than I can make (at most ${issue[1]}). Point it at the section that holds them`:`that was more than I can make in one step (at most ${issue[1]} of something). Try it in smaller steps`;
  if(/^\s*[\[{]/.test(reason)||/"code"\s*:/.test(reason))return 'I lost track of one of the elements I needed, often one I had just added. Try describing it by its visible text';
  if(/several independent labels/i.test(reason))return 'that part has several pieces of text and I couldn’t tell which one to change. Name the exact text you want changed';
  if(/Choose a container as the destination/i.test(reason))return 'I tried to place it inside something that can’t hold other elements';

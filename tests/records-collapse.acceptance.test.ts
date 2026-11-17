@@ -55,3 +55,48 @@ it.skipIf(!live)('makes each My Record section collapsible, collapsed by default
   expect(after).toEqual([true,true,false,true]);
  }finally{session.destroy();db.close();}
 },900000);
+// The beta user's own words (2026-11-17): arrows beside each title that fold that item, open by default. Runs the panel's next steps too.
+it.skipIf(!live)('adds an arrow beside each My Record title that folds only its own item',async()=>{
+ const ask='make the items in my record collapsible/expandable. i.e. each check box item shold collapse all the content within it. Use a small arrow on the right side of the checkbox title to show the expand/collapse state and act as the button.';
+ const env=Object.fromEntries(readFileSync('.env','utf8').split(/\r?\n/).flatMap(l=>{const m=l.match(/^([A-Z_]+)=(.*)$/);return m?[[m[1],m[2].trim().replace(/^['"]|['"]$/g,'')]]:[];}));
+ const provider=new OpenAIAssistant(env.OPENAI_API_KEY,env.OPENAI_MODEL),db=database(':memory:');
+ const config=configuration({WANDEL_AUTH_MODE:'legacy'},'verification-only-test-pepper-32-characters');
+ const trace:unknown[]=[];const log=(x:any)=>{trace.push(x);writeFileSync(process.env.TRACE_OUT||'/dev/null',JSON.stringify(trace,null,2));};
+ const app=createPlatform({db,config,ai:new MockAIProvider(),mail:{reset:async()=>{}},assistant:{transcribe:bytes=>provider.transcribe(bytes),plan:input=>provider.plan(input)}});
+ const signup=await app.handle(new Request(config.origin+'/api/auth/signup',{method:'POST',headers:{Origin:config.origin,'Content-Type':'application/json'},body:JSON.stringify({email:'verification@example.test',password:'synthetic-test-password-123'})}));const cookie=signup.headers.get('set-cookie')!.split(';')[0];
+ const cloud=async(instruction:string,context:any,history:any[])=>{const r=await app.handle(new Request(config.origin+'/api/assistant/plan',{method:'POST',headers:{Origin:config.origin,Cookie:cookie,'Content-Type':'application/json'},body:JSON.stringify({instruction,context,history,requestId:crypto.randomUUID(),steps:true})}));const d=await r.json();return r.ok?normalizePlan(d.plan):response('unsupported','API '+r.status+': '+(d.error?.message||JSON.stringify(d)));};
+ // jsdom has no layout: every element gets a small box, as a real page would give it.
+ const rect=Element.prototype.getBoundingClientRect;Element.prototype.getBoundingClientRect=function(){return {x:0,y:0,top:0,left:0,right:32,bottom:32,width:32,height:32,toJSON(){}} as DOMRect;};
+ localStorage.clear();document.body.innerHTML=page;
+ const session=new Session(document.getElementById('app')!,new Repository(new BrowserStorage()),new URL('https://example.test/groups/1'),{assistantEnabled:true});
+ const bodies=()=>[...document.querySelectorAll('.ChunkBody')] as HTMLElement[];
+ const folded=()=>bodies().map(b=>b.hidden||getComputedStyle(b).display==='none'||b.closest('details:not([open])')!==null||[...b.children].every(c=>(c as HTMLElement).hidden||getComputedStyle(c).display==='none'));
+ try{
+  await session.init();await session.dispatch({type:'edit'});
+  let instruction=ask,history:any[]=[],error='';
+  for(let step=0;step<3&&instruction;step++){
+   let c=(await session.dispatch({type:'assistantContext'})).assistant!.context!;
+   let plan=await cloud(instruction,c,history);
+   for(let round=0;plan.status==='inspect'&&round<4;round++){log({step,round,message:plan.message});c=(await session.dispatch({type:'assistantContext',inspect:plan.candidates})).assistant!.context!;plan=await cloud(instruction,c,[...history,{role:'assistant',text:'The requested elements have now been inspected. Use their supplied labels, descendants and styles to continue.',status:'sent'}]);}
+   log({step,status:plan.status,message:plan.message,next:plan.next,actions:plan.actions});
+   if(plan.status!=='edit'){error='step '+step+' '+plan.status+': '+plan.message;break;}
+   validatePlanReferences(plan,c.elements.map(e=>e.ref));
+   try{await session.dispatch({type:'assistantApply',token:c.token,plan});}catch(e){error=(e as Error).message;log({step,error});break;}
+   history=[...history,{role:'user',text:instruction,status:'sent'},{role:'assistant',text:plan.message,status:'sent'}];
+   instruction=plan.next?'Next step: '+plan.next:'';
+  }
+  const arrows=[...document.querySelectorAll('.ChunkSection')].map(s=>[...s.querySelectorAll('button,[role=button]')].find(b=>/[▾▸▴▼►▶⌄›]/.test(b.textContent||'')&&!(b as HTMLElement).matches('.AudioButton')) as HTMLElement|undefined);
+  log({error,folded:folded(),arrows:arrows.map(a=>a?.textContent),html:document.querySelector('.ChunkSection')?.outerHTML.slice(0,2500)});
+  expect(error).toBe('');
+  expect(arrows.every(Boolean)).toBe(true);
+  expect(folded()).toEqual([false,false,false,false]);
+  const before=arrows[2]!.textContent;
+  arrows[2]!.click();
+  expect(folded()).toEqual([false,false,true,false]);
+  expect(arrows[2]!.textContent).not.toBe(before);
+  // The checkbox still works and stays visible.
+  const box=document.querySelectorAll<HTMLInputElement>('.ChunkSection input[type=checkbox]')[2];expect(getComputedStyle(box.closest('label')!).display).not.toBe('none');
+  arrows[2]!.click();
+  expect(folded()).toEqual([false,false,false,false]);
+ }finally{Element.prototype.getBoundingClientRect=rect;session.destroy();db.close();}
+},900000);

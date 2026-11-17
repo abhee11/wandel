@@ -15,9 +15,14 @@ export function verifyReadableText(root:HTMLElement){
 export function verifyNewButton(node:HTMLElement){
  if(node.isConnected&&hiddenByDesign(node))return;
  const box=node.getBoundingClientRect(),css=getComputedStyle(node);
- if(!(node instanceof HTMLButtonElement)||node.disabled||box.width<24||box.height<24)throw new Error('The new button is not a usable visible control.');
+ // An arrow, close or menu icon is a bare symbol by design: no fill or border needed, and it may be small.
+ const glyph=isGlyphButton(node),least=glyph?12:24;
+ if(!(node instanceof HTMLButtonElement)||node.disabled||box.width<least||box.height<least)throw new Error('The new button is not a usable visible control.');
  const background=color(css.backgroundColor),border=color(css.borderColor),text=color(css.color);
  const filled=!!background&&background.a>.1,outlined=!!border&&border.a>.1&&parseFloat(css.borderWidth)>0&&css.borderStyle!=='none';
- if(!filled&&!outlined)throw new Error('The new button looks like plain text. Add a visible background or border.');
+ if(!filled&&!outlined&&!glyph)throw new Error('The new button looks like plain text. Add a visible background or border.');
  if(filled&&text&&background!.a>=.99){const a=luminance(text),b=luminance(background!);if((Math.max(a,b)+.05)/(Math.min(a,b)+.05)<3)throw new Error('The new button text does not have enough contrast against its background.');}
 }
+
+/** A button whose whole label is one or two symbols, such as ▾ ▸ ✕ ⋮ or ›, with no letters or digits. */
+export function isGlyphButton(node:HTMLElement){const label=(node.textContent||'').replace(/\s+/g,'');return label.length>=1&&label.length<=2&&!/[\p{L}\p{N}]/u.test(label);}
