@@ -44,7 +44,7 @@ export function App({bridge,demo=false,demoAccount=null}:{bridge:Bridge;demo?:bo
   const embedded=new URL(location.href).searchParams.get('embedded')==='1';
   useEffect(()=>{if(menuOpen)window.dispatchEvent(new Event('wandel-account-refresh'));},[menuOpen]);
   useEffect(()=>{if(!discarding)return;const escape=(event:KeyboardEvent)=>{if(event.key==='Escape'){event.preventDefault();event.stopImmediatePropagation();setDiscarding(false);}};window.addEventListener('keydown',escape,true);return()=>window.removeEventListener('keydown',escape,true);},[discarding]);
-  useEffect(()=>{const opened=()=>{setTab('build');setAssistantOpen(true);};window.addEventListener('wandel-flow-opened',opened);return()=>window.removeEventListener('wandel-flow-opened',opened);},[]);
+  useEffect(()=>{const opened=(event:Event)=>{if((event as CustomEvent<{stay?:boolean}>).detail?.stay)return;setTab('build');setAssistantOpen(true);};window.addEventListener('wandel-flow-opened',opened);return()=>window.removeEventListener('wandel-flow-opened',opened);},[]);
   const menu=useRef<HTMLDivElement|null>(null);
   useEffect(()=>{if(!menuOpen)return;const outside=(event:PointerEvent)=>{if(event.target instanceof Node&&!menu.current?.contains(event.target))setMenuOpen(false);};const escape=(event:KeyboardEvent)=>{if(event.key==='Escape'){event.preventDefault();event.stopImmediatePropagation();setMenuOpen(false);}};document.addEventListener('pointerdown',outside,true);window.addEventListener('keydown',escape,true);return()=>{document.removeEventListener('pointerdown',outside,true);window.removeEventListener('keydown',escape,true);};},[menuOpen]);
   // Unresolved changes the user hid stay hidden until the set changes.
