@@ -50,7 +50,8 @@ export function promptOperations(prompt:string,plan:unknown,selected:HTMLElement
     const target=step.target==='selected'&&el===selected?locator:describe(el,ownedId).locator;
     if(step.kind==='text'&&!editableText(el))throw new Error('Select the specific button text to rename it.');
     if(step.kind==='insert'&&step.position==='inside'&&el.matches('button,a,input,textarea,select,img,br,hr'))throw new Error('Select a container to add elements inside it.');
-    if(step.kind==='insert'&&el.closest('table')&&!el.closest('td,th'))throw new Error('Select a table cell or a container outside the table.');
+    const host=step.kind==='insert'?(step.position==='inside'?el:el.parentElement):null;
+    if(host?.closest('table')&&!host.closest('td,th'))throw new Error('Select a table cell or a container outside the table.');
     return OperationSchema.parse(step.kind==='insert'?{id:uid(),kind:'insert',target,position:step.position,node:{id:uid(),kind:step.element,text:step.text,...(step.control?{control:step.control}:{}),...(step.required?{required:true}:{}),...(step.inputType?{inputType:step.inputType}:{})}}:step.kind==='text'?{id:uid(),kind:'text',target,text:step.text}:step.kind==='style'?{id:uid(),kind:'style',target,style:step.style}:{id:uid(),kind:'remove',target});
   });
   // Text changes can alter host locators. Apply insertions/styles first.

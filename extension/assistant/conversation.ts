@@ -15,3 +15,13 @@ export function conversationInstruction(instruction:string,turns:ChatTurn[]){
 export function conversationHistory(turns:ChatTurn[]){
  return turns.filter(t=>t.status!=='sending').slice(-24).map(t=>({role:t.role,text:t.text.slice(0,1600),...(typeof t.page==='string'?{page:t.page.slice(0,300)}:{}),...(t.status?{status:t.status}:{}),...(t.error?{error:t.error.slice(0,300)}:{})}));
 }
+/** The original request with every answer given so far, as one instruction the server accepts (at most 1600 characters).
+ * The original request is always kept; when space runs out, the oldest answers go first. */
+export function continueRequest(prior:string,answer:string){
+ const lead='Continue this request: ',mark='\nUser clarification: ';
+ const body=prior.startsWith(lead)?prior.slice(lead.length):prior;
+ const [original,...answers]=body.split(mark);answers.push(answer);
+ const build=()=>lead+original+answers.map(a=>mark+a).join('');
+ while(build().length>1600&&answers.length>1)answers.shift();
+ return build().slice(0,1600);
+}

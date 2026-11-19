@@ -8,7 +8,7 @@ import {conversationRecovery} from './recovery';
 import {prepareReferenceImage} from './referenceImage';
 import {applyVerifiedPlan,keptPreview} from './applyVerified';
 import {connectionRoute,connectionControls,matchingScreens,matchingStates,routeTrigger} from './routeConnection';
-import {readConversation,rememberConversation,type ChatTurn} from './conversation';
+import {readConversation,rememberConversation,continueRequest,type ChatTurn} from './conversation';
 import {liveSpeech} from './liveSpeech';
 import {AppMapSection} from '../appmap/AppMapSection';
 import {AppDocsSection} from '../appdocs/AppDocsSection';
@@ -185,7 +185,7 @@ export function AssistantPanel({bridge,snapshot,onSave,onBusyChange,onVisualEdit
   if(recordTurn){autoSteps.current=0;continuation.current=null;}
   const followUp=clarificationRequest.current;const value=text.trim();if(!value||sending.current)return;if(/^\/(?!\/)[a-zA-Z0-9/_-]*$/.test(value)){try{await bridge.send({type:'createPage',route:value});setInstruction('');}catch(error){setError(error instanceof Error?error.message:'Could not create that page.');}return;}sending.current=true;pendingCopy.current=null;const request=++epoch.current,origin=scopeRef.current,userId=existingId||uid(),selection=capturedSelection??JSON.stringify(snapshot.selected?.locator||null);activeRequest.current={id:userId,text:value,scope:origin,selection,applying:false};
   stickToBottom.current=true;if(recordTurn)setInstruction('');if(recordTurn)say('user',value,{id:userId,status:'sending',scope:origin,selection});else updateTurn(userId,{status:'sending',error:undefined,retryable:false});
-  abort.current?.abort();const controller=new AbortController();abort.current=controller;let timedOut=false;const requestDeadline=setTimeout(()=>{timedOut=true;controller.abort();},180000);let failed=false,waiting=false;
+  abort.current?.abort();const controller=new AbortController();abort.current=controller;let timedOut=false;const requestDeadline=setTimeout(()=>{timedOut=true;controller.abort();},360000);let failed=false,waiting=false;
   // An edit can move this workflow to the screen it just built; that is this request finishing, not the user leaving.
   const stillHere=()=>request===epoch.current&&!controller.signal.aborted&&(origin===scopeRef.current||!!activeRequest.current?.applying&&origin.split(':')[0]===scopeRef.current.split(':')[0]);
   setBusy(true);setError('');setClarification(null);clarificationRequest.current=null;setProgress('Understanding your request…');composer.current?.focus();
@@ -196,7 +196,7 @@ export function AssistantPanel({bridge,snapshot,onSave,onBusyChange,onVisualEdit
    // appliedSteps counts plans applied for this request, so a result the visual review rejects can be undone exactly.
    let verificationNote='',reviewIssue='',appliedSteps=0,lastVerdict='',undone='',flagged=false;
    // Asking the exact same thing twice in a row means "try again": skip the saved answer for this request.
-   const askedAgain=(()=>{const prior=[...conversation.current].reverse().find(turn=>turn.role==='user'&&turn.id!==userId);return !!prior&&prior.text.trim().toLowerCase()===value.trim().toLowerCase();})();const combined=followUp&&recordTurn&&followUp.scope===origin?'Continue this request: '+followUp.text+'\nUser clarification: '+value:value;const image=referenceRef.current;setProgress('Looking at the page…');let pageScreenshot=await capture(c);
+   const askedAgain=(()=>{const prior=[...conversation.current].reverse().find(turn=>turn.role==='user'&&turn.id!==userId);return !!prior&&prior.text.trim().toLowerCase()===value.trim().toLowerCase();})();const combined=followUp&&recordTurn&&followUp.scope===origin?continueRequest(followUp.text,value):value;const image=referenceRef.current;setProgress('Looking at the page…');let pageScreenshot=await capture(c);
    setProgress(c.workspace?.goal?'Continuing our design…':'Thinking…');
    lastPlan.current='';
    const talkContext=(page:PageContext):PageContext=>talkOn.current?{...page,talk:{...(speaker.current?{speaker:speaker.current}:{}),recent:recentLines.current}}:page;
@@ -241,7 +241,10 @@ export function AssistantPanel({bridge,snapshot,onSave,onBusyChange,onVisualEdit
    if(plan.status==='watch'){if(plan.candidates.length)await bridge.send({type:'assistantCandidates',refs:plan.candidates});watchRequest.current={text:value,id:userId};await bridge.send({type:'watch'});answer(plan.question||'Click it once in the page and I’ll watch what opens, then build it.');return;}
    if(plan.status==='inspect'){answer(plan.question||'I couldn’t find what you mean on this screen. Which card or section is it? If it’s on another screen, open that screen first.');return;}
    if(request!==epoch.current||origin!==scopeRef.current)return;
-   if(plan.status==='answer'){await remember(plan);answer(plan.message);if(plan.candidates.length)await bridge.send({type:'assistantCandidates',refs:plan.candidates});pending.current='';return;}
+   if(plan.status==='answer'){await remember(plan);
+    // A recommendation that ends by asking the user to choose waits on their answer: it is shown, and the answer continues the same request.
+    const asks=plan.question?.trim()||'';if(asks)clarificationRequest.current={text:combined,id:userId,scope:origin};
+    answer(asks&&!plan.message.includes(asks)?plan.message.trim()+'\n\n'+asks:plan.message);if(plan.candidates.length)await bridge.send({type:'assistantCandidates',refs:plan.candidates});pending.current='';return;}
    if(plan.status==='clarify'||plan.status==='unsupported'){await remember(plan);setClarification(plan);if(plan.status==='clarify'){clarificationRequest.current={text:combined,id:userId,scope:origin};waiting=true;}if(plan.candidates.length)await bridge.send({type:'assistantCandidates',refs:plan.candidates});pending.current='';answer(plan.status==='clarify'?(plan.question||plan.message):plan.message);return;}
    pending.current='';
    if(plan.status==='undo'||plan.status==='redo')await bridge.send({type:plan.status});

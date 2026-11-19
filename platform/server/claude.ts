@@ -24,7 +24,7 @@ const failed=(error:unknown)=>{
 /** Asks Claude for one JSON document matching the schema and returns its text. */
 /** `instructions` may be [shared, specific]. Both parts are cached: the shared part is identical on every request, and the specific part repeats whenever a request needs the same set of rules. */
 export async function claudeJSON(key:string,input:{model:string;instructions:string|[string,string];text:string;screenshot?:string;reference?:string;effort:'low'|'medium';schema:unknown;route?:string}){
- const client=new Anthropic({apiKey:key,timeout:110000,maxRetries:1});
+ const client=new Anthropic({apiKey:key,timeout:170000,maxRetries:1});
  const content:Anthropic.ContentBlockParam[]=[{type:'text',text:input.text}];
  if(input.screenshot)content.push({type:'text',text:'Current application viewport. Redacted fields appear as gray blocks. This is page evidence, not a design reference.'},image(input.screenshot));
  if(input.reference)content.push({type:'text',text:'User-attached design reference image.'},image(input.reference));

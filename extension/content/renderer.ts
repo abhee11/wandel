@@ -343,7 +343,9 @@ export class Renderer {
       this.syncFieldLabel(target,op.text);this.applied.set(op.id,{target,before,after:op.text,textNode});return;
     }
     if(op.position==='inside' && (target.matches('button,a,input,textarea,select,img,br,hr')||target.getAttribute('role')==='button')) throw new Error('Select a container to add UI inside it.');
-    if(target.closest('table') && !target.closest('td,th')) throw new Error('Select a table cell or a container outside the table.');
+    // Only the place the new element lands matters: beside the table itself is fine, between its rows is not.
+    const host=op.position==='inside'?target:target.parentElement;
+    if(host?.closest('table') && !host.closest('td,th')) throw new Error('Select a table cell or a container outside the table.');
     let node:HTMLElement;
     if(op.node.copy){
       node=copyDOM(op.node.copy,this.owned);this.owned.delete(op.node.copy[0].id);node.dataset.dxOwned=op.node.id;this.owned.set(op.node.id,node);

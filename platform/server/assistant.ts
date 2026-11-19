@@ -69,9 +69,15 @@ export class OpenAIAssistant implements AssistantProvider{
  }
  private async request(path:string,body:BodyInit,headers:Record<string,string>={},route?:{base:string;key:string}){
   if(!(route?.key||this.key))throw new APIError(503,'ASSISTANT_UNAVAILABLE','Configure the assistant API on the server. Text editing still works locally.');
-  let result:Response;try{result=await fetch((route?.base||'https://api.openai.com/v1/')+path,{method:'POST',headers:{Authorization:'Bearer '+(route?.key||this.key),...headers},body,signal:AbortSignal.timeout(110000)});}catch(error){
+  // A dropped connection (the provider resets long requests now and then) is tried once more; a timeout is not.
+  const send=()=>fetch((route?.base||'https://api.openai.com/v1/')+path,{method:'POST',headers:{Authorization:'Bearer '+(route?.key||this.key),...headers},body,signal:AbortSignal.timeout(170000)});
+  const dropped=(error:unknown)=>error instanceof Error&&error.name!=='TimeoutError'&&/ECONNRESET|EPIPE|UND_ERR_SOCKET|socket|other side closed/i.test(String((error.cause as any)?.code||'')+' '+String((error.cause as any)?.message||'')+' '+error.message);
+  let result:Response;try{try{result=await send();}catch(error){if(!dropped(error))throw error;console.error(JSON.stringify({event:'provider_retry',path}));result=await send();}}catch(error){
    // Designing a whole page can take the model well over a minute; a timeout is reported as one, not as an outage.
-   if(error instanceof Error&&error.name==='TimeoutError')throw new APIError(504,'ASSISTANT_TIMEOUT','The AI took too long on this request. No page edit was applied.');
+   if(error instanceof Error&&(error.name==='TimeoutError'||(error.cause as any)?.name==='TimeoutError'))throw new APIError(504,'ASSISTANT_TIMEOUT','The AI took too long on this request. No page edit was applied.');
+   // Why the connection failed (reset, DNS, body timeout), so outages can be told apart in the logs. No request content is logged.
+   const cause=error instanceof Error?(error.cause instanceof Error?error.cause.name+': '+error.cause.message:error.name+': '+error.message):String(error);
+   console.error(JSON.stringify({event:'provider_error',path,cause:cause.slice(0,300)}));
    throw new APIError(503,'ASSISTANT_UNAVAILABLE','The assistant could not reach its provider. No page edit was applied.');}
   if(!result.ok){
    if(result.status===429){const body=await result.json().catch(()=>null) as {error?:{code?:string;type?:string}}|null;const code=body?.error?.code,quota=body?.error?.type==='insufficient_quota'||['insufficient_quota','credit_balance_exhausted'].includes(code||'');throw new APIError(429,quota?'ASSISTANT_PROVIDER_QUOTA':'ASSISTANT_PROVIDER_RATE_LIMIT',code==='credit_balance_exhausted'?'The OpenAI API account has no credits remaining. Add credits in OpenAI API billing, then retry. No edit was applied.':quota?'The AI provider has no available quota. Check the API project’s billing or spending limit. No edit was applied.':'The AI provider is rate limiting requests. Wait briefly, then retry. No edit was applied.');}
@@ -97,7 +103,7 @@ export class OpenAIAssistant implements AssistantProvider{
   const parsed=z.object({status:z.enum(['answer','edit']),message:z.string().max(1600)}).safeParse((()=>{try{return JSON.parse(reply);}catch{return null;}})());
   return parsed.success?parsed.data:null;
  }
- async plan(input:AssistantInput){
+ async plan(input:AssistantInput,shrunk=false):Promise<any>{
   const {model:requested,...request}=input,offered=this.models(),model=requested||this.model;
   if(!model)throw new APIError(503,'ASSISTANT_UNAVAILABLE','Configure OPENAI_MODEL before using cloud interpretation.');
   const choice=offered.models.find(item=>item.id===model);
@@ -116,6 +122,9 @@ export class OpenAIAssistant implements AssistantProvider{
    const route=choice?.provider==='xai'?{base:'https://api.x.ai/v1/',key:this.keys.xai||''}:undefined;
    const data=await this.request('responses',JSON.stringify({model,...(!route&&/^gpt-5|^gpt-6|^o[134]/.test(model)?{reasoning:{effort:referenceImage?'medium':'low'}}:{}),store:false,...(route?{}:{prompt_cache_key:'wandel-plan'}),max_output_tokens:16000,instructions,input:providerInput,text:{format:{type:'json_schema',name:'wandel_assistant',strict:true,schema:assistantOutputSchema}}}),{'Content-Type':'application/json'},route);
    logUsage(input.feedback?'correction':'plan',model,responsesUsage(data));
+   // A plan that ran out of room (a big panel built element by element) is asked for once more as a smaller first step,
+   // with the rest left for the next steps, instead of failing the whole request.
+   if(data.status!=='completed'&&!shrunk&&data.incomplete_details?.reason==='max_output_tokens'){console.info(JSON.stringify({event:'plan_too_long'}));return this.plan({...input,feedback:(input.feedback?input.feedback+'\n':'')+'Your previous plan for this request was too long to finish. Return a smaller first step that works on its own (for example the container and the first few controls, reusing one pattern), and describe everything still to build in next, so the following steps complete the whole request. Keep every choice the user already made.'},true);}
    if(data.status!=='completed')throw new APIError(502,'INCOMPLETE_PLAN','The assistant did not finish its plan. Try a smaller change.');
    reply=data.output?.flatMap((o:any)=>o.content||[]).filter((c:any)=>c.type==='output_text').map((c:any)=>c.text).join('')||'{}';
   }

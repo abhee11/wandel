@@ -3,7 +3,7 @@ import {accountConfig} from '../shared/accountConfig';
 import {accountToken} from '../sidepanel/accountClient';
 import {conversationHistory,type ChatTurn} from './conversation';
 import {AssistantPlanSchema,PageContextSchema,VisualVerdictSchema,type AssistantPlan,type PageContext} from './schema';
-import {refersBack,stableNames} from './stableRefs';
+import {continuesChat,stableNames} from './stableRefs';
 import type {ModelChoice} from '../shared/models';
 async function request(path:string,body:BodyInit,contentType:string,signal:AbortSignal){
  return withDeadline(async bounded=>{
@@ -23,7 +23,7 @@ export const chooseModel=(id:string)=>localStorage.setItem(modelKey,id);
 export async function planConversation(instruction:string,context:PageContext,signal:AbortSignal,history:ChatTurn[]=[],referenceImage?:string,pageScreenshot?:string,turnId?:string,retry=false){const model=chosenModel();
  // A fresh request leaves out the chat and the session's memory, so the same request on the same screen gets the same input.
  // A retry or repair keeps the chat: it carries why the last attempt failed.
- const fresh=!refersBack(instruction);let sent=context;
+ const fresh=!continuesChat(instruction,history);let sent=context;
  if(fresh){const candidate=PageContextSchema.safeParse({...context,workspace:undefined,recent:[],edits:[],lastCard:null,lastGroup:null});if(candidate.success)sent=candidate.data;}
  const named=stableNames(JSON.stringify(sent));
  const data=await request('plan',JSON.stringify({...(model?{model}:{}),instruction,context:JSON.parse(named.text),history:fresh&&!retry?[]:conversationHistory(history),...(referenceImage?{referenceImage}:{}),...(pageScreenshot?{pageScreenshot}:{}),requestId:crypto.randomUUID(),...(turnId?{turnId}:{}),steps:true,...(retry?{retry:true}:{})}),'application/json',signal);
