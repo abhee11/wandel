@@ -2,7 +2,13 @@ import {sensitive} from './privacy';
 const controls='button,a,[role="button"],[role="link"]';
 export type CardParts={root:HTMLElement;heading:HTMLElement;description:HTMLElement|null;controls:HTMLElement[]};
 const text=(node:Element)=>(node.textContent||'').replace(/\s+/g,' ').trim();
-function parts(root:HTMLElement):CardParts|null{
+// Card detection walks every link's ancestors and lists each ancestor's links, so on a page with a big menu the same
+// ancestors were measured again for every link: millions of style reads and a page that stopped responding.
+// While the page isn't changing (one context capture, one findCard call), each ancestor is measured once.
+let memo:Map<HTMLElement,CardParts|null>|null=null;
+export function withCardMemo<T>(fn:()=>T):T{const outer=memo;memo=outer||new Map();try{return fn();}finally{memo=outer;}}
+function parts(root:HTMLElement):CardParts|null{if(!memo)return measure(root);if(memo.has(root))return memo.get(root)!;const result=measure(root);memo.set(root,result);return result;}
+function measure(root:HTMLElement):CardParts|null{
  if(root.matches('body,main,form,[role=dialog]')||sensitive(root))return null;
  const actions=[...root.querySelectorAll<HTMLElement>(controls)].filter(node=>!node.parentElement?.closest(controls)&&!sensitive(node)&&getComputedStyle(node).display!=='none'&&getComputedStyle(node).visibility!=='hidden');
  // Feature tiles can be complete cards without a CTA. Require repeated sibling
@@ -42,7 +48,8 @@ function completeSurface(card:CardParts):CardParts{
  return card;
 }
 /** Find the closest complete card, including apps built from styled divs/spans. Never guess across multiple cards. */
-export function findCard(node:HTMLElement):CardParts|null{
+export function findCard(node:HTMLElement):CardParts|null{return withCardMemo(()=>findCardNow(node));}
+function findCardNow(node:HTMLElement):CardParts|null{
  const actions=node.matches(controls)?[node]:[...node.querySelectorAll<HTMLElement>(controls)];
  const found=new Map<HTMLElement,CardParts>();
  for(const action of actions){let parent=action.parentElement;while(parent&&!parent.matches('body,main,form,[role=dialog]')){let card=parts(parent);if(card){

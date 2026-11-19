@@ -10,7 +10,7 @@ import {currentAppDocs} from '../appdocs/cache';
 import {relevantDocs} from '../appdocs/docs';
 import {renderLineage} from '../prototype/engine';
 import {cardGroups,pageRegions} from './scene';
-import {findCard,copiedHeading} from './card';
+import {findCard,copiedHeading,withCardMemo} from './card';
 import {uid,type Locator,type Workflow,type Selection} from '../shared/model';
 import {describe,resolve,nameOf} from '../content/locator';
 import {visible,shownOnScreen,readStyle} from '../content/nativeDesign';
@@ -37,7 +37,8 @@ export class ContextCollector{
   if(!node||!this.available(node)||node.tagName!==handle.tag||(!liveContainer&&contextName(node)!==handle.name)||(checkStyle&&JSON.stringify(readStyle(node))!==handle.style))throw new Error('The referenced element changed while preparing this edit. Nothing was applied.');
   handle.node=node;this.identities.set(node,ref);return node;
  }
- collect(workflow:Workflow,stateId:string,selected:Selection|null,hover:HTMLElement|null,inspect:string[]=[],instruction=''):PageContext{
+ collect(workflow:Workflow,stateId:string,selected:Selection|null,hover:HTMLElement|null,inspect:string[]=[],instruction=''):PageContext{return withCardMemo(()=>this.collectNow(workflow,stateId,selected,hover,inspect,instruction));}
+ private collectNow(workflow:Workflow,stateId:string,selected:Selection|null,hover:HTMLElement|null,inspect:string[],instruction:string):PageContext{
   const scope=workflow.id+':'+location.href;if(scope!==this.scope){this.reset();this.scope=scope;}else if(this.viewState!==stateId){const lastView=this.lastView;this.reset();this.lastView=workflow.states.some(s=>s.id===lastView)?lastView:null;}this.viewState=stateId;
   // Rebuild short-lived handles on each explicit context capture, retaining semantic memory only when revalidated.
   const retain=(id:string|null)=>{if(!id)return null;try{return this.get(id)?id:null;}catch{return null;}};

@@ -90,7 +90,7 @@ export class ChromeBridge implements Bridge {
     let result;let timeout:ReturnType<typeof setTimeout>|undefined;
     try{result=await Promise.race([
       chrome.tabs.sendMessage(tabId,{type:'DX_COMMAND',command},{frameId:0}),
-      new Promise<never>((_,reject)=>{timeout=setTimeout(()=>reject(new Error('The page did not respond. Close and reopen the Wandel panel to reconnect. Your workflow has not been cleared.')),10000);})
+      new Promise<never>((_,reject)=>{timeout=setTimeout(()=>reject(new Error('The page did not respond. Close and reopen the Wandel panel to reconnect. Your workflow has not been cleared.')),designer?30000:10000);})
     ]);}catch(error){throw new Error(error instanceof Error?error.message:'Page unavailable. Reopen Wandel to reconnect.');}finally{clearTimeout(timeout);}
     if(tabId!==this.tabId||generation!==this.generation)throw new Error('Active tab changed. Try again on the current page.');
     if(result.error)throw new Error(result.error);return result.snapshot;
