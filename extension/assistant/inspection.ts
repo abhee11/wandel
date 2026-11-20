@@ -30,7 +30,7 @@ export async function resolveInspections(initial:AssistantPlan,context:PageConte
   // One decision pass, with the evidence and the reason for stopping. Never
   // forward an unfinished inspect response to the clarification UI.
   plan=normalizePlan(await options.replan(current,stalled+' A clarify response must include the actual question in question, not an inspection announcement.'));assertActive();
-  if(plan.status==='inspect'||plan.status==='clarify'&&!plan.question?.trim())return {plan:response('answer','I couldn’t tell which parts of the page you mean, so I haven’t changed anything. Click ✎ Edit, pick one of them on the page, then send the request again.'),context:current,interrupted:false,exhausted:true};
+  if(plan.status==='inspect'||plan.status==='clarify'&&!plan.question?.trim())return {plan:response('answer','I looked through this part of the page but couldn’t work out how to build that from what I can read here, so nothing changed. Try a smaller first step, or describe one example item and what it should show.'),context:current,interrupted:false,exhausted:true};
  }
  return {plan,context:current,interrupted:false,exhausted:false};
 }

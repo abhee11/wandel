@@ -1,4 +1,5 @@
 import {mountPrototypePage,mountChartSection} from './prototypePage';
+import {repeatPeers} from './repeats';
 import {mountBlock,blockInteract} from './block';
 import {fill,fieldOf,dataClick,syncBlocks,passes} from './blockData';
 import {Behaviors,safeDeclarations,choiceLabels} from './behavior';
@@ -255,7 +256,17 @@ export class Renderer {
     const inputs=[...view.querySelectorAll<HTMLInputElement|HTMLTextAreaElement|HTMLSelectElement>('[data-dx-field]')].filter(input=>!input.closest('form')||input.closest('form')===button?.closest('form'));
     for(const input of inputs){if(!input.checkValidity()){input.setAttribute('aria-invalid','true');input.reportValidity();return false;}input.removeAttribute('aria-invalid');}return true;
   }
+  /** While an "every item" change is copied to one item, effects on the example item (or inside it) land on that item instead. */
+  private peerOf:{from:HTMLElement;to:HTMLElement}|null=null;
+  private onPeer(el:HTMLElement|null){const swap=this.peerOf;if(!el||!swap||!swap.from.contains(el))return el;
+    const path:number[]=[];for(let node:HTMLElement=el;node!==swap.from;node=node.parentElement!)path.unshift([...node.parentElement!.children].indexOf(node));
+    let node:Element|undefined=swap.to;for(const index of path)node=node?.children[index];return node instanceof HTMLElement&&node.tagName===el.tagName?node:el;}
   private apply(op:Operation,target:HTMLElement,boundAnchor?:HTMLElement,bindings=new Map<Locator,HTMLElement>()) {
+    // "Every item": the same change on each repeated item like the target, found now, so items the context never listed are included.
+    if((op.kind==='style'||op.kind==='css'||op.kind==='behavior')&&op.every){
+      repeatPeers(target,this.root).forEach((peer,index)=>{if(peer===target)return;const id=op.id+'~'+index,prior=this.applied.get(id);if(prior?.target===peer&&peer.isConnected)return;
+        this.peerOf={from:target,to:peer};try{this.apply({...op,id,every:undefined} as Operation,peer,boundAnchor,bindings);}catch{/* one unusual item does not stop the rest */}finally{this.peerOf=null;}});
+    }
     if(op.kind==='theme'){this.applied.set(op.id,{target,theme:applyTheme(target,op.theme)});return;}
     if(op.kind==='reorder'){
       const anchor=boundAnchor?.isConnected?boundAnchor:resolve(op.anchor,this.root,this.owned);if(!anchor||anchor===target||target.contains(anchor))throw new Error('Choose a distinct destination outside the moved element.');
@@ -304,7 +315,7 @@ export class Renderer {
       this.applied.set(op.id,{target});return;
     }
     if(op.kind==='behavior'){
-      const effects=op.effects.map(effect=>{const el=resolve(effect.target,this.root,this.owned);if(!el)throw new Error('An element this behavior changes is missing.');return {action:effect.action,el,...(effect.value!==undefined?{value:effect.value}:{}),...(effect.seconds?{seconds:effect.seconds}:{}),...(effect.look?{look:effect.look}:{})};});
+      const effects=op.effects.map(effect=>{const el=this.onPeer(resolve(effect.target,this.root,this.owned));if(!el)throw new Error('An element this behavior changes is missing.');return {action:effect.action,el,...(effect.value!==undefined?{value:effect.value}:{}),...(effect.seconds?{seconds:effect.seconds}:{}),...(effect.look?{look:effect.look}:{})};});
       // A conditional click is taken over only when its condition holds; otherwise the page's own click runs untouched.
       if(op.when?.key){const {key,is,present}=op.when;this.behaviors.follow(effects,op.id,data=>passes({key,is:is??null},data)===present);this.applied.set(op.id,{target});return;}
       const when=op.when,holds=when?()=>{const on=when.target?!!resolve(when.target,this.root,this.owned)?.getClientRects().length:(this.root.textContent||'').toLowerCase().includes(when.text!.toLowerCase());return on===when.present;}:undefined;

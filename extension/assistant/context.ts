@@ -67,7 +67,11 @@ export class ContextCollector{
   // body, instead of the first one's deepest lines (and a button per line) using up the whole budget.
   const inspected=inspect.slice(0,8),share=Math.max(16,Math.floor(96/Math.max(1,inspected.length)));
   const breadth=(root:HTMLElement)=>{const out:HTMLElement[]=[];let level=[root];for(let depth=0;depth<8&&level.length&&out.length<share;depth++){level=level.flatMap(node=>[...node.children].filter((child):child is HTMLElement=>child instanceof HTMLElement));out.push(...level);}return out.slice(0,share);};
-  const expanded=inspected.flatMap(ref=>{let node:HTMLElement;try{node=this.get(ref);}catch{return [];}const quarter=Math.ceil(share/4);return [node,...deepElements(node,'h1,h2,h3,h4,h5,h6,[role=heading]').slice(0,quarter),...breadth(node),...deepElements(node,'button,a,input,select,textarea,[role=button],[role=link]').slice(0,quarter)];});
+  // Some tables spread one record over several rows (a title row, then a details row with its points or date). Inspecting
+  // the record's row also shows the rows that belong to it, up to the next row of its own kind; otherwise the details
+  // stay out of reach and the AI asks to inspect the same row again.
+  const recordRows=(node:HTMLElement)=>{const out:HTMLElement[]=[];if(!node.matches('tr'))return out;let next=node.nextElementSibling;while(next instanceof HTMLElement&&out.length<2&&next.matches('tr')&&!(node.className&&next.className===node.className)){out.push(next);next=next.nextElementSibling;}return out;};
+  const expanded=inspected.flatMap(ref=>{let node:HTMLElement;try{node=this.get(ref);}catch{return [];}const quarter=Math.ceil(share/4);return [node,...deepElements(node,'h1,h2,h3,h4,h5,h6,[role=heading]').slice(0,quarter),...breadth(node),...deepElements(node,'button,a,input,select,textarea,[role=button],[role=link]').slice(0,quarter),...recordRows(node).flatMap(row=>[row,...breadth(row).slice(0,quarter)])];});
   const request=instruction.toLowerCase().replace(/\s+/g,' ');
   // "On all cards" needs every match in view: up to 40, with full card context only for the first 6 so the element budget lasts.
   const bulk=!!request&&/\b(all|every|each|everywhere|throughout)\b/i.test(request);

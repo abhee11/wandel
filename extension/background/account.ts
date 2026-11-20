@@ -6,7 +6,12 @@ export async function backgroundAccountToken(signOut=false){
  if(accountConfig.publishableKey.startsWith('pk_test_')&&!await chrome.cookies.get({url:accountConfig.syncHost,name:'__clerk_db_jwt'}))return null;
  const clerk=await createClerkClient({publishableKey:accountConfig.publishableKey,syncHost:accountConfig.syncHost,background:true});
  if(signOut){await clerk.signOut();return null;}
- return await clerk.session?.getToken()||null;
+ const token=await clerk.session?.getToken().catch(()=>null);if(token)return token;
+ // After hours idle, Chrome restarts the background worker and Clerk can come back without its session for a moment;
+ // a signed-in user then saw "reconnect your session" with nothing sent. Look once more, bypassing the token cache.
+ await new Promise(r=>setTimeout(r,800));
+ await (clerk as any).load?.().catch(()=>{});
+ return await clerk.session?.getToken({skipCache:true}).catch(()=>null)||null;
 }
 export function registerAccountBridge(){
  const trustedSurface=(sender:chrome.runtime.MessageSender)=>{

@@ -28,7 +28,8 @@ export function normalizePlan(input:unknown):AssistantPlan{
   theme:a.kind==='theme'?a.theme:undefined,
   css:a.kind==='css'?a.css:null,
   event:a.kind==='behavior'?a.event||'click':null,
-  effects:a.kind==='behavior'?a.effects:null
+  effects:a.kind==='behavior'?a.effects:null,
+  everyMatch:['style','css','behavior'].includes(a.kind)&&a.everyMatch?true:null
  }))};
 }
 /** A step can reference captured elements or results of earlier steps only. */

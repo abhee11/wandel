@@ -19,6 +19,7 @@ import {sensitive} from './privacy';
 import {clone,uid,OperationSchema,type Workflow,type Locator,type Operation,type CopyNode} from '../shared/model';
 import {validateWorkflow,visibleNodeIds,renderLineage} from '../prototype/engine';
 import {describe,resolve,structuralIdentity} from '../content/locator';
+import {repeatPeers} from '../content/repeats';
 import {captureDesign,readStyle,visible,buttonAppearance} from '../content/nativeDesign';
 import {editableText,percentageTextRuns,textPath} from '../content/text';
 import {normalizePlan,validatePlanReferences} from './plan';
@@ -109,7 +110,11 @@ export function compileAssistant(workflow:Workflow,stateId:string,planInput:unkn
   return {...action,kind:'duplicate' as const,element:null,targets:[ref],relativeTo:previous||ref,position:'after' as const,description:null,labels:[],styleRef:null,style:null,resultRef};
  });
  for(const action of plan.actions){
-  const targets=action.targets.map(locate),styleReference=action.styleRef?collector.get(action.styleRef,true):null;
+  // Every item of a repeated list: one example per set of peers; the page applies it to the rest, so no item is reached twice.
+  const every=!!action.everyMatch&&['style','css','behavior'].includes(action.kind)&&(action.kind!=='behavior'||action.event!=='load');
+  const located=action.targets.map(locate),targets=every?located.filter((target,index)=>!located.slice(0,index).some(prior=>repeatPeers(prior.node,collector.rootNode).includes(target.node))):located;
+  const mark=every?{every:true as const}:{};
+  const styleReference=action.styleRef?collector.get(action.styleRef,true):null;
   const appearance=styleReference?readStyle(styleReference):undefined;
   if(action.kind==='theme'){
    if(targets.length!==1||!action.theme)throw new Error('Choose a page or region and a complete theme palette.');if(targets[0].node.matches('button,a,input,select,textarea'))throw new Error('Theme a page or container; use style for a single control.');validateTheme(action.theme);add({id:uid(),kind:'theme',target:targets[0].locator,theme:action.theme});const locator=targets[0].locator,node=targets[0].node;checks.push(()=>verifyTheme(locator.owned?collector.ownedNode(locator.owned)||node:node));
@@ -315,7 +320,7 @@ export function compileAssistant(workflow:Workflow,stateId:string,planInput:unkn
   }else if(action.kind==='css'){
    // Any style on any element, as plain CSS declarations.
    if(!action.css||!safeDeclarations(action.css).length)throw new Error('Give the CSS declarations to apply, such as "display:none" or "gap:12px".');
-   for(const target of targets){add({id:uid(),kind:'css',target:target.locator,css:action.css});checks.push(()=>verifyReadableText(target.node));}
+   for(const target of targets){add({id:uid(),kind:'css',target:target.locator,...mark,css:action.css});checks.push(()=>verifyReadableText(target.node));}
   }else if(action.kind==='behavior'){
    // When the target is clicked, hovered or the screen loads, the effects change other elements: expand, collapse, reveal, relabel, restyle.
    if(!action.effects?.length)throw new Error('Say what the behavior changes: show, hide, toggle, text or style, and on which elements.');
@@ -333,7 +338,7 @@ export function compileAssistant(workflow:Workflow,stateId:string,planInput:unkn
    const byValue=!!condition?.key?.trim();
    if(when&&!byValue&&(action.event||'click')!=='click')throw new Error('Only a click can depend on a condition.');
    if(byValue&&action.event!=='load')throw new Error('A value condition needs the load event.');
-   for(const target of targets)add({id:uid(),kind:'behavior',target:target.locator,event:action.event||'click',...(when?{when}:{}),effects});
+   for(const target of targets)add({id:uid(),kind:'behavior',target:target.locator,...mark,event:action.event||'click',...(when?{when}:{}),effects});
   }else if(action.kind==='connect'&&action.destination&&/^e_/.test(action.destination)){
    // An existing application control as the destination: clicks on the trigger are forwarded to it, so its real modal, menu or action runs.
    if(targets.length!==1)throw new Error('Choose one trigger.');const host=locate(action.destination);
@@ -460,7 +465,7 @@ export function compileAssistant(workflow:Workflow,stateId:string,planInput:unkn
      // A grid span only works on a grid item; host pages often wrap a card in
      // positioning layers, so the span moves to the card's own grid slot.
      let locator=target.locator;if(style.gridColumn&&target.node.parentElement&&!getComputedStyle(target.node.parentElement).display.includes('grid')){for(let node:HTMLElement|null=target.node.parentElement,depth=0;node?.parentElement&&depth<5;node=node.parentElement,depth++)if(getComputedStyle(node.parentElement).display.includes('grid')){locator=locatorOf(node);const {gridColumn,...rest}=style;if(Object.keys(rest).length)add({id:uid(),kind:'style',target:target.locator,style:rest});style={gridColumn};break;}}
-     add({id:uid(),kind:'style',target:locator,style});
+     add({id:uid(),kind:'style',target:locator,...(action.kind==='style'?mark:{}),style});
      if(style.backgroundColor!==undefined||style.color!==undefined)checks.push(()=>verifyReadableText(target.node));
     }else throw new Error('This action is not supported.');
    }
