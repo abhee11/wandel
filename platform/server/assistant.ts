@@ -208,14 +208,16 @@ export function assistantService(db:DB,entitlements:Entitlements,provider:Assist
    if(!provider.verify)return {verdict:{status:'uncertain',message:'Visual review is unavailable for this provider.'}};
    return metered(userId,input.requestId,createHash('sha256').update(raw).digest('hex'),async()=>({verdict:await provider.verify!(input)}),input.turnId);
   }
-  const input=z.object({model:z.string().max(60).optional(),instruction:z.string().trim().min(1).max(1600),context:PageContextSchema,history:ConversationHistorySchema.optional(),referenceImage:ReferenceImageSchema.optional(),pageScreenshot:ReferenceImageSchema.optional(),requestId:z.string().uuid(),turnId:z.string().uuid().optional(),steps:z.boolean().optional(),retry:z.boolean().optional()}).strict().parse(decoded);
+  const input=z.object({model:z.string().max(60).optional(),instruction:z.string().trim().min(1).max(1600),context:PageContextSchema,history:ConversationHistorySchema.optional(),referenceImage:ReferenceImageSchema.optional(),pageScreenshot:ReferenceImageSchema.optional(),requestId:z.string().uuid(),turnId:z.string().uuid().optional(),steps:z.boolean().optional(),every:z.boolean().optional(),retry:z.boolean().optional()}).strict().parse(decoded);
+  // Panels before 0.4.5 check plans strictly and reject the everyMatch field; they get plans without it.
+  const forClient=(plan:AssistantPlan):AssistantPlan=>input.every?plan:{...plan,actions:plan.actions.map(({everyMatch:_every,...action})=>action)};
   // Sanitize again at the trust boundary; no free-form transcript or page markup is retained.
   const context=PageContextSchema.parse(JSON.parse(JSON.stringify(input.context,(_key,value)=>typeof value==='string'?cleanText(value,2048):value)));
   // The same request on the same screen returns the plan it got before: the models' own sampling can't be fixed, so the answer is kept.
   // The key covers the request, the page description, history, model and the instructions in use, not the screenshot's pixels.
   const instructionKey=planInstructionKey(input.instruction);
   const cacheKey=createHash('sha256').update(JSON.stringify({instruction:input.instruction.trim().toLowerCase().replace(/\s+/g,' '),context,history:input.history||[],model:input.model||'default',steps:!!input.steps,reference:input.referenceImage?createHash('sha256').update(input.referenceImage).digest('hex'):null,rules:createHash('sha256').update(relevantInstructions({instruction:input.instruction,context,history:input.history,referenceImage:input.referenceImage,steps:input.steps})).digest('hex')})).digest('hex');
-  if(!input.retry){const saved=one<{plan:string}>(db,'SELECT plan FROM plan_cache WHERE user_id=? AND cache_key=? AND created_at>?',userId,cacheKey,new Date(clock().getTime()-PLAN_CACHE_DAYS*864e5).toISOString());const cached=saved?AssistantPlanSchema.safeParse(JSON.parse(saved.plan)):null;if(cached?.success&&cached.data.status==='edit'){console.info(JSON.stringify({event:'plan_cache_hit',user:userId.slice(0,8)}));return {plan:cached.data};}}
+  if(!input.retry){const saved=one<{plan:string}>(db,'SELECT plan FROM plan_cache WHERE user_id=? AND cache_key=? AND created_at>?',userId,cacheKey,new Date(clock().getTime()-PLAN_CACHE_DAYS*864e5).toISOString());const cached=saved?AssistantPlanSchema.safeParse(JSON.parse(saved.plan)):null;if(cached?.success&&cached.data.status==='edit'){console.info(JSON.stringify({event:'plan_cache_hit',user:userId.slice(0,8)}));return {plan:forClient(cached.data)};}}
   return metered(userId,input.requestId,createHash('sha256').update(JSON.stringify({instruction:input.instruction,context,history:input.history,referenceImage:input.referenceImage,pageScreenshot:input.pageScreenshot})).digest('hex'),async()=>{
    const history=input.history?ConversationHistorySchema.parse(JSON.parse(JSON.stringify(input.history,(_key,value)=>typeof value==='string'?cleanText(value,1600):value))):undefined;
    let plan:AssistantPlan|undefined,feedback:string|undefined,chatted=false;
@@ -255,7 +257,7 @@ export function assistantService(db:DB,entitlements:Entitlements,provider:Assist
    if(plan.status==='edit'){
    db.prepare('DELETE FROM plan_cache WHERE user_id=? AND created_at<=?').run(userId,new Date(clock().getTime()-PLAN_CACHE_DAYS*864e5).toISOString());
    db.prepare('INSERT OR REPLACE INTO plan_cache (user_id,cache_key,instruction_key,plan,created_at) VALUES (?,?,?,?,?)').run(userId,cacheKey,instructionKey,JSON.stringify(plan),clock().toISOString());}
-   return {plan};
+   return {plan:forClient(plan)};
   },input.turnId);
  }};
 }
