@@ -1,4 +1,4 @@
-import {trimContextStyles} from '../../extension/assistant/contextTrim';
+import {trimContext,compactElements} from '../../extension/assistant/contextTrim';
 import {normalizePlan,validatePlanReferences,planContractIssues} from '../../extension/assistant/plan';
 import {createHash,randomUUID} from 'node:crypto';
 import {z} from 'zod';
@@ -29,7 +29,7 @@ const chatInstructions='You are Wandel, a product designer chatting about the li
 
 /** Failure reports carry the request trimmed to 400 characters, so saved plans are found by the same trimmed form. */
 const planInstructionKey=(instruction:string)=>createHash('sha256').update(instruction.trim().toLowerCase().replace(/\s+/g,' ').slice(0,400)).digest('hex');
-export type AssistantInput={model?:string;instruction:string;context:PageContext;history?:ConversationHistory;feedback?:string;referenceImage?:string;pageScreenshot?:string;steps?:boolean};
+export type AssistantInput={model?:string;instruction:string;context:PageContext;history?:ConversationHistory;feedback?:string;referenceImage?:string;pageScreenshot?:string;steps?:boolean;slim?:boolean;compact?:boolean};
 /** The instruction blocks a request can use. Anything that is not clearly a small edit gets every block; a duplicate, rename, move, hide or restyle that adds nothing new gets only the blocks its words call for. */
 export function relevantInstructions(input:AssistantInput){
  const request=input.instruction.toLowerCase(),asked=(request+' '+(input.feedback||'')+' '+JSON.stringify(input.history||[]).slice(-2000)).toLowerCase();
@@ -68,10 +68,10 @@ export class OpenAIAssistant implements AssistantProvider{
   const known=keyed.some(choice=>choice.id===this.model);
   return {models:known||!this.model?keyed:[{id:this.model,label:this.model,provider:'openai' as const},...keyed],default:this.model};
  }
- private async request(path:string,body:BodyInit,headers:Record<string,string>={},route?:{base:string;key:string}){
+ private async request(path:string,body:BodyInit,headers:Record<string,string>={},route?:{base:string;key:string},timeout=170000){
   if(!(route?.key||this.key))throw new APIError(503,'ASSISTANT_UNAVAILABLE','Configure the assistant API on the server. Text editing still works locally.');
   // A dropped connection (the provider resets long requests now and then) is tried once more; a timeout is not.
-  const send=()=>fetch((route?.base||'https://api.openai.com/v1/')+path,{method:'POST',headers:{Authorization:'Bearer '+(route?.key||this.key),...headers},body,signal:AbortSignal.timeout(170000)});
+  const send=()=>fetch((route?.base||'https://api.openai.com/v1/')+path,{method:'POST',headers:{Authorization:'Bearer '+(route?.key||this.key),...headers},body,signal:AbortSignal.timeout(timeout)});
   const dropped=(error:unknown)=>error instanceof Error&&error.name!=='TimeoutError'&&/ECONNRESET|EPIPE|UND_ERR_SOCKET|socket|other side closed/i.test(String((error.cause as any)?.code||'')+' '+String((error.cause as any)?.message||'')+' '+error.message);
   let result:Response;try{try{result=await send();}catch(error){if(!dropped(error))throw error;console.error(JSON.stringify({event:'provider_retry',path}));result=await send();}}catch(error){
    // Designing a whole page can take the model well over a minute; a timeout is reported as one, not as an outage.
@@ -84,6 +84,18 @@ export class OpenAIAssistant implements AssistantProvider{
    if(result.status===429){const body=await result.json().catch(()=>null) as {error?:{code?:string;type?:string}}|null;const code=body?.error?.code,quota=body?.error?.type==='insufficient_quota'||['insufficient_quota','credit_balance_exhausted'].includes(code||'');throw new APIError(429,quota?'ASSISTANT_PROVIDER_QUOTA':'ASSISTANT_PROVIDER_RATE_LIMIT',code==='credit_balance_exhausted'?'The OpenAI API account has no credits remaining. Add credits in OpenAI API billing, then retry. No edit was applied.':quota?'The AI provider has no available quota. Check the API project’s billing or spending limit. No edit was applied.':'The AI provider is rate limiting requests. Wait briefly, then retry. No edit was applied.');}
    throw new APIError(503,'ASSISTANT_PROVIDER_FAILED','The assistant provider is unavailable. Check its credits, model access, or retry later.');
   }return result.json();
+ }
+ /** A plan request on OpenAI's flex tier: the same model at a lower price, sometimes slower or briefly without capacity.
+  * When flex has no capacity, fails or takes over 100 seconds, the request goes once more at the standard tier, so a
+  * user waits longer at worst and never gets a failure flex caused. Off unless WANDEL_FLEX=1: replies are slower. */
+ private async flexible(body:Record<string,unknown>){
+  if(process.env.WANDEL_FLEX!=='1')return this.request('responses',JSON.stringify(body),{'Content-Type':'application/json'});
+  try{return await this.request('responses',JSON.stringify({...body,service_tier:'flex'}),{'Content-Type':'application/json'},undefined,100000);}
+  catch(error){
+   if(!(error instanceof APIError)||error.code==='ASSISTANT_PROVIDER_QUOTA')throw error;
+   console.info(JSON.stringify({event:'flex_fallback',reason:error.code}));
+   return this.request('responses',JSON.stringify(body),{'Content-Type':'application/json'});
+  }
  }
  /** A conversation reply from the cheap chat model (WANDEL_CHAT_MODEL, else GPT-6 Luna or Claude Haiku 5.5); null when none is configured. */
  async chat(input:{instruction:string;context:PageContext;history?:ConversationHistory;pageScreenshot?:string}){
@@ -109,9 +121,15 @@ export class OpenAIAssistant implements AssistantProvider{
   if(!model)throw new APIError(503,'ASSISTANT_UNAVAILABLE','Configure OPENAI_MODEL before using cloud interpretation.');
   const choice=offered.models.find(item=>item.id===model);
   if(requested&&!choice)throw new APIError(400,'MODEL_UNAVAILABLE','That model isn’t available right now. Choose another one.');
-  const {referenceImage,pageScreenshot,...rest}=request,{projectContext,appMap,appDocs,...pageContext}=trimContextStyles(rest.context),description={...rest,context:pageContext};
+  const {referenceImage,pageScreenshot,slim:_slim,compact:_compact,...rest}=request,{projectContext,appMap,appDocs,...trimmed}=trimContext(rest.context,input.instruction,!input.slim||!!input.feedback);
+  // Panels from 0.4.7 read plans the same way but ask for the page as a compact table; older panels keep the JSON form.
+  const pageContext=input.compact?compactElements(trimmed as PageContext):trimmed,description={...rest,context:pageContext};
   console.info(JSON.stringify({event:'assistant_context',elements:input.context.elements.length,screenshot:!!pageScreenshot,referenceImage:!!referenceImage,inspection:!!input.feedback}));
-  const providerInput=referenceImage||pageScreenshot?[{role:'user',content:[{type:'input_text',text:JSON.stringify(description)},...(pageScreenshot?[{type:'input_text',text:'Current application viewport. Redacted fields appear as gray blocks. This is page evidence, not a design reference.'},{type:'input_image',image_url:pageScreenshot,detail:'high'}]:[]),...(referenceImage?[{type:'input_text',text:'User-attached design reference image.'},{type:'input_image',image_url:referenceImage,detail:'high'}]:[])]}]:JSON.stringify(description);
+  // The screenshot at low detail (about a tenth of the tokens) on a slim first call whose request isn't about looks;
+  // anything about appearance, layout or matching, a reference image, and every follow-up call get full detail.
+  const looks=/\b(look|looks|style|styling|styled|colou?rs?|font|fonts|typography|align|aligned|alignment|spacing|padding|margin|gap|overlap|layout|design|visual|screenshot|image|picture|icon|match|matching|like|same|similar|pixel|position|bigger|smaller|size|wider|narrower|taller|cramped|crowded|ugly|polish|clean|modern|theme|dark|light|shadow|rounded|border|background|gradient|contrast)\b/i;
+  const screenshotDetail:'high'|'low'=input.slim&&!input.feedback&&!referenceImage&&!looks.test(input.instruction)?'low':'high';
+  const providerInput=referenceImage||pageScreenshot?[{role:'user',content:[{type:'input_text',text:JSON.stringify(description)},...(pageScreenshot?[{type:'input_text',text:'Current application viewport. Redacted fields appear as gray blocks. This is page evidence, not a design reference.'},{type:'input_image',image_url:pageScreenshot,detail:screenshotDetail}]:[]),...(referenceImage?[{type:'input_text',text:'User-attached design reference image.'},{type:'input_image',image_url:referenceImage,detail:'high'}]:[])]}]:JSON.stringify(description);
   // Recreating a screen from an attached image needs more thought than a small edit.
   // The shared rules come first and the date last, so the long opening is byte-identical on every request and the provider can cache it.
   const dated=`Today is ${new Date().toISOString().slice(0,10)}. Sample or mock data uses realistic recent dates relative to today, plausible names and figures, and the vocabulary of this application.`;
@@ -121,7 +139,8 @@ export class OpenAIAssistant implements AssistantProvider{
   else{
    // Grok speaks the same Responses API; it has its own address and key, and no reasoning setting.
    const route=choice?.provider==='xai'?{base:'https://api.x.ai/v1/',key:this.keys.xai||''}:undefined;
-   const data=await this.request('responses',JSON.stringify({model,...(!route&&/^gpt-5|^gpt-6|^o[134]/.test(model)?{reasoning:{effort:referenceImage?'medium':'low'}}:{}),store:false,...(route?{}:{prompt_cache_key:'wandel-plan'}),max_output_tokens:16000,instructions,input:providerInput,text:{format:{type:'json_schema',name:'wandel_assistant',strict:true,schema:assistantOutputSchema}}}),{'Content-Type':'application/json'},route);
+   const body={model,...(!route&&/^gpt-5|^gpt-6|^o[134]/.test(model)?{reasoning:{effort:referenceImage?'medium':'low'}}:{}),store:false,...(route?{}:{prompt_cache_key:'wandel-plan'}),max_output_tokens:16000,instructions,input:providerInput,text:{format:{type:'json_schema',name:'wandel_assistant',strict:true,schema:assistantOutputSchema}}};
+   const data=route?await this.request('responses',JSON.stringify(body),{'Content-Type':'application/json'},route):await this.flexible(body);
    logUsage(input.feedback?'correction':'plan',model,responsesUsage(data));
    // A plan that ran out of room (a big panel built element by element) is asked for once more as a smaller first step,
    // with the rest left for the next steps, instead of failing the whole request.
@@ -209,7 +228,7 @@ export function assistantService(db:DB,entitlements:Entitlements,provider:Assist
    if(!provider.verify)return {verdict:{status:'uncertain',message:'Visual review is unavailable for this provider.'}};
    return metered(userId,input.requestId,createHash('sha256').update(raw).digest('hex'),async()=>({verdict:await provider.verify!(input)}),input.turnId);
   }
-  const input=z.object({model:z.string().max(60).optional(),instruction:z.string().trim().min(1).max(1600),context:PageContextSchema,history:ConversationHistorySchema.optional(),referenceImage:ReferenceImageSchema.optional(),pageScreenshot:ReferenceImageSchema.optional(),requestId:z.string().uuid(),turnId:z.string().uuid().optional(),steps:z.boolean().optional(),every:z.boolean().optional(),retry:z.boolean().optional()}).strict().parse(decoded);
+  const input=z.object({model:z.string().max(60).optional(),instruction:z.string().trim().min(1).max(1600),context:PageContextSchema,history:ConversationHistorySchema.optional(),referenceImage:ReferenceImageSchema.optional(),pageScreenshot:ReferenceImageSchema.optional(),requestId:z.string().uuid(),turnId:z.string().uuid().optional(),steps:z.boolean().optional(),every:z.boolean().optional(),slim:z.boolean().optional(),compact:z.boolean().optional(),retry:z.boolean().optional()}).strict().parse(decoded);
   // Panels before 0.4.5 check plans strictly and reject the everyMatch field; they get plans without it.
   const forClient=(plan:AssistantPlan):AssistantPlan=>input.every?plan:{...plan,actions:plan.actions.map(({everyMatch:_every,...action})=>action)};
   // Sanitize again at the trust boundary; no free-form transcript or page markup is retained.
@@ -233,7 +252,7 @@ export function assistantService(db:DB,entitlements:Entitlements,provider:Assist
    for(let attempt=0;!chatted&&attempt<2;attempt++){
     plan=undefined;
     try{
-     plan=normalizePlan(await provider.plan({instruction:input.instruction,context,...(input.steps?{steps:true}:{}),...(input.referenceImage?{referenceImage:input.referenceImage}:{}),...(input.pageScreenshot?{pageScreenshot:input.pageScreenshot}:{}),...history?{history}:{},...feedback?{feedback}:{}}));
+     plan=normalizePlan(await provider.plan({instruction:input.instruction,context,...(input.steps?{steps:true}:{}),...(input.slim?{slim:true}:{}),...(input.compact?{compact:true}:{}),...(input.referenceImage?{referenceImage:input.referenceImage}:{}),...(input.pageScreenshot?{pageScreenshot:input.pageScreenshot}:{}),...history?{history}:{},...feedback?{feedback}:{}}));
      for(const action of plan.actions){if(action.kind!=='duplicate'||!action.labels.length)continue;const source=context.elements.find(e=>e.ref===action.targets[0]);if(source?.attributes['wandel-control-count']==='0')throw new APIError(502,'INVALID_PLAN','This feature card has no buttons. Duplicate it with text for the heading and description for the body; labels must be empty. Edit a copied badge through a separate text action using its captured ref.');}
      try{validatePlanReferences(plan,[...context.elements.map(e=>e.ref),...(plan.status==='inspect'?context.views.map(view=>'view:'+view.id):[])]);}catch(error){throw new APIError(502,'INVALID_REFERENCES',(error as Error).message+' Nothing was applied.');}
      // Reject shapes the executor cannot build here, so the repair names the exact rule.

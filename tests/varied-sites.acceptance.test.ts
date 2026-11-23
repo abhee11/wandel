@@ -32,15 +32,16 @@ it.skipIf(!live)('handles realistic requests on a real site',async()=>{
   const root=document.querySelector<HTMLElement>('[data-site-root]')!;
   const session=new Session(root,new Repository(new BrowserStorage()),new URL(url),{assistantEnabled:true});
   const turns:ChatTurn[]=[];const started=Date.now();
-  const cloud=async(instruction:string,context:any,extra:ChatTurn[]=[])=>{const chat=[...turns,...extra],fresh=!continuesChat(instruction,chat);const sent=fresh?PageContextSchema.parse({...context,workspace:undefined,recent:[],edits:[],lastCard:null,lastGroup:null}):context;
-   const r=await app.handle(new Request(config.origin+'/api/assistant/plan',{method:'POST',headers:{Origin:config.origin,Cookie:cookie,'Content-Type':'application/json'},body:JSON.stringify({instruction,context:sent,history:fresh?[]:conversationHistory(chat),requestId:crypto.randomUUID(),steps:true,every:true})}));const d=await r.json();return r.ok?normalizePlan(d.plan):response('unsupported',JSON.stringify(d).slice(0,400));};
+  const cloud=async(instruction:string,context:any,extra:ChatTurn[]=[],slim=false)=>{const chat=[...turns,...extra],fresh=!continuesChat(instruction,chat);const sent=fresh?PageContextSchema.parse({...context,workspace:undefined,recent:[],edits:[],lastCard:null,lastGroup:null}):context;
+   const r=await app.handle(new Request(config.origin+'/api/assistant/plan',{method:'POST',headers:{Origin:config.origin,Cookie:cookie,'Content-Type':'application/json'},body:JSON.stringify({instruction,context:sent,history:fresh?[]:conversationHistory(chat),requestId:crypto.randomUUID(),steps:true,every:true,compact:true,...(slim?{slim:true}:{})})}));const d=await r.json();return r.ok?normalizePlan(d.plan):response('unsupported',JSON.stringify(d).slice(0,400));};
   const before=root.innerHTML;let error='',edits=0,autoSteps=0,clarifies=0,pending:string|null=null,value=request;const steps:any[]=[];
   try{
    await session.init();await session.dispatch({type:'edit'});
    for(let turn=0;turn<10&&value;turn++){
     const combined:string=pending?continueRequest(pending,value):value;pending=null;
     const t0=Date.now();let c=(await session.dispatch({type:'assistantContext',instruction:combined})).assistant!.context!;const contextMs=Date.now()-t0;
-    let plan=await cloud(combined,c);
+    // As the panel does: only a request's first call is slim.
+    let plan=await cloud(combined,c,[],true);
     if(plan.status==='inspect'){const r=await resolveInspections(plan,c,{active:()=>true,inspect:async refs=>{steps.push({turn,inspect:refs.map(ref=>c.elements.find(e=>e.ref===ref)?.name?.slice(0,60)||ref),why:plan.message.slice(0,300)});return (await session.dispatch({type:'assistantContext',inspect:refs,instruction:combined})).assistant!.context!;},replan:async(expanded,note)=>{const p=await cloud(combined,expanded,[{role:'assistant',text:note,status:'sent'}]);steps.push({turn,replan:p.status,message:p.message.slice(0,300),candidates:p.candidates.map(ref=>expanded.elements.find(e=>e.ref===ref)?.name?.slice(0,50)||ref)});return p;}});plan=r.plan;c=r.context;}
     if(plan.status==='open'&&plan.candidates[0]){const name=(c.elements.find(e=>e.ref===plan.candidates[0])?.name||'it').slice(0,60);await session.dispatch({type:'openControl',ref:plan.candidates[0]});await new Promise(r=>setTimeout(r,50));
      const reopened=combined+`\n(Wandel opened “${name}” so you can see what it shows. Continue the request on this screen; do not open anything else.)`;

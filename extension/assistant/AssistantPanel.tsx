@@ -200,7 +200,7 @@ export function AssistantPanel({bridge,snapshot,onSave,onBusyChange,onVisualEdit
    setProgress(c.workspace?.goal?'Continuing our design…':'Thinking…');
    lastPlan.current='';
    const talkContext=(page:PageContext):PageContext=>talkOn.current?{...page,talk:{...(speaker.current?{speaker:speaker.current}:{}),recent:recentLines.current}}:page;
-   let plan=await planConversation(combined,talkContext(c),controller.signal,conversation.current.filter(turn=>turn.id!==userId),image,pageScreenshot,userId,askedAgain);spokenLine.current=plan.spoken||'';
+   let plan=await planConversation(combined,talkContext(c),controller.signal,conversation.current.filter(turn=>turn.id!==userId),image,pageScreenshot,userId,askedAgain,true);spokenLine.current=plan.spoken||'';
    const inspectPlan=async(input:AssistantPlan,current:PageContext,allowNavigation:boolean)=>resolveInspections(input,current,{
     active:stillHere,
     inspect:async refs=>{

@@ -6,12 +6,15 @@ const prices:Record<string,[number,number,number]>={
  'claude-opus-5-5':[4,20,.05],'claude-sonnet-5-5':[2,10,.05],'claude-haiku-5-5':[.1,.5,.1],
  'grok-4.7':[2,6,.1],'grok-4.6':[2,6,.1],
 };
-export type Usage={input:number;cached:number;written?:number;output:number};
+// OpenAI's flex tier bills at a discount; its docs give both batch rates (half) and 30-40% off, so half is an estimate.
+// Each call logs the tier it was served on, so the estimate can be checked against the bill.
+const FLEX_RATE=.5;
+export type Usage={input:number;cached:number;written?:number;output:number;tier?:string};
 /** Reads the usage block of an OpenAI or Grok Responses API reply. */
 export function responsesUsage(data:any):Usage|null{
  const u=data?.usage;if(!u)return null;
  const input=Number(u.input_tokens)||0,cached=Number(u.input_tokens_details?.cached_tokens)||0;
- return {input:input-cached,cached,output:Number(u.output_tokens)||0};
+ return {input:input-cached,cached,output:Number(u.output_tokens)||0,...(typeof data.service_tier==='string'?{tier:data.service_tier}:{})};
 }
 /** Reads the usage block of a Claude reply. Cache writes cost 1.25× input. */
 export function claudeUsage(message:any):Usage|null{
@@ -21,9 +24,9 @@ export function claudeUsage(message:any):Usage|null{
 export function usageCost(model:string,u:Usage){
  const price=prices[model];if(!price)return null;
  const [input,output,cachedRate]=price;
- return Math.round((u.input*input+u.cached*input*cachedRate+(u.written||0)*input*1.25+u.output*output)/1e6*1e6)/1e6;
+ return Math.round((u.input*input+u.cached*input*cachedRate+(u.written||0)*input*1.25+u.output*output)*(u.tier==='flex'?FLEX_RATE:1)/1e6*1e6)/1e6;
 }
 export function logUsage(route:string,model:string,u:Usage|null){
  if(!u)return;
- console.info(JSON.stringify({event:'ai_usage',route,model,input:u.input,cached:u.cached,...(u.written?{written:u.written}:{}),output:u.output,cost:usageCost(model,u)}));
+ console.info(JSON.stringify({event:'ai_usage',route,model,input:u.input,cached:u.cached,...(u.written?{written:u.written}:{}),output:u.output,...(u.tier?{tier:u.tier}:{}),cost:usageCost(model,u)}));
 }
