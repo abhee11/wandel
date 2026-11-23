@@ -1,3 +1,4 @@
+import {trimContextStyles} from '../../extension/assistant/contextTrim';
 import {normalizePlan,validatePlanReferences,planContractIssues} from '../../extension/assistant/plan';
 import {createHash,randomUUID} from 'node:crypto';
 import {z} from 'zod';
@@ -108,7 +109,7 @@ export class OpenAIAssistant implements AssistantProvider{
   if(!model)throw new APIError(503,'ASSISTANT_UNAVAILABLE','Configure OPENAI_MODEL before using cloud interpretation.');
   const choice=offered.models.find(item=>item.id===model);
   if(requested&&!choice)throw new APIError(400,'MODEL_UNAVAILABLE','That model isn’t available right now. Choose another one.');
-  const {referenceImage,pageScreenshot,...rest}=request,{projectContext,appMap,appDocs,...pageContext}=rest.context,description={...rest,context:pageContext};
+  const {referenceImage,pageScreenshot,...rest}=request,{projectContext,appMap,appDocs,...pageContext}=trimContextStyles(rest.context),description={...rest,context:pageContext};
   console.info(JSON.stringify({event:'assistant_context',elements:input.context.elements.length,screenshot:!!pageScreenshot,referenceImage:!!referenceImage,inspection:!!input.feedback}));
   const providerInput=referenceImage||pageScreenshot?[{role:'user',content:[{type:'input_text',text:JSON.stringify(description)},...(pageScreenshot?[{type:'input_text',text:'Current application viewport. Redacted fields appear as gray blocks. This is page evidence, not a design reference.'},{type:'input_image',image_url:pageScreenshot,detail:'high'}]:[]),...(referenceImage?[{type:'input_text',text:'User-attached design reference image.'},{type:'input_image',image_url:referenceImage,detail:'high'}]:[])]}]:JSON.stringify(description);
   // Recreating a screen from an attached image needs more thought than a small edit.

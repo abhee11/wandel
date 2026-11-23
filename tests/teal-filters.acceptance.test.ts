@@ -58,7 +58,7 @@ it.skipIf(!live)('builds all five filters in a Filters panel and keeps every ans
  const turns:ChatTurn[]=[];
  // As planConversation sends it: chat and session memory only when the request continues the conversation.
  const cloud=async(instruction:string,context:any,extra:ChatTurn[]=[])=>{const chat=[...turns,...extra],fresh=!continuesChat(instruction,chat);const sent=fresh?PageContextSchema.parse({...context,workspace:undefined,recent:[],edits:[],lastCard:null,lastGroup:null}):context;
-  const r=await app.handle(new Request(config.origin+'/api/assistant/plan',{method:'POST',headers:{Origin:config.origin,Cookie:cookie,'Content-Type':'application/json'},body:JSON.stringify({instruction,context:sent,history:fresh?[]:conversationHistory(chat),requestId:crypto.randomUUID(),steps:true})}));const d=await r.json();return r.ok?normalizePlan(d.plan):response('unsupported',JSON.stringify(d).slice(0,400));};
+  const r=await app.handle(new Request(config.origin+'/api/assistant/plan',{method:'POST',headers:{Origin:config.origin,Cookie:cookie,'Content-Type':'application/json'},body:JSON.stringify({instruction,context:sent,history:fresh?[]:conversationHistory(chat),requestId:crypto.randomUUID(),steps:true,every:true})}));const d=await r.json();return r.ok?normalizePlan(d.plan):response('unsupported',JSON.stringify(d).slice(0,400));};
  const rect=Element.prototype.getBoundingClientRect;Element.prototype.getBoundingClientRect=function(){return {x:0,y:0,top:0,left:0,right:120,bottom:32,width:120,height:32,toJSON(){}} as DOMRect;};
  localStorage.clear();document.body.innerHTML=page;
  const session=new Session(document.querySelector('main')!,new Repository(new BrowserStorage()),new URL('https://example.test/jobs'),{assistantEnabled:true});
