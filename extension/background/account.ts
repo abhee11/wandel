@@ -2,16 +2,29 @@ import {createClerkClient} from '@clerk/chrome-extension/client';
 import {accountConfig} from '../shared/accountConfig';
 /** The signed-in user's API token, read in the background (null when signed out). */
 export async function backgroundAccountToken(signOut=false){
+ tokenMiss='';
  if(!accountConfig.publishableKey)throw new Error('This extension build has no Clerk key. Rebuild Wandel and click Reload in chrome://extensions, then refresh this page.');
  if(accountConfig.publishableKey.startsWith('pk_test_')&&!await chrome.cookies.get({url:accountConfig.syncHost,name:'__clerk_db_jwt'}))return null;
  const clerk=await createClerkClient({publishableKey:accountConfig.publishableKey,syncHost:accountConfig.syncHost,background:true});
  if(signOut){await clerk.signOut();return null;}
- const token=await clerk.session?.getToken().catch(()=>null);if(token)return token;
+ const first=await readToken(clerk);if(first.token)return first.token;
  // After hours idle, Chrome restarts the background worker and Clerk can come back without its session for a moment;
  // a signed-in user then saw "reconnect your session" with nothing sent. Look once more, bypassing the token cache.
  await new Promise(r=>setTimeout(r,800));
- await (clerk as any).load?.().catch(()=>{});
- return await clerk.session?.getToken({skipCache:true}).catch(()=>null)||null;
+ let reloaded='';await (clerk as any).load?.().catch((error:unknown)=>{reloaded=' reload: '+describe(error);});
+ const second=await readToken(clerk,true);if(second.token)return second.token;
+ // Signed-in users still lose their token now and then; why is kept for the panel to report once it can.
+ tokenMiss='first: '+first.reason+'; second: '+second.reason+reloaded;
+ return null;
+}
+/** Why the last token read came back empty: no Clerk session, or getToken failing (and how). */
+let tokenMiss='';
+export const lastTokenMiss=()=>tokenMiss;
+const describe=(error:unknown)=>(error instanceof Error?error.name+': '+error.message:String(error)).slice(0,160);
+async function readToken(clerk:any,skipCache=false):Promise<{token:string|null;reason:string}>{
+ if(!clerk.session)return {token:null,reason:'no session'+(clerk.user?' (user present)':'')+(clerk.client?.sessions?.length?` (${clerk.client.sessions.length} client sessions)`:'')};
+ try{const token=await clerk.session.getToken(skipCache?{skipCache:true}:undefined);return token?{token,reason:''}:{token:null,reason:'getToken returned nothing ('+(clerk.session.status||'unknown status')+')'};}
+ catch(error){return {token:null,reason:'getToken threw '+describe(error)};}
 }
 export function registerAccountBridge(){
  const trustedSurface=(sender:chrome.runtime.MessageSender)=>{
@@ -100,6 +113,6 @@ export function registerAccountBridge(){
   }
   // Only exact packaged UI pages can request tokens; host-page content scripts cannot.
   if(message?.type!=='WANDEL_ACCOUNT_TOKEN'||!trustedSurface(sender))return;
-  (async()=>message.signOut?{token:await backgroundAccountToken(true)}:{token:await backgroundAccountToken()})().then(reply).catch(error=>reply({error:error instanceof Error?(/authenticate this browser|dev.*browser/i.test(error.message)?'Sign in to Wandel in this Chrome profile, then return and retry. Your draft is unchanged.':error.message):'Sign-in unavailable.'}));return true;
+  (async()=>message.signOut?{token:await backgroundAccountToken(true)}:await backgroundAccountToken().then(token=>token?{token}:lastTokenMiss()?{token:null,reason:lastTokenMiss()}:{token:null}))().then(reply).catch(error=>reply({error:error instanceof Error?(/authenticate this browser|dev.*browser/i.test(error.message)?'Sign in to Wandel in this Chrome profile, then return and retry. Your draft is unchanged.':error.message):'Sign-in unavailable.'}));return true;
  });
 }

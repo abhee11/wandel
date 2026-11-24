@@ -33,7 +33,7 @@ it.skipIf(!live)('handles realistic requests on a real site',async()=>{
   const session=new Session(root,new Repository(new BrowserStorage()),new URL(url),{assistantEnabled:true});
   const turns:ChatTurn[]=[];const started=Date.now();
   const cloud=async(instruction:string,context:any,extra:ChatTurn[]=[],slim=false)=>{const chat=[...turns,...extra],fresh=!continuesChat(instruction,chat);const sent=fresh?PageContextSchema.parse({...context,workspace:undefined,recent:[],edits:[],lastCard:null,lastGroup:null}):context;
-   const r=await app.handle(new Request(config.origin+'/api/assistant/plan',{method:'POST',headers:{Origin:config.origin,Cookie:cookie,'Content-Type':'application/json'},body:JSON.stringify({instruction,context:sent,history:fresh?[]:conversationHistory(chat),requestId:crypto.randomUUID(),steps:true,every:true,compact:true,...(slim?{slim:true}:{})})}));const d=await r.json();return r.ok?normalizePlan(d.plan):response('unsupported',JSON.stringify(d).slice(0,400));};
+   const r=await app.handle(new Request(config.origin+'/api/assistant/plan',{method:'POST',headers:{Origin:config.origin,Cookie:cookie,'Content-Type':'application/json'},body:JSON.stringify({instruction,context:sent,history:fresh?[]:conversationHistory(chat),requestId:crypto.randomUUID(),steps:true,every:true,compact:true,capabilities:["every","compact","copy"],...(slim?{slim:true}:{})})}));const d=await r.json();return r.ok?normalizePlan(d.plan):response('unsupported',JSON.stringify(d).slice(0,400));};
   const before=root.innerHTML;let error='',edits=0,autoSteps=0,clarifies=0,pending:string|null=null,value=request;const steps:any[]=[];
   try{
    await session.init();await session.dispatch({type:'edit'});

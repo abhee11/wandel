@@ -1,6 +1,18 @@
 import {accountConfig} from '../shared/accountConfig';
 export class AccountError extends Error {constructor(public code:string,message:string){super(message);}}
-export async function accountToken(){const result=await chrome.runtime.sendMessage({type:'WANDEL_ACCOUNT_TOKEN'});if(result?.error)throw new AccountError('AUTH_NOT_CONFIGURED',result.error);if(!result?.token)throw new AccountError('AUTH_REQUIRED','Sign in under Account to use Wandel AI and account saves.');return result.token as string;}
+const missKey='wandel:token-missing';
+/** The signed-in user's token. An empty answer is asked once more after a moment, because signed-in users still get one
+ * now and then; when it stays empty, why is kept and reported with the next request that works (tokenMissReport). */
+export async function accountToken(){
+ const ask=()=>chrome.runtime.sendMessage({type:'WANDEL_ACCOUNT_TOKEN'}) as Promise<{token?:string|null;reason?:string;error?:string}|undefined>;
+ let result=await ask();if(result?.error)throw new AccountError('AUTH_NOT_CONFIGURED',result.error);
+ if(!result?.token){await new Promise(resolve=>setTimeout(resolve,1500));result=await ask();if(result?.error)throw new AccountError('AUTH_NOT_CONFIGURED',result.error);}
+ if(!result?.token){try{localStorage.setItem(missKey,JSON.stringify({reason:(result?.reason||'no reason given').slice(0,300),at:new Date().toISOString()}));}catch{/* nothing to keep it in */}
+  throw new AccountError('AUTH_REQUIRED','Sign in under Account to use Wandel AI and account saves.');}
+ return result.token as string;
+}
+/** A kept token failure, once: the next request that works sends it to the server log as token_missing. */
+export function tokenMissReport():string|null{try{const saved=localStorage.getItem(missKey);if(!saved)return null;localStorage.removeItem(missKey);const miss=JSON.parse(saved);return 'token_missing at '+miss.at+': '+miss.reason;}catch{return null;}}
 export async function accountAPI<T=any>(path:string,method='GET',body?:unknown,timeoutMs=20000):Promise<T>{
  const token=await accountToken();let response:Response;
  try{response=await fetch(accountConfig.apiOrigin+'/api'+path,{method,credentials:'omit',headers:{'Content-Type':'application/json',Authorization:`Bearer ${token}`},...(body?{body:JSON.stringify(body)}:{}),signal:AbortSignal.timeout(timeoutMs)});}catch{throw new AccountError('CONNECTION_FAILED',path==='/ai/plan'?'Wandel AI is unavailable. Your draft is unchanged; retry or connect a local planner.':'Account server is unavailable. Your draft is unchanged; save temporarily or retry.');}

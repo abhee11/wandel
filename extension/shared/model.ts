@@ -130,6 +130,7 @@ export type Command =
  | {type:'new';discard?:boolean}
  | {type:'revealChange'}
  | {type:'openControl';ref:string;confirmed?:boolean}
+ | {type:'assistantCopy';ref:string}
  | {type:'watch'}
  | {type:'watchClear'}
  | {type:'copyPrompt';prompt:string;context?:{workflowId:string;stateId:string;selection:string}}

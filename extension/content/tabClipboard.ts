@@ -11,6 +11,12 @@ try{
  storage()?.onChanged.addListener((changes,area)=>{if(area==='local'&&changes[storageKey])held=changes[storageKey].newValue||null;});
 }catch{/* no extension storage here */}
 export const copiedElement=()=>held;
+/** Keeps an element on the clipboard: its look and text only. Private parts (passwords, payment fields) are refused. */
+export async function holdCopy(el:HTMLElement,label?:string){
+ if(sensitive(el)||el.querySelector('input[type=password],[autocomplete^="cc-"]'))throw new Error('That part of the page is private, so Wandel won’t copy it.');
+ const value:CopiedElement={copy:captureCopy(el),label:(label||el.getAttribute('aria-label')||el.textContent||'Element').replace(/\s+/g,' ').trim().slice(0,60)||'Element',from:location.hostname};
+ held=value;await storage()?.local.set({[storageKey]:value});return value;
+}
 const ours=(node:Element)=>!!node.closest('[data-dx-ignore],[data-dx-owned]');
 /** What a click most likely means: the smallest thing around it big enough to be a component. */
 function component(start:Element){

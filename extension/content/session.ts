@@ -1,3 +1,4 @@
+import {holdCopy} from './tabClipboard';
 import {showSharedNotice,clearSharedNotice,signInPage,sharedLeftKey} from './sharedNotice';
 import type {SharedWait} from '../shared/liveNavigation';
 import {collectEvidence} from './designEvidence';
@@ -516,7 +517,10 @@ export class Session {
     if(remember)await this.rememberLivePosition();
     this.library=await this.repository.list(this.url.origin,routeOf(this.url));this.emit();
   }
-  private async rememberLivePosition(){if(!this.navigationError&&!this.navigating&&(this.liveSession||this.dirty||this.record||this.workflow.edges.length))await this.options.liveNavigation?.remember?.({workflowId:this.workflow.id,stateId:this.stateId,visits:this.visits.slice(-60),mode:this.mode()==='closed'?'edit':this.mode() as 'edit'|'interact'|'replay',minimized:this.panelMinimized,...(this.sharedExperience?{shared:true}:{}),dialogs:this.liveDialogs});}
+  /** Set once the chat is used on this page. Before, a page where the user only talked to Wandel wasn't kept in the flow, so
+   * moving to the next page (Activity 4 → Activity 5) started a new flow and the AI lost the page it had just looked at. */
+  private assistantUsed=false;
+  private async rememberLivePosition(){if(!this.navigationError&&!this.navigating&&(this.liveSession||this.dirty||this.record||this.workflow.edges.length||this.assistantUsed))await this.options.liveNavigation?.remember?.({workflowId:this.workflow.id,stateId:this.stateId,visits:this.visits.slice(-60),mode:this.mode()==='closed'?'edit':this.mode() as 'edit'|'interact'|'replay',minimized:this.panelMinimized,...(this.sharedExperience?{shared:true}:{}),dialogs:this.liveDialogs});}
   scopedSelection(scope:'element'|'section'|'page'='element'){
     const selected=this.findSelected();if(!selected)throw new Error('Select an element first.');
     const target=scope==='page'?this.root:scope==='section'?sectionTarget(selected,this.root):selected;
@@ -624,6 +628,13 @@ export class Session {
       // Chat can inspect a page even when its prototype overlay is off.
       if(c.type==='assistantApply')this.enabled=true;
       this.assistant??=new AssistantController(this.root,this.renderer.owned);
+      if(c.type==='assistantContext'&&c.chat&&!this.assistantUsed){this.assistantUsed=true;if(!this.record)await this.checkpoint();else await this.rememberLivePosition();}
+      if(c.type==='assistantCopy'){
+        // Puts an element the AI found on Wandel's clipboard, the same one a user's "Copy from page" fills, so it can be
+        // pasted on another screen or tab. Nothing on the page changes.
+        const el=this.assistant?.collector.get(c.ref);if(!el)throw new Error('That element is no longer on the page.');
+        await holdCopy(el);return this.snapshot();
+      }
       if(c.type==='assistantContext'){
         if(c.chat){const inactive=!this.projectionActive;this.cancelDrag();this.interacting=true;this.projectionActive=true;this.picking=false;this.dragging=false;this.replay=false;this.outline.style.display='none';if(inactive||this.workflow.states.find(state=>state.id===this.stateId)?.view==='panel'&&!this.renderer.owned.get('view:'+this.stateId)?.isConnected)this.render();}
         this.assistant.collect(this.workflow,this.stateId,this.selected,this.hovered,c.inspect,c.instruction);

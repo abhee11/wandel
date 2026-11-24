@@ -1,6 +1,6 @@
 import {withDeadline} from './deadline';
 import {accountConfig} from '../shared/accountConfig';
-import {accountToken} from '../sidepanel/accountClient';
+import {accountToken,tokenMissReport} from '../sidepanel/accountClient';
 import {conversationHistory,type ChatTurn} from './conversation';
 import {AssistantPlanSchema,PageContextSchema,VisualVerdictSchema,type AssistantPlan,type PageContext} from './schema';
 import {continuesChat,stableNames} from './stableRefs';
@@ -9,6 +9,8 @@ async function request(path:string,body:BodyInit,contentType:string,signal:Abort
  return withDeadline(async bounded=>{
  const token=await accountToken();if(bounded.aborted)throw new Error('Request canceled.');const result=await fetch(accountConfig.apiOrigin+'/api/assistant/'+path,{method:'POST',credentials:'omit',headers:{'Content-Type':contentType,Authorization:'Bearer '+token},body,signal:bounded});
  const data=await result.json();
+ // The token worked this time; if it went missing before, the server log hears why.
+ if(result.ok&&path!=='diagnostic'){const miss=tokenMissReport();if(miss)reportFailure({detail:miss.slice(0,600)});}
  // Limit codes travel with the message so the conversation can say which limit applies and when it clears.
  if(!result.ok){const e=data.error||{},tag=['AI_LIMIT_REACHED','RATE_LIMITED','AI_RATE_LIMITED','AI_NOT_CONFIGURED','ASSISTANT_DISABLED','ASSISTANT_TIMEOUT','INCOMPLETE_PLAN'].includes(e.code)?` [${e.code}${e.resetsAt?';resets='+e.resetsAt:''}${e.retryAfter?';wait='+e.retryAfter:''}]`:'';throw new Error((e.message||'The assistant is unavailable. Your draft is unchanged.')+tag);}
  return data;
@@ -28,7 +30,7 @@ export async function planConversation(instruction:string,context:PageContext,si
  const fresh=!continuesChat(instruction,history);let sent=context;
  if(fresh){const candidate=PageContextSchema.safeParse({...context,workspace:undefined,recent:[],edits:[],lastCard:null,lastGroup:null});if(candidate.success)sent=candidate.data;}
  const named=stableNames(JSON.stringify(sent));
- const data=await request('plan',JSON.stringify({...(model?{model}:{}),instruction,context:JSON.parse(named.text),history:fresh&&!retry?[]:conversationHistory(history),...(referenceImage?{referenceImage}:{}),...(pageScreenshot?{pageScreenshot}:{}),requestId:crypto.randomUUID(),...(turnId?{turnId}:{}),steps:true,every:true,compact:true,...(slim?{slim:true}:{}),...(retry?{retry:true}:{})}),'application/json',signal);
+ const data=await request('plan',JSON.stringify({...(model?{model}:{}),instruction,context:JSON.parse(named.text),history:fresh&&!retry?[]:conversationHistory(history),...(referenceImage?{referenceImage}:{}),...(pageScreenshot?{pageScreenshot}:{}),requestId:crypto.randomUUID(),...(turnId?{turnId}:{}),steps:true,every:true,compact:true,capabilities:['every','compact','copy'],...(slim?{slim:true}:{}),...(retry?{retry:true}:{})}),'application/json',signal);
  return AssistantPlanSchema.parse(JSON.parse(named.restore(JSON.stringify(data.plan))));}
 export async function transcribeInstruction(wav:Blob,signal:AbortSignal,turnId?:string){const data=await request('transcribe?requestId='+crypto.randomUUID()+(turnId?'&turnId='+turnId:''),wav,'audio/wav',signal);if(typeof data.text!=='string'||!data.text.trim())throw new Error('No instruction was recognized. Try again or type instead.');return data.text as string;}
 
