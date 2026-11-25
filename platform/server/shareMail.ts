@@ -2,7 +2,9 @@ import {mkdirSync,appendFileSync} from 'node:fs';
 import {APIError} from './security';
 /** One share email: a link to a published prototype, sent on behalf of the person who shared it. */
 export type ShareMessage={to:string;sender:{name:string|null;email:string};title:string;url:string;expiresAt:string;note?:string};
-export interface ShareMailer{send(message:ShareMessage):Promise<void>;}
+/** An invite to join a team, from its owner. */
+export type InviteMessage={to:string;sender:{name:string|null;email:string};team:string;url:string;expiresAt:string};
+export interface ShareMailer{send(message:ShareMessage):Promise<void>;sendInvite?(message:InviteMessage):Promise<void>;}
 const escape=(text:string)=>text.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
 const day=(iso:string)=>new Date(iso).toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric',timeZone:'UTC'});
 /** Subject, plain text and HTML for a share email. Everything the sender typed is escaped; the only link is the prototype's. */
@@ -21,6 +23,21 @@ ${note?`<p style="margin:0 0 20px;padding:12px 14px;background:#f6f5fa;border-ra
 </td></tr></table><p style="margin:16px 0 0;font-size:12px;color:#9a97a8">Sent with Wandel by Studio447</p></td></tr></table></body></html>`;
  return {subject,text,html};
 }
+/** Subject, plain text and HTML for a team invite. The team name and sender are escaped; the only link is the invite's. */
+export function inviteEmail(message:InviteMessage){
+ const who=(message.sender.name||'').trim()||message.sender.email,team=message.team.trim()||'a team';
+ const subject=`${who} invited you to ${team} on Wandel`.slice(0,180);
+ const text=[`${who} (${message.sender.email}) invited you to join ${team} on Wandel.`,'','Teammates share what Wandel learns about your apps: their layout and design, never their content.','',`Join: ${message.url}`,'',`Sign in with this email address (${message.to}) to join. The invite works until ${day(message.expiresAt)}.`].join('\n');
+ const html=`<!doctype html><html><body style="margin:0;padding:24px;background:#f6f5fa;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#14131b">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center"><table role="presentation" width="100%" style="max-width:520px;background:#ffffff;border:1px solid #e6e3ee;border-radius:16px" cellpadding="0" cellspacing="0"><tr><td style="padding:28px">
+<p style="margin:0 0 6px;font-size:13px;color:#6e6c7f">${escape(who)} invited you to a team</p>
+<h1 style="margin:0 0 12px;font-size:20px;line-height:1.3">Join ${escape(team)} on Wandel</h1>
+<p style="margin:0 0 20px;font-size:15px;line-height:1.5">Teammates share what Wandel learns about your apps: their layout and design, never their content.</p>
+<a href="${escape(message.url)}" style="display:inline-block;padding:12px 20px;border-radius:10px;background:#6254ca;color:#ffffff;text-decoration:none;font-weight:600;font-size:15px">Join the team</a>
+<p style="margin:20px 0 0;font-size:13px;line-height:1.5;color:#6e6c7f">Sign in with ${escape(message.to)} to join. The invite works until ${escape(day(message.expiresAt))}.</p>
+</td></tr></table><p style="margin:16px 0 0;font-size:12px;color:#9a97a8">Sent with Wandel by Studio447</p></td></tr></table></body></html>`;
+ return {subject,text,html};
+}
 /** Sends through Resend's API. Replies go to the person who shared. */
 export class ResendMailer implements ShareMailer{
  constructor(private key:string,private from:string){}
@@ -29,10 +46,16 @@ export class ResendMailer implements ShareMailer{
   const response=await fetch('https://api.resend.com/emails',{method:'POST',headers:{Authorization:`Bearer ${this.key}`,'Content-Type':'application/json'},body:JSON.stringify({from:this.from,to:[message.to],reply_to:message.sender.email,subject,text,html}),signal:AbortSignal.timeout(15000)});
   if(!response.ok){const body=await response.text().catch(()=>'');console.error(JSON.stringify({event:'share_email_failed',status:response.status,detail:body.slice(0,300)}));throw new APIError(502,'EMAIL_FAILED','The email couldn’t be sent. The link was still created; copy it and send it yourself.');}
  }
+ async sendInvite(message:InviteMessage){
+  const {subject,text,html}=inviteEmail(message);
+  const response=await fetch('https://api.resend.com/emails',{method:'POST',headers:{Authorization:`Bearer ${this.key}`,'Content-Type':'application/json'},body:JSON.stringify({from:this.from,to:[message.to],reply_to:message.sender.email,subject,text,html}),signal:AbortSignal.timeout(15000)});
+  if(!response.ok){const body=await response.text().catch(()=>'');console.error(JSON.stringify({event:'invite_email_failed',status:response.status,detail:body.slice(0,300)}));throw new APIError(502,'EMAIL_FAILED','The invite email couldn’t be sent. The invite was still made; copy its link and send it yourself.');}
+ }
 }
 /** Local development: emails are written to a file instead of sent. */
 export class DevShareMailer implements ShareMailer{
  async send(message:ShareMessage){mkdirSync('.data',{recursive:true,mode:0o700});appendFileSync('.data/mailbox.jsonl',JSON.stringify({...shareEmail(message),to:message.to,createdAt:new Date().toISOString()})+'\n',{mode:0o600});}
+ async sendInvite(message:InviteMessage){mkdirSync('.data',{recursive:true,mode:0o700});appendFileSync('.data/mailbox.jsonl',JSON.stringify({...inviteEmail(message),to:message.to,createdAt:new Date().toISOString()})+'\n',{mode:0o600});}
 }
 const EMAIL=/^[^\s@<>()[\]\\,;:"]{1,64}@[a-z0-9-]+(\.[a-z0-9-]+)+$/i;
 /** Recipients from what the person typed: commas, spaces or new lines between addresses; each checked, lowercased and listed once. */

@@ -1,4 +1,5 @@
 import {copiedElement} from '../content/tabClipboard';
+import {libraryComponent} from '../knowledge/library';
 import {verifyNewButton,verifyReadableText} from './controlVerification';
 import {verifyArrangement} from '../content/arrangement';
 import {namedIcon} from '../content/copyIcon';
@@ -305,7 +306,10 @@ export function compileAssistant(workflow:Workflow,stateId:string,planInput:unkn
     created.push(...action.labels.map((_,i)=>id+':choice:'+i));group=id;
    }
   }else if(action.kind==='paste'){
-   const held=copiedElement();if(!held)throw new Error('Nothing has been copied from another tab yet.');
+   // From the team's component library (description library:<id>), or from what was copied.
+   const fromLibrary=action.description?.startsWith('library:')?libraryComponent(action.description.slice(8)):null;
+   if(action.description?.startsWith('library:')&&!fromLibrary)throw new Error('That component isn’t in this app’s team library any more.');
+   const held=fromLibrary?{copy:fromLibrary.copy,label:fromLibrary.name}:copiedElement();if(!held)throw new Error('Nothing has been copied from another tab yet.');
    if(!targets[0])throw new Error('Say where the copied element should go.');
    const id=uid(),copy=held.copy.map(part=>({...part,id:uid()})),place=action.position==='before'||action.position==='inside'?action.position:'after';
    add({id:uid(),kind:'insert',target:targets[0].locator,position:place,node:{id,kind:'panel',text:action.text||held.label,copy}});created.push(id);

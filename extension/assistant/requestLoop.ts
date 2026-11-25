@@ -18,6 +18,8 @@ export function revealNote(plan:AssistantPlan){
  * conversation replay tests pass a page in jsdom, so both run this exact loop. */
 export interface RequestIO{
  bridge:{send(command:Command):Promise<Snapshot>};
+ /** Learning from this request's page description for the team's App knowledge, in the background. */
+ learn?(context:PageContext):void;
  context(inspect?:string[],instruction?:string):Promise<PageContext>;
  capture(context:PageContext):Promise<string|undefined>;
  planConversation:typeof PlanConversation;
@@ -42,7 +44,7 @@ export async function runRequest(io:RequestIO):Promise<{waiting:boolean}>{
  const {bridge,context,capture,planConversation,verifyConversation,talkContext,workflow,setProgress,setMessage,answer,remember,setClarification,applying,onSave,stillHere,
   conversation,reopen,lastPlan,spokenLine,clarificationRequest,continuation,pending,watchRequest,epoch,scopeRef,referenceRef,request,controller,followUp,recordTurn,value,origin,userId}=io;
  let waiting=false;const hops=io.hops||0;
-   let c=await context(undefined,value);
+   let c=await context(undefined,value);io.learn?.(c);
    // Selection is optional; the collector recovers or drops expired handles.
    // appliedSteps counts plans applied for this request, so a result the visual review rejects can be undone exactly.
    let verificationNote='',reviewIssue='',appliedSteps=0,lastVerdict='',undone='',flagged=false;
@@ -62,7 +64,9 @@ export async function runRequest(io:RequestIO):Promise<{waiting:boolean}>{
     spokenLine.current=next.spoken||'';return next;
    };
    // Wandel moving to another screen for this request: the request is kept and continues there (see carryOn in carry.ts).
-   const moveFor=async(name:string)=>{if(hops>=MAX_HOPS)return false;const text=carriedText(combined,name);reopen.current={text,id:userId,hops:hops+1};await holdCarry({text,id:userId,name,hops:hops+1,at:Date.now()});return true;};
+   // Where the request was asked: a request already carried once keeps naming its first screen.
+   const askedOn=/\(Wandel switched from “([^”]+)”, where the user asked/.exec(combined)?.[1]||c.views.find(view=>view.id===c.stateId)?.title||'';
+   const moveFor=async(name:string)=>{if(hops>=MAX_HOPS)return false;const text=carriedText(combined,name,askedOn);reopen.current={text,id:userId,hops:hops+1};await holdCarry({text,id:userId,name,hops:hops+1,at:Date.now()});return true;};
    let refused='';
    const inspectPlan=async(input:AssistantPlan,current:PageContext,allowNavigation:boolean)=>resolveInspections(input,current,{
     active:stillHere,
@@ -75,7 +79,7 @@ export async function runRequest(io:RequestIO):Promise<{waiting:boolean}>{
       if(!allowNavigation){refused=`it asked to look at the “${screen.title}” screen, but Wandel already moved once in this step.`;return null;}
       if(!reachable){refused=`the “${screen.title}” screen is on another site, which Wandel can’t open from here.`;return null;}
       if(!samePage(target,here)&&!await moveFor(screen.title)){refused=`it asked to move to the “${screen.title}” screen, but Wandel has already moved screens ${MAX_HOPS} times for this request.`;return null;}
-      if(samePage(target,here))reopen.current={text:carriedText(combined,screen.title),id:userId,hops:hops+1};
+      if(samePage(target,here))reopen.current={text:carriedText(combined,screen.title,askedOn),id:userId,hops:hops+1};
       // The page goes away under this call as it moves, so its reply may never come or may say the tab changed. That is the
       // move working: the kept request continues on the new screen.
       setProgress(`Opening “${screen.title}”…`);await bridge.send({type:'state',id:screen.id}).catch(()=>undefined);return null;

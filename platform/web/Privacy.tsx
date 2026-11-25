@@ -4,7 +4,7 @@ export function Privacy(){
  return <main className="legal">
   <a className="brand" href="/"><img src="/brand/wandel-mark.svg" alt=""/>Wandel</a>
   <h1>Privacy policy</h1>
-  <p className="legal-date">Last updated November 12, 2026</p>
+  <p className="legal-date">Last updated November 25, 2026</p>
   <p>Wandel is made by Studio447. It is a Chrome extension that lets you prototype changes to the web pages you use, by describing them in chat or editing them directly. This policy explains what Wandel collects, why, who else handles it, and how to reach us. Questions go to <a href={'mailto:'+contact}>{contact}</a>.</p>
 
   <h2>What we collect</h2>
@@ -40,6 +40,10 @@ export function Privacy(){
   <h3>Payments</h3>
   <p>If you upgrade, payment is handled by Stripe. We receive your plan and payment status, never your full card details.</p>
 
+  <h3>Teams and App knowledge</h3>
+  <p>If you create or join a team, we keep the team’s name, who is on it and their roles, and pending invites with the email address each was sent to. Invite emails are sent through Resend.</p>
+  <p>App knowledge is off until a team owner switches it on for an app. Then, while team members use Wandel on that app, we keep for the team: each screen’s address pattern with identifiers removed (such as <code>/groups/:id</code>), the app’s design (colours, fonts, sizes, corners, shadows), the words of its controls and short headings, components a member chooses to save, and rules the team writes. Everything else on the page, such as names, numbers, messages and anything typed into it, is replaced with placeholder letters in your browser before anything is sent, and our server refuses anything that still looks like an email address, phone number or running text. Only members of that team can see or use it. It is added to the AI requests of team members working on that app.</p>
+
   <h2>What stays on your computer</h2>
   <p>Drafts of your prototypes, your chat history, your settings and chosen AI model, what Wandel has learned about how an app’s data is shaped, elements you copy between tabs and values shared between your tabs are kept in your browser’s storage for the extension. They are not sent to us unless you save, share or ask the AI about them, and they are removed when you remove Wandel.</p>
 
@@ -59,13 +63,15 @@ export function Privacy(){
   <p>If you sign in with Google, we receive only your name, email address and profile picture, and use them only to sign you in. Wandel’s use and transfer of information received from Google APIs adheres to the <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>, including the Limited Use requirements.</p>
 
   <h2>How long we keep it</h2>
-  <p>Account details, saved prototypes and usage records are kept while your account is open. Links and videos expire as described above. When you ask us to delete your account, we delete it and the work saved in it, except where we must keep a record by law.</p>
+  <p>Account details, saved prototypes and usage records are kept while your account is open. App knowledge is kept while its team exists and the app is switched on; a removed member loses access at once. Links and videos expire as described above. When you ask us to delete your account, we delete it and the work saved in it, except where we must keep a record by law.</p>
 
   <h2>Your choices</h2>
   <ul>
    <li>Remove share links and videos from Wandel’s Share view at any time.</li>
    <li>Switch “Learn how this app works” off for any site, list paths it must never record, or delete everything it learned about a site, from the chat options in Wandel.</li>
    <li>Switch off or remove a prototype’s project context at any time.</li>
+   <li>Leave a team, or as an owner remove members, cancel invites or delete the team, from Account in Wandel. Deleting a team deletes its App knowledge.</li>
+   <li>As a team owner, use “Forget this app” in App knowledge to delete everything learned about an app at once; any member can remove saved components and rules.</li>
    <li>Remove any codebase context file for a site at any time, from the chat options in Wandel.</li>
    <li>Ask us for a copy of your data, a correction, or deletion of your account by emailing <a href={'mailto:'+contact}>{contact}</a>.</li>
    <li>Remove the extension from Chrome to delete what it keeps on your computer.</li>

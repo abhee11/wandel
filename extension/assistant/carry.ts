@@ -8,7 +8,11 @@ const fresh=90_000;
 const key=()=>{try{return 'wandel:crawl:'+(new URL(location.href).searchParams.get('tabId')||'');}catch{return 'wandel:crawl:';}};
 const store=()=>{try{return typeof chrome!=='undefined'?chrome.storage?.session:undefined;}catch{return undefined;}};
 /** The request as it continues on the next screen: the original text, with one note saying where Wandel went. */
-export function carriedText(request:string,name:string){return request.replace(/\n\(Wandel (?:opened|switched to) [^\n]*\)$/,'')+`\n(Wandel switched to “${name}” to continue this request. Continue it on this screen.)`;}
+export function carriedText(request:string,name:string,from=''){
+ const original=request.replace(/\n\(Wandel (?:opened|switched to) [^\n]*\)$/,'');
+ // "Here" and "this page" in the request still mean the screen where the user asked, not the one Wandel went to.
+ return original+(from&&from!==name?`\n(Wandel switched from “${from}”, where the user asked, to “${name}” for this request. Words like here and this page still mean “${from}”. Do only what needs this screen now, such as copying something from it, and put the rest in next, naming “${from}”.)`:`\n(Wandel switched to “${name}” to continue this request. Continue it on this screen.)`);
+}
 export async function holdCarry(carry:Carry){await store()?.set({[key()]:carry}).catch(()=>{});}
 /** The kept request, once: it is removed as it is read, and ignored when older than a minute and a half. */
 export async function takeCarry():Promise<Carry|null>{

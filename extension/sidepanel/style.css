@@ -380,3 +380,10 @@
 .dx-share-saved .dx-share-go{flex:none;max-width:45%;text-align:right}
 .dx-share-more{margin:8px 0}
 .dx-share-more summary{cursor:pointer;font-size:12px;color:#51458a}
+/* Teams: who shares what Wandel learns about your apps. */
+.dx-teams{display:grid;gap:8px;margin-top:12px}
+.dx-team-detail{display:grid;gap:8px;padding:8px 0 4px 8px}
+.dx-team-detail ul{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.dx-team-detail li{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.dx-team-detail li small,.dx-teams .dx-library small{color:var(--dx-muted,#6e6c7f);margin-left:4px}
+.dx-team-detail input[readonly]{width:100%;font-size:12px}

@@ -1,3 +1,4 @@
+import {Teams} from './Teams';
 import {BillingSettings} from './useBilling';
 import {stateURL} from '../shared/liveNavigation';
 import {useCallback,useEffect,useRef,useState} from 'react';
@@ -63,6 +64,7 @@ export function Account({bridge,snapshot,onAuthChange,onCount,onMe}:{bridge:Brid
  <button className="dx-small" disabled={busy} onClick={()=>void run(refresh)}>Refresh</button>{me.entitlements.access?.source==='subscription'&&<button className="dx-small" disabled={busy} onClick={()=>void run(async()=>{const {url}=await accountAPI('/billing/portal','POST',{});const target=new URL(url);if(target.protocol!=='https:'||target.hostname!=='billing.stripe.com')throw new Error('Stripe portal unavailable.');await chrome.tabs.create({url});})}>Manage subscription ↗</button>}
  {!betaAccess&&<form onSubmit={e=>{e.preventDefault();void run(async()=>{await accountAPI('/account/redeem','POST',{code});await refresh();window.dispatchEvent(new Event('wandel-account-refresh'));setCode('');setStatus('Beta access activated. Save your workflow again.');});}}><label className="dx-muted">Beta access code<input aria-label="Beta access code" maxLength={80} autoComplete="off" spellCheck={false} value={code} onChange={e=>setCode(e.target.value)}/></label><button className="dx-small" disabled={busy||!code.trim()}>Redeem code</button></form>}
  {confirm&&<p className="dx-alert">Replace the current unsaved draft with “{confirm.name}”? <button className="dx-small" onClick={()=>void run(async()=>{if(confirm.view)await view(confirm,true);else await load(confirm);})}>Replace draft</button><button className="dx-small" onClick={()=>setConfirm(null)}>Keep editing</button></p>}
+ <Teams me={me.user}/>
  <button className="dx-small" disabled={busy} onClick={()=>void run(signOut)}>Sign out</button></>}
  {legacy.length>0&&<details><summary>Previous local saves</summary><p className="dx-muted">These older persistent saves are still on this computer. Open one, then save to your account to sync it.</p>{legacy.map(record=><button key={record.draft.id} className="dx-library" disabled={busy||snapshot?.dirty||record.draft.origin!==snapshot?.workflow.origin||record.draft.route!==snapshot?.workflow.route} onClick={()=>void run(async()=>{await bridge.send({type:'loadRecord',record});setStatus('Opened previous local save. Use Save to my account to sync it.');})}>{record.draft.name}</button>)}</details>}
  </section>}</div>;

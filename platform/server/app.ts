@@ -3,6 +3,8 @@ import {implementationService} from './implementation';
 import type {GitHubProvider} from './github';
 import type {ImplementationProvider} from './implementationProvider';
 import {workflowLinks} from './workflowLinks';
+import {teamService} from './teams';
+import {knowledgeService} from './knowledge';
 import {redeemAccessCode} from './access';
 import {assistantService,type AssistantProvider} from './assistant';
 import {recordingStore} from './recordings';
@@ -42,6 +44,8 @@ export function createPlatform(options:{db:DB;config:Config;ai:AIProvider;mail:M
  const workflows=workflowStore(db,entitlements,clock);
  const links=workflowLinks(db,config.publicAPIOrigin||config.origin,config.pepper,clock);
  const views=publicViews(db,config.publicAPIOrigin||config.origin,config.pepper,clock);
+ const teams=teamService(db,{appOrigin:config.origin,pepper:config.pepper,clock,mailer:options.shareMail});
+ const knowledge=knowledgeService(db,clock);
  const now=()=>clock().toISOString();
  const track=(name:string,id:string,properties:Record<string,string|number|boolean>={})=>analytics.track(name,id,properties);
  const cookie=(token:string,clear=false)=>`wandel_session=${token}; HttpOnly; Path=/; SameSite=Lax; Max-Age=${clear?0:2592000}${config.production?'; Secure':''}`;
@@ -91,7 +95,40 @@ export function createPlatform(options:{db:DB;config:Config;ai:AIProvider;mail:M
    return json({message:'Password updated. Please log in.'},200,{'Set-Cookie':cookie('',true)});
   }
   if(path==='/api/ai/guest-plan'&&method==='POST'){rateLimit(db,`guest-request:${tokenHash(ip,config.pepper)}`,12,clock().getTime(),60000);const raw=await req.text();if(Buffer.byteLength(raw)>2400)throw new APIError(413,'BODY_TOO_LARGE','Free preview requests must be under 2.4 KB.');let data:unknown;try{data=JSON.parse(raw);}catch{throw new APIError(400,'INVALID_JSON','Invalid request.');}return json(await guestPlan(db,ai,config.pepper,ip,data,clock()));}
+  // What an invite link is for, shown on the invite page before signing in.
+  const invitePreview=path.match(/^\/api\/invites\/([A-Za-z0-9_-]{10,200})$/);
+  if(invitePreview&&method==='GET'){rateLimit(db,'invite-view:'+tokenHash(ip,config.pepper),30,clock().getTime(),60000);return json(teams.preview(invitePreview[1]));}
   const u=await user(req);
+  // Teams: people who share what Wandel learns about their apps.
+  if(path==='/api/teams'&&method==='GET')return json({teams:teams.list(u)});
+  if(path==='/api/teams'&&method==='POST'){rateLimit(db,'team-create:'+u.id,10,clock().getTime(),3600000);return json(teams.create(u,await body(req)));}
+  if(path==='/api/invites/accept'&&method==='POST'){rateLimit(db,'invite-accept:'+u.id,20,clock().getTime(),3600000);return json(teams.accept(u,await body(req)));}
+  // App knowledge: what Wandel learned about an app for a team. The app is named by its origin in the query or body.
+  if(path==='/api/knowledge'&&method==='GET')return json({teams:knowledge.status(u.id,new URL(req.url).searchParams.get('origin')||'')});
+  const knowledgePath=path.match(/^\/api\/knowledge\/([0-9a-f-]{36})(?:\/(enable|screen|design|components|rules)(?:\/([0-9a-f-]{36}))?)?$/);
+  if(knowledgePath){const [,teamId,part,item]=knowledgePath,query=new URL(req.url).searchParams.get('origin')||'';
+   if(!part&&method==='GET')return json(knowledge.read(u.id,teamId,query));
+   if(!part&&method==='DELETE')return json(knowledge.forget(u.id,teamId,query));
+   if(item&&method==='DELETE'&&part==='components')return json(knowledge.removeComponent(u.id,teamId,query,item));
+   if(item&&method==='DELETE'&&part==='rules')return json(knowledge.removeRule(u.id,teamId,query,item));
+   if(!item&&(method==='POST'||method==='PUT')&&part){rateLimit(db,'knowledge-write:'+u.id,240,clock().getTime(),3600000);
+    const data=z.object({origin:z.string().max(300)}).passthrough().parse(await body(req)),{origin,...rest}=data as {origin:string}&Record<string,unknown>;
+    if(part==='enable')return json(knowledge.enable(u.id,teamId,origin));
+    if(part==='screen')return json(knowledge.putScreen(u.id,teamId,origin,rest.screen));
+    if(part==='design')return json(knowledge.putDesign(u.id,teamId,origin,rest.design));
+    if(part==='components')return json(knowledge.addComponent(u.id,teamId,origin,rest.component));
+    if(part==='rules')return json(knowledge.addRule(u.id,teamId,origin,rest.rule));}
+  }
+  const teamPath=path.match(/^\/api\/teams\/([0-9a-f-]{36})(?:\/(members|invites)(?:\/([^/]+))?)?$/);
+  if(teamPath){const [,teamId,part,item]=teamPath;
+   if(!part&&method==='PATCH')return json(teams.rename(u,teamId,await body(req)));
+   if(!part&&method==='DELETE')return json(teams.remove(u,teamId));
+   if(part==='members'&&!item&&method==='GET')return json(teams.members(u,teamId));
+   if(part==='members'&&item&&method==='DELETE')return json(teams.removeMember(u,teamId,decodeURIComponent(item)));
+   if(part==='members'&&item&&method==='PATCH')return json(teams.setRole(u,teamId,decodeURIComponent(item),await body(req)));
+   if(part==='invites'&&!item&&method==='POST'){rateLimit(db,'team-invite:'+u.id,30,clock().getTime(),3600000);return json(await teams.invite(u,teamId,await body(req)));}
+   if(part==='invites'&&item&&method==='DELETE')return json(teams.cancelInvite(u,teamId,decodeURIComponent(item)));
+  }
   if(path.startsWith('/api/github/')||path==='/api/implementations'||path.startsWith('/api/implementations/'))return implementation.handle(u.id,req);
   if(['/api/assistant/plan','/api/assistant/transcribe','/api/assistant/speak','/api/assistant/verify','/api/assistant/diagnostic'].includes(path)&&method==='POST'||path==='/api/assistant/models'&&method==='GET')return json(await assistant.handle(u.id,req));
   if(path==='/api/workflow-links'&&method==='GET')return json({links:links.list(u.id)});

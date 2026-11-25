@@ -1,4 +1,5 @@
 import {trimContext,compactElements} from '../../extension/assistant/contextTrim';
+import {knowledgeService} from './knowledge';
 import {normalizePlan,validatePlanReferences,planContractIssues} from '../../extension/assistant/plan';
 import {createHash,randomUUID} from 'node:crypto';
 import {z} from 'zod';
@@ -29,7 +30,7 @@ const chatInstructions='You are Wandel, a product designer chatting about the li
 
 /** Failure reports carry the request trimmed to 400 characters, so saved plans are found by the same trimmed form. */
 const planInstructionKey=(instruction:string)=>createHash('sha256').update(instruction.trim().toLowerCase().replace(/\s+/g,' ').slice(0,400)).digest('hex');
-export type AssistantInput={model?:string;instruction:string;context:PageContext;history?:ConversationHistory;feedback?:string;referenceImage?:string;pageScreenshot?:string;steps?:boolean;slim?:boolean;compact?:boolean;copy?:boolean};
+export type AssistantInput={model?:string;instruction:string;context:PageContext;history?:ConversationHistory;feedback?:string;referenceImage?:string;pageScreenshot?:string;steps?:boolean;slim?:boolean;compact?:boolean;copy?:boolean;appKnowledge?:string};
 /** The instruction blocks a request can use. Anything that is not clearly a small edit gets every block; a duplicate, rename, move, hide or restyle that adds nothing new gets only the blocks its words call for. */
 export function relevantInstructions(input:AssistantInput){
  const request=input.instruction.toLowerCase(),asked=(request+' '+(input.feedback||'')+' '+JSON.stringify(input.history||[]).slice(-2000)).toLowerCase();
@@ -121,7 +122,7 @@ export class OpenAIAssistant implements AssistantProvider{
   if(!model)throw new APIError(503,'ASSISTANT_UNAVAILABLE','Configure OPENAI_MODEL before using cloud interpretation.');
   const choice=offered.models.find(item=>item.id===model);
   if(requested&&!choice)throw new APIError(400,'MODEL_UNAVAILABLE','That model isn’t available right now. Choose another one.');
-  const {referenceImage,pageScreenshot,slim:_slim,compact:_compact,copy:_copy,...rest}=request,{projectContext,appMap,appDocs,...trimmed}=trimContext(rest.context,input.instruction,!input.slim||!!input.feedback);
+  const {referenceImage,pageScreenshot,slim:_slim,compact:_compact,copy:_copy,appKnowledge,...rest}=request,{projectContext,appMap,appDocs,...trimmed}=trimContext(rest.context,input.instruction,!input.slim||!!input.feedback);
   // Panels from 0.4.7 read plans the same way but ask for the page as a compact table; older panels keep the JSON form.
   const pageContext=input.compact?compactElements(trimmed as PageContext):trimmed,description={...rest,context:pageContext};
   console.info(JSON.stringify({event:'assistant_context',elements:input.context.elements.length,screenshot:!!pageScreenshot,referenceImage:!!referenceImage,inspection:!!input.feedback}));
@@ -133,7 +134,7 @@ export class OpenAIAssistant implements AssistantProvider{
   // Recreating a screen from an attached image needs more thought than a small edit.
   // The shared rules come first and the date last, so the long opening is byte-identical on every request and the provider can cache it.
   const dated=`Today is ${new Date().toISOString().slice(0,10)}. Sample or mock data uses realistic recent dates relative to today, plausible names and figures, and the vocabulary of this application.`;
-  const specific=relevantInstructions(input).slice(assistantInstructions.length+1)+(projectContext?'\n'+projectBrief(projectContext):'')+(appMap?'\n'+appMapBrief(appMap):'')+(appDocs?'\n'+appDocsBrief(appDocs):'')+(input.copy?'':'\nThis panel cannot use kind copy. To bring something from another screen, tell the user to open that screen and use ＋ then Copy from page on it, then ask you to place it.')+'\n'+dated,instructions=assistantInstructions+'\n'+specific;
+  const specific=relevantInstructions(input).slice(assistantInstructions.length+1)+(projectContext?'\n'+projectBrief(projectContext):'')+(appMap?'\n'+appMapBrief(appMap):'')+(appDocs?'\n'+appDocsBrief(appDocs):'')+(appKnowledge?'\n'+appKnowledge:'')+(input.copy?'':'\nThis panel cannot use kind copy. To bring something from another screen, tell the user to open that screen and use ＋ then Copy from page on it, then ask you to place it.')+'\n'+dated,instructions=assistantInstructions+'\n'+specific;
   let reply:string;
   if(choice?.provider==='anthropic')reply=await claudeJSON(this.keys.anthropic||'',{model,instructions:[assistantInstructions,specific],text:JSON.stringify(description),screenshot:pageScreenshot,reference:referenceImage,effort:referenceImage?'medium':'low',schema:assistantOutputSchema,route:input.feedback?'correction':'plan'});
   else{
@@ -186,6 +187,7 @@ export function validateWav(bytes:Uint8Array){
  if(bytes.length===44)throw new APIError(400,'EMPTY_AUDIO','No audio was recorded.');
 }
 export function assistantService(db:DB,entitlements:Entitlements,provider:AssistantProvider|undefined,clock:()=>Date){
+ const knowledge=knowledgeService(db,clock);
  async function metered(userId:string,requestId:string,fingerprint:string,work:()=>Promise<unknown>,turnId?:string){
   const id=randomUUID(),now=clock().toISOString(),key='assistant:'+requestId;let cached:unknown;
   db.transaction(()=>{const previous=one<{status:string;result:string;fingerprint:string}>(db,'SELECT status,result,fingerprint FROM ai_actions WHERE user_id=? AND request_key=?',userId,key);if(previous){if(previous.fingerprint!==fingerprint)throw new APIError(409,'IDEMPOTENCY_CONFLICT','Use a new request ID for another instruction.');if(previous.status!=='succeeded')throw new APIError(409,'ASSISTANT_PENDING','This request is pending or failed. Retry with a new request.');cached=JSON.parse(previous.result);return;}// A message already under way finishes its follow-up calls; only a new message is checked against the allowance.
@@ -228,18 +230,24 @@ export function assistantService(db:DB,entitlements:Entitlements,provider:Assist
    if(!provider.verify)return {verdict:{status:'uncertain',message:'Visual review is unavailable for this provider.'}};
    return metered(userId,input.requestId,createHash('sha256').update(raw).digest('hex'),async()=>({verdict:await provider.verify!(input)}),input.turnId);
   }
-  const input=z.object({model:z.string().max(60).optional(),instruction:z.string().trim().min(1).max(1600),context:PageContextSchema,history:ConversationHistorySchema.optional(),referenceImage:ReferenceImageSchema.optional(),pageScreenshot:ReferenceImageSchema.optional(),requestId:z.string().uuid(),turnId:z.string().uuid().optional(),steps:z.boolean().optional(),every:z.boolean().optional(),slim:z.boolean().optional(),compact:z.boolean().optional(),capabilities:z.array(z.string().max(30)).max(20).optional(),retry:z.boolean().optional()}).strict().parse(decoded);
+  const input=z.object({model:z.string().max(60).optional(),instruction:z.string().trim().min(1).max(1600),context:PageContextSchema,history:ConversationHistorySchema.optional(),referenceImage:ReferenceImageSchema.optional(),pageScreenshot:ReferenceImageSchema.optional(),requestId:z.string().uuid(),turnId:z.string().uuid().optional(),steps:z.boolean().optional(),every:z.boolean().optional(),slim:z.boolean().optional(),compact:z.boolean().optional(),capabilities:z.array(z.string().max(30)).max(20).optional(),knowledge:z.object({team:z.string().uuid(),origin:z.string().max(300),pattern:z.string().max(300)}).strict().optional(),retry:z.boolean().optional()}).strict().parse(decoded);
   // What this panel can run. Panels check plans strictly, so a plan never carries a field or move the panel doesn't know:
   // everyMatch reached 0.4.4 panels once and every AI edit failed. Panels from 0.4.8 list what they can do; earlier
   // ones said it with single flags (every from 0.4.5, compact from 0.4.7).
   const can=new Set(input.capabilities||[]);if(input.every)can.add('every');if(input.compact)can.add('compact');
+  // The team's App knowledge for this app: only when the person is on the team and the team learns the app.
+  const appKnowledge=input.knowledge?knowledge.brief(userId,input.knowledge.team,input.knowledge.origin,input.knowledge.pattern,input.instruction):'';
+  if(appKnowledge)console.info(JSON.stringify({event:'app_knowledge',chars:appKnowledge.length}));
   const forClient=(plan:AssistantPlan):AssistantPlan=>{
    let actions=can.has('every')?plan.actions:plan.actions.map(({everyMatch:_every,...action})=>action);
+   // A paste from the team's component library needs a panel that has the library (0.4.9+).
+   if(!can.has('library'))actions=actions.filter(action=>!(action.kind==='paste'&&action.description?.startsWith('library:')));
    if(!can.has('copy')&&actions.some(action=>action.kind==='copy')){
     actions=actions.filter(action=>action.kind!=='copy');
     // A plan that was only a copy becomes the AI's own reply plus how to copy by hand in this version.
     if(plan.status==='edit'&&!actions.length)return response('answer',plan.message.replace(/\.?$/,'.')+' This version of Wandel can’t copy for you: use ＋ then Copy from page on that element, then tell me where to put it.');
    }
+   if(plan.status==='edit'&&!actions.length)return response('answer',plan.message);
    return {...plan,actions};
   };
   // Sanitize again at the trust boundary; no free-form transcript or page markup is retained.
@@ -247,7 +255,8 @@ export function assistantService(db:DB,entitlements:Entitlements,provider:Assist
   // The same request on the same screen returns the plan it got before: the models' own sampling can't be fixed, so the answer is kept.
   // The key covers the request, the page description, history, model and the instructions in use, not the screenshot's pixels.
   const instructionKey=planInstructionKey(input.instruction);
-  const cacheKey=createHash('sha256').update(JSON.stringify({instruction:input.instruction.trim().toLowerCase().replace(/\s+/g,' '),context,history:input.history||[],model:input.model||'default',steps:!!input.steps,reference:input.referenceImage?createHash('sha256').update(input.referenceImage).digest('hex'):null,rules:createHash('sha256').update(relevantInstructions({instruction:input.instruction,context,history:input.history,referenceImage:input.referenceImage,steps:input.steps})).digest('hex')})).digest('hex');
+  // What the team knows about the app shapes the plan, so a changed App knowledge gives a fresh plan.
+  const cacheKey=createHash('sha256').update(JSON.stringify({knowledge:appKnowledge?createHash('sha256').update(appKnowledge).digest('hex'):null,instruction:input.instruction.trim().toLowerCase().replace(/\s+/g,' '),context,history:input.history||[],model:input.model||'default',steps:!!input.steps,reference:input.referenceImage?createHash('sha256').update(input.referenceImage).digest('hex'):null,rules:createHash('sha256').update(relevantInstructions({instruction:input.instruction,context,history:input.history,referenceImage:input.referenceImage,steps:input.steps})).digest('hex')})).digest('hex');
   if(!input.retry){const saved=one<{plan:string}>(db,'SELECT plan FROM plan_cache WHERE user_id=? AND cache_key=? AND created_at>?',userId,cacheKey,new Date(clock().getTime()-PLAN_CACHE_DAYS*864e5).toISOString());const cached=saved?AssistantPlanSchema.safeParse(JSON.parse(saved.plan)):null;if(cached?.success&&cached.data.status==='edit'){console.info(JSON.stringify({event:'plan_cache_hit',user:userId.slice(0,8)}));return {plan:forClient(cached.data)};}}
   return metered(userId,input.requestId,createHash('sha256').update(JSON.stringify({instruction:input.instruction,context,history:input.history,referenceImage:input.referenceImage,pageScreenshot:input.pageScreenshot})).digest('hex'),async()=>{
    const history=input.history?ConversationHistorySchema.parse(JSON.parse(JSON.stringify(input.history,(_key,value)=>typeof value==='string'?cleanText(value,1600):value))):undefined;
@@ -263,7 +272,7 @@ export function assistantService(db:DB,entitlements:Entitlements,provider:Assist
    for(let attempt=0;!chatted&&attempt<2;attempt++){
     plan=undefined;
     try{
-     plan=normalizePlan(await provider.plan({instruction:input.instruction,context,...(input.steps?{steps:true}:{}),...(input.slim?{slim:true}:{}),...(can.has('compact')?{compact:true}:{}),...(can.has('copy')?{copy:true}:{}),...(input.referenceImage?{referenceImage:input.referenceImage}:{}),...(input.pageScreenshot?{pageScreenshot:input.pageScreenshot}:{}),...history?{history}:{},...feedback?{feedback}:{}}));
+     plan=normalizePlan(await provider.plan({instruction:input.instruction,context,...(appKnowledge?{appKnowledge}:{}),...(input.steps?{steps:true}:{}),...(input.slim?{slim:true}:{}),...(can.has('compact')?{compact:true}:{}),...(can.has('copy')?{copy:true}:{}),...(input.referenceImage?{referenceImage:input.referenceImage}:{}),...(input.pageScreenshot?{pageScreenshot:input.pageScreenshot}:{}),...history?{history}:{},...feedback?{feedback}:{}}));
      for(const action of plan.actions){if(action.kind!=='duplicate'||!action.labels.length)continue;const source=context.elements.find(e=>e.ref===action.targets[0]);if(source?.attributes['wandel-control-count']==='0')throw new APIError(502,'INVALID_PLAN','This feature card has no buttons. Duplicate it with text for the heading and description for the body; labels must be empty. Edit a copied badge through a separate text action using its captured ref.');}
      try{validatePlanReferences(plan,[...context.elements.map(e=>e.ref),...(plan.status==='inspect'?context.views.map(view=>'view:'+view.id):[])]);}catch(error){throw new APIError(502,'INVALID_REFERENCES',(error as Error).message+' Nothing was applied.');}
      // Reject shapes the executor cannot build here, so the repair names the exact rule.

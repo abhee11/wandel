@@ -13,7 +13,8 @@ export function normalizePlan(input:unknown):AssistantPlan{
   options:a.kind==='create'&&a.element==='field'?a.options:undefined,
   radioGroup:a.kind==='create'&&a.element==='field'?a.radioGroup:undefined,
   text:['create','duplicate','text','default','icon','tooltip','iconOnly','connect'].includes(a.kind)?a.text:null,
-  description:a.kind==='duplicate'?a.description:null,
+  // A paste names a team library component in description (library:<id>); a duplicate's description is its new text.
+  description:a.kind==='duplicate'||a.kind==='paste'&&a.description?.startsWith('library:')?a.description:null,
   labels:['duplicate','choices'].includes(a.kind)?a.labels:[],
   relativeTo:['reorder','layout','duplicate'].includes(a.kind)&&a.relativeTo?canonical(a.relativeTo):null,
   resultRef:['create','duplicate'].includes(a.kind)||a.kind==='connect'&&a.newViewTitle?a.resultRef:null,

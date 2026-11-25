@@ -22,6 +22,9 @@ export async function availableModels(){const token=await accountToken();const r
 const modelKey='wandel:model';
 export const chosenModel=()=>localStorage.getItem(modelKey)||undefined;
 export const chooseModel=(id:string)=>localStorage.setItem(modelKey,id);
+/** The team App knowledge this panel plans with: set by the panel for the app it is on, or null when no team learns it. */
+let knowledgeTarget:{team:string;origin:string;pattern:string}|null=null;
+export function setKnowledgeTarget(target:typeof knowledgeTarget){knowledgeTarget=target;}
 export async function planConversation(instruction:string,context:PageContext,signal:AbortSignal,history:ChatTurn[]=[],referenceImage?:string,pageScreenshot?:string,turnId?:string,retry=false,slim=false){const model=chosenModel();
  // slim: the first call of a request, where the server may send the AI a slimmer page; calls after an inspection,
  // a failed check or an opened screen leave it out, so what was inspected or opened reaches the AI in full.
@@ -30,7 +33,7 @@ export async function planConversation(instruction:string,context:PageContext,si
  const fresh=!continuesChat(instruction,history);let sent=context;
  if(fresh){const candidate=PageContextSchema.safeParse({...context,workspace:undefined,recent:[],edits:[],lastCard:null,lastGroup:null});if(candidate.success)sent=candidate.data;}
  const named=stableNames(JSON.stringify(sent));
- const data=await request('plan',JSON.stringify({...(model?{model}:{}),instruction,context:JSON.parse(named.text),history:fresh&&!retry?[]:conversationHistory(history),...(referenceImage?{referenceImage}:{}),...(pageScreenshot?{pageScreenshot}:{}),requestId:crypto.randomUUID(),...(turnId?{turnId}:{}),steps:true,every:true,compact:true,capabilities:['every','compact','copy'],...(slim?{slim:true}:{}),...(retry?{retry:true}:{})}),'application/json',signal);
+ const data=await request('plan',JSON.stringify({...(model?{model}:{}),instruction,context:JSON.parse(named.text),history:fresh&&!retry?[]:conversationHistory(history),...(referenceImage?{referenceImage}:{}),...(pageScreenshot?{pageScreenshot}:{}),requestId:crypto.randomUUID(),...(turnId?{turnId}:{}),steps:true,every:true,compact:true,capabilities:['every','compact','copy','library'],...(knowledgeTarget?{knowledge:knowledgeTarget}:{}),...(slim?{slim:true}:{}),...(retry?{retry:true}:{})}),'application/json',signal);
  return AssistantPlanSchema.parse(JSON.parse(named.restore(JSON.stringify(data.plan))));}
 export async function transcribeInstruction(wav:Blob,signal:AbortSignal,turnId?:string){const data=await request('transcribe?requestId='+crypto.randomUUID()+(turnId?'&turnId='+turnId:''),wav,'audio/wav',signal);if(typeof data.text!=='string'||!data.text.trim())throw new Error('No instruction was recognized. Try again or type instead.');return data.text as string;}
 

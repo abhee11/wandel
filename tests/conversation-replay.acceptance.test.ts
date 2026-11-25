@@ -15,7 +15,12 @@ import {OpenAIAssistant} from '../platform/server/assistant';
 import {Session} from '../extension/content/session';
 import {Repository,BrowserStorage} from '../extension/storage/store';
 import {runRequest} from '../extension/assistant/requestLoop';
-import {planConversation,verifyConversation} from '../extension/assistant/client';
+import {planConversation,verifyConversation,setKnowledgeTarget} from '../extension/assistant/client';
+import {blankCopy,screenPattern} from '../extension/knowledge/blank';
+import {captureCopy} from '../extension/content/duplicate';
+import {setLibrary} from '../extension/knowledge/library';
+import {chooseTeam} from '../extension/knowledge/store';
+import {learnFrom} from '../extension/knowledge/learn';
 import {type ChatTurn} from '../extension/assistant/conversation';
 import {peekCarry,dropCarry} from '../extension/assistant/carry';
 import {contextAtURL,stateURL,type LiveContext,type LiveNavigation} from '../extension/shared/liveNavigation';
@@ -25,7 +30,9 @@ import type {AssistantPlan} from '../extension/assistant/schema';
 const live=process.env.WANDEL_RUN_DESIGNER_ACCEPTANCE==='1';
 const scratch=process.env.REPLAY_PAGES||'';
 type Step={user:string}|{switchTo:string};
-type Case={pages:Record<string,string>;start:string;script:Step[];answer:(question:string)=>string;check:(page:{url:string;root:HTMLElement})=>void;
+type Case={pages:Record<string,string>;start:string;
+ /** Seeds the team's App knowledge first: a component taken from a page (blanked, as the panel would save it). */
+ knowledge?:{fromPage:string;component:string;name:string};script:Step[];answer:(question:string)=>string;check:(page:{url:string;root:HTMLElement})=>void;
  /** Clicking an element whose text matches takes the app to that page, as the app's own switcher would. */
  links?:{text:RegExp;url:string}[]};
 /** Words the user must never see: fixed dead ends from before 0.4.8. */
@@ -41,6 +48,13 @@ const cases:Record<string,()=>Case>={
   script:[{user:'Have a look at the first story row on this page, I will want it on page 2. Do not change anything yet.'},{switchTo:'https://replay.test/news?p=2'},{user:'add that first story row from page 1 at the top of this list'}],
   answer:()=>'Yes, use the exact row from page 1 and put it at the top here',
   check:({url,root})=>{expect(url).toContain('p=2');const owned=[...root.querySelectorAll('[data-dx-owned]')].map(n=>n.textContent||'').join(' ');expect(owned.length).toBeGreaterThan(20);}}),
+ // App knowledge: a teammate saved Activity 4's My Record card to the team library. On Activity 5, someone who never
+ // opened Activity 4 asks for it, and Wandel pastes it from the library without going anywhere.
+ 'm2-my-record-known':()=>({pages:{'https://replay.test/groups/1?activityContainerId=5':'tests/fixtures/m2-activity-5.html'},start:'https://replay.test/groups/1?activityContainerId=5',
+  knowledge:{fromPage:'tests/fixtures/m2-activity-4.html',component:'My Record',name:'My Record card'},
+  script:[{user:'add the my record card from activity 4 here, above the cards'}],
+  answer:()=>'Yes, use the team’s My Record card and put it above the cards',
+  check:({url,root})=>{expect(url).toContain('activityContainerId=5');const card=[...root.querySelectorAll<HTMLElement>('[data-dx-owned]')].find(n=>/My Record/.test(n.textContent||''));expect(card).toBeTruthy();}}),
  // The M2 report (2026-11-24): understand Activity 4, switch to Activity 5, add Activity 4's My Record card on top.
  'm2-my-record':()=>({pages:{'https://replay.test/groups/1?activityContainerId=4':'tests/fixtures/m2-activity-4.html','https://replay.test/groups/1?activityContainerId=5':'tests/fixtures/m2-activity-5.html'},start:'https://replay.test/groups/1?activityContainerId=4',
   links:[{text:/^\s*Activity 4\s*$/,url:'https://replay.test/groups/1?activityContainerId=4'},{text:/^\s*Activity 5\s*$/,url:'https://replay.test/groups/1?activityContainerId=5'}],
@@ -80,7 +94,7 @@ it.skipIf(!live||!process.env.REPLAY_CASE)('replays the conversation without dea
  const turns:ChatTurn[]=[],replies:string[]=[];const ref=<T,>(current:T)=>({current});
  const reopen=ref<{text:string;id:string;hops?:number}|null>(null),clarificationRequest=ref<{text:string;id:string;scope:string}|null>(null),continuation=ref<string|null>(null),epoch=ref(0);
  const scopeOf=(s:Snapshot)=>s.workflow.id+':'+s.stateId+':'+s.workflow.route;let scope='';const scopeRef={get current(){return scope;}};
- const queue:Promise<void>[]=[];let autoSteps=0;
+ const queue:Promise<void>[]=[];let autoSteps=0,knowledgeTeam='';
  async function panelSees(){const s=session.snapshot();
   // Wandel's own move onto a page outside the flow joins the flow without asking (the panel's resumeChoice effect).
   if((s as any).resumeChoice&&(await peekCarry()||reopen.current)){await session.dispatch({type:'continueWorkflowHere'});}
@@ -91,7 +105,9 @@ it.skipIf(!live||!process.env.REPLAY_CASE)('replays the conversation without dea
   const followUp=clarificationRequest.current;clarificationRequest.current=null;const value=text.trim(),request=++epoch.current,origin=scope,userId=existingId||crypto.randomUUID(),controller=new AbortController();
   if(recordTurn)turns.push({id:userId,role:'user',text:value,status:'sending'} as ChatTurn);log({user:value,hops});
   let waiting=false;
-  try{({waiting}=await runRequest({bridge,context:async(inspect,instruction)=>(await bridge.send({type:'assistantContext',chat:true,...(inspect?{inspect}:{}),...(instruction?{instruction}:{})} as Command)).assistant!.context!,
+  // As the panel does before each request: the team App knowledge for this app and screen.
+  setKnowledgeTarget(knowledgeTeam?{team:knowledgeTeam,origin:'https://replay.test',pattern:screenPattern(url)}:null);
+  try{({waiting}=await runRequest({learn:page=>{void learnFrom(page,url,'https://replay.test');},bridge,context:async(inspect,instruction)=>(await bridge.send({type:'assistantContext',chat:true,...(inspect?{inspect}:{}),...(instruction?{instruction}:{})} as Command)).assistant!.context!,
    capture:async()=>undefined,planConversation:(...args)=>planConversation(...args).then(plan=>{const page=args[1];log({plan:plan.status,views:page.views.map(v=>v.title.slice(0,30)+' '+(v.route||'')+(v.id===page.stateId?' (here)':'')),opens:plan.status==='open'?page.elements.find(e=>e.ref===plan.candidates[0])?.name?.slice(0,60):undefined,message:plan.message.slice(0,300),candidates:plan.candidates,actions:plan.actions.map(a=>a.kind+' '+a.targets.join(',')),next:plan.next});return plan;}),verifyConversation:(...args)=>verifyConversation(...args),
    talkContext:page=>page,workflow:()=>session.snapshot().workflow,setProgress:t=>log({progress:t}),setMessage:t=>{replies.push(t);log({message:t});},
    answer:t=>{replies.push(t);turns.push({role:'assistant',text:t,status:'sent'} as ChatTurn);log({reply:t});},remember:async(plan:AssistantPlan)=>{if(plan.memory)await bridge.send({type:'assistantRemember',memory:plan.memory} as Command).catch(()=>{});},
@@ -106,6 +122,17 @@ it.skipIf(!live||!process.env.REPLAY_CASE)('replays the conversation without dea
   const next=continuation.current;continuation.current=null;if(next&&request===epoch.current&&autoSteps<4){autoSteps++;await submit('Next step: '+next,true,undefined,0);}
  }
  try{
+  if(spec.knowledge){
+   // As teammate A did: a team learns this app, and the component goes to its library, blanked except labels.
+   const post=async(path:string,method:string,body?:unknown)=>{const r=await app.handle(new Request(config.origin+path,{method,headers:{Origin:config.origin,Cookie:cookie,'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})}));const v=await r.json();if(!r.ok)throw new Error(JSON.stringify(v));return v;};
+   const team=await post('/api/teams','POST',{name:'Replay team'});await post(`/api/knowledge/${team.id}/enable`,'POST',{origin:'https://replay.test'});
+   document.body.innerHTML=readFileSync(spec.knowledge.fromPage,'utf8').replace(/^<!--.*?-->\n/,'');
+   const source=[...document.querySelectorAll<HTMLElement>('article,section,div')].filter(n=>new RegExp(spec.knowledge!.component).test(n.querySelector('h1,h2,h3,h4,h5,h6')?.textContent||'')).sort((a,b)=>a.querySelectorAll('*').length-b.querySelectorAll('*').length)[0];
+   if(!source)throw new Error('Component not found on '+spec.knowledge.fromPage);
+   const saved=await post(`/api/knowledge/${team.id}/components`,'POST',{origin:'https://replay.test',component:{name:spec.knowledge.name,pattern:'/groups/:id?activityContainerId',copy:blankCopy(captureCopy(source))}});
+   const library=(await post(`/api/knowledge/${team.id}?origin=${encodeURIComponent('https://replay.test')}`,'GET')).components;setLibrary(library);await chooseTeam('https://replay.test',team.id);
+   knowledgeTeam=team.id;log({seeded:saved,component:spec.knowledge.name});
+  }
   await load(spec.start);
   for(const step of spec.script){
    if('switchTo' in step){await load(step.switchTo);if((session.snapshot() as any).resumeChoice)await session.dispatch({type:'continueWorkflowHere'});await panelSees();continue;}

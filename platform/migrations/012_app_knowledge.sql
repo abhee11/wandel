@@ -1,0 +1,8 @@
+-- App knowledge: what Wandel learns about an app for a team. Structure and design only, never content.
+CREATE TABLE knowledge_apps (team_id TEXT NOT NULL REFERENCES teams(id) ON DELETE CASCADE, origin TEXT NOT NULL, enabled_by TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, enabled_at TEXT NOT NULL, block_list TEXT NOT NULL DEFAULT '[]', PRIMARY KEY(team_id,origin));
+CREATE TABLE knowledge_screens (team_id TEXT NOT NULL, origin TEXT NOT NULL, pattern TEXT NOT NULL, summary TEXT NOT NULL, hash TEXT NOT NULL, updated_by TEXT REFERENCES users(id) ON DELETE SET NULL, updated_at TEXT NOT NULL, PRIMARY KEY(team_id,origin,pattern), FOREIGN KEY(team_id,origin) REFERENCES knowledge_apps(team_id,origin) ON DELETE CASCADE);
+CREATE TABLE knowledge_design (team_id TEXT NOT NULL, origin TEXT NOT NULL, design TEXT NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY(team_id,origin), FOREIGN KEY(team_id,origin) REFERENCES knowledge_apps(team_id,origin) ON DELETE CASCADE);
+CREATE TABLE knowledge_components (id TEXT PRIMARY KEY, team_id TEXT NOT NULL, origin TEXT NOT NULL, name TEXT NOT NULL, pattern TEXT, copy TEXT NOT NULL, created_by TEXT REFERENCES users(id) ON DELETE SET NULL, created_at TEXT NOT NULL, FOREIGN KEY(team_id,origin) REFERENCES knowledge_apps(team_id,origin) ON DELETE CASCADE);
+CREATE INDEX knowledge_components_app ON knowledge_components(team_id,origin);
+CREATE TABLE knowledge_rules (id TEXT PRIMARY KEY, team_id TEXT NOT NULL, origin TEXT NOT NULL, text TEXT NOT NULL, created_by TEXT REFERENCES users(id) ON DELETE SET NULL, created_at TEXT NOT NULL, FOREIGN KEY(team_id,origin) REFERENCES knowledge_apps(team_id,origin) ON DELETE CASCADE);
+CREATE INDEX knowledge_rules_app ON knowledge_rules(team_id,origin);
